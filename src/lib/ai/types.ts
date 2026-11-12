@@ -1,0 +1,87 @@
+/**
+ * Provider-neutral AI service interfaces. Business logic depends only on these.
+ * Concrete vendors are selected in ./registry.ts from environment variables.
+ */
+import type { WordTiming } from "@/db/schema";
+
+export interface ProviderInfo {
+  id: string;
+  model?: string;
+}
+
+export interface ASRResult {
+  text: string;
+  words?: WordTiming[];
+  confidence?: number;
+  language?: string;
+}
+export interface ASRProvider extends ProviderInfo {
+  /** "server" providers transcribe uploaded audio; "browser" means the client supplies Web Speech transcripts. */
+  location: "server" | "browser";
+  transcribe(audio: Buffer, mimeType: string, opts?: { signal?: AbortSignal; prompt?: string }): Promise<ASRResult>;
+}
+
+export interface ChatMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+export interface LLMProvider extends ProviderInfo {
+  complete(messages: ChatMessage[], opts?: { json?: boolean; temperature?: number; maxTokens?: number; signal?: AbortSignal }): Promise<string>;
+}
+
+export interface TTSStream {
+  body: ReadableStream<Uint8Array>;
+  mimeType: string;
+}
+
+export interface TTSProvider extends ProviderInfo {
+  location: "server" | "browser";
+  synthesize(text: string, opts?: { voice?: string; signal?: AbortSignal }): Promise<{ audio: Buffer; mimeType: string }>;
+  /**
+   * Optional progressive synthesis. When available the API route pipes the audio
+   * straight to the browser, so playback starts at the first spoken sentence
+   * instead of waiting for the whole line to be generated.
+   */
+  synthesizeStream?(text: string, opts?: { voice?: string; signal?: AbortSignal }): Promise<TTSStream | null>;
+}
+
+export interface PronunciationResult {
+  accuracy: number;
+  fluency: number;
+  prosody?: number;
+  completeness?: number;
+  overall: number;
+  words: { word: string; accuracy: number; errorType?: string }[];
+}
+export interface PronunciationProvider extends ProviderInfo {
+  /** Expects 16 kHz mono 16-bit PCM WAV. referenceText = ASR transcript (unscripted assessment). */
+  assess(wav: Buffer, referenceText: string, opts?: { signal?: AbortSignal }): Promise<PronunciationResult>;
+}
+
+export class ProviderError extends Error {
+  constructor(
+    public provider: string,
+    public code: "timeout" | "http" | "config" | "invalid_response" | "unsupported",
+    message: string,
+  ) {
+    super(`[${provider}] ${code}: ${message}`);
+  }
+}
+
+/** Run a provider call with a hard timeout that aborts the underlying request. */
+export async function withTimeout<T>(provider: string, ms: number, fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const ctrl = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, rej) => {
+    timer = setTimeout(() => {
+      // reject first so the race settles with a classified timeout, then cancel the request
+      rej(new ProviderError(provider, "timeout", `no response within ${ms}ms`));
+      ctrl.abort();
+    }, ms);
+  });
+  try {
+    return await Promise.race([fn(ctrl.signal), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}

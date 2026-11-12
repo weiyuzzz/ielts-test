@@ -1,0 +1,610 @@
+{
+  "tool": "rea-agents v6.8.0 via npx",
+  "command": "rea analyze-javascript-application <dir of captured public scripts> --json",
+  "evidence_id": "ev_075420e828f753c17c04748d8062d5c2adec06414d9b47473424f78eaacb77e0",
+  "provider": {
+    "id": "rea-javascript-application",
+    "name": "REA JavaScript application analyzer",
+    "version": "1"
+  },
+  "predicate_type": "rea.javascript-application-analysis",
+  "root_artifact_sha256": "4e763faad6e186e9288a979ce2f6cbc2031257f666ebc3065864d510c1b3f646",
+  "graph_id": "jag_bf12dcedeffb9c8472b5b3f49d240f42e4c892fadd87b72507beb36375ec466b",
+  "graph_nodes": 1073,
+  "graph_edges": 1247,
+  "coverage": {
+    "status": "partial",
+    "truncated": false,
+    "omitted_count": null,
+    "limits": [
+      {
+        "name": "javascript_analysis_parent_available_result_budget_bytes",
+        "value": 322138370,
+        "unit": "bytes"
+      },
+      {
+        "name": "javascript_analysis_parent_result_budget_bytes",
+        "value": 819679208,
+        "unit": "bytes"
+      },
+      {
+        "name": "javascript_analysis_worker_heap_limit_bytes",
+        "value": 1098907648,
+        "unit": "bytes"
+      },
+      {
+        "name": "javascript_analysis_worker_timeout_ms",
+        "value": 300000,
+        "unit": "milliseconds"
+      },
+      {
+        "name": "javascript_semantic_alias_selections",
+        "value": 512,
+        "unit": "items"
+      }
+    ]
+  },
+  "limitations": [
+    "Alias selection expansion was conservatively bounded (maximum 512 additional selector states); selected paths remain unknown.",
+    "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+    "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+    "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+    "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+    "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+    "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code.",
+    "speak-evaluation-a5a6b953.js: Resource constraint during analyze_javascript_application: Semantic graph for speak-evaluation-a5a6b953.js exceeds the parent's remaining result budget; static and module facts were retained"
+  ],
+  "captured_scripts": {
+    "index.js": {
+      "sha256": "8320c2141f463e1ba96296e47c12a0aae47ed4357f1e5bfcd4886e22ea35644c",
+      "source": "https://www.idictation.cn/assets/index.js"
+    },
+    "speak-evaluation-a5a6b953.js": {
+      "sha256": "4c9401428dd18f72f09b2d7b25c8a21d51290e97fc559abda9211350ec91a51f",
+      "source": "https://www.idictation.cn/assets/speak-evaluation-a5a6b953.js"
+    },
+    "speaking-mock-analytics-4234aecb.js": {
+      "sha256": "600671dc8530721021cb3a216c771ab12f92c65417e456f79e6b4a4aaa52522f",
+      "source": "https://www.idictation.cn/assets/speaking-mock-analytics-4234aecb.js"
+    },
+    "speaking-mock-df5b4187.js": {
+      "sha256": "c815812b8307afbbbc486b818bdeb071a6ba9b5029a092f0bcc51644e1e945e2",
+      "source": "https://www.idictation.cn/assets/speaking-mock-df5b4187.js"
+    },
+    "speaking-mock-result-97e49e06.js": {
+      "sha256": "57f4e77c455e74c9c013814501751315cff7a62e9763f13e11f97692dd3f4b04",
+      "source": "https://www.idictation.cn/assets/speaking-mock-result-97e49e06.js"
+    },
+    "speaking-mock-session-15339205.js": {
+      "sha256": "508674bc3573d701b93991205c08946f4bf0f08dc066a90a415404104ec1232c",
+      "source": "https://www.idictation.cn/assets/speaking-mock-session-15339205.js"
+    }
+  },
+  "endpoint_and_storage_nodes": [
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"start\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/essaylisten-classic\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/contrast\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"candidate\",\"/main/book\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"vocabularyBook\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"invite\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/login\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/company\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"process\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"statistics\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"index/:type/:id\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"candidate\",\"/gallery\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"personal-plan\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/welcome\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"candidate\",\"/main/book\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"result\"]"
+    },
+    {
+      "kind": "storage",
+      "namespace": "session-storage",
+      "key": "call:window.sessionStorage.setItem"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"king\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/philippine-speaking\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"candidate\",\"/\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/vip\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"errorBook\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/article_result\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"read/:type\"]"
+    },
+    {
+      "kind": "storage",
+      "namespace": "session-storage",
+      "key": "call:window.sessionStorage.removeItem"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "network",
+      "key": "[\"literal\",\"partial\",{\"start\":{\"line\":1,\"column\":15423},\"end\":{\"line\":1,\"column\":15439}},\"B\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"studentPlan\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"candidate\",\"/main\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"join\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"emulation\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"mastery-list\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"schedule\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"studentSeats\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"zzcqsm\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"write-result/:type/:id\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/transfer\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"write/:type\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/typing-practice-game\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "network",
+      "key": "[\"literal\",\"partial\",{\"start\":{\"line\":1,\"column\":115294},\"end\":{\"line\":1,\"column\":115310}},\"f\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"yhfwxy\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"candidate\",\"/main/book\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"applicat\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"speak/:type\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"booking\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"v2/:type\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"classDetail\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/admin\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/school\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"speak-mock/result\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"ai-essay\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "network",
+      "key": "[\"candidate\",\"length\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"nrsqxy\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/extension\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"text\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"zhenti\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"speak-mock\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/mode\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"vocabularyTest\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"collect\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/typing-practice/squid-game\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"book\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"read-result/:type/:id\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "network",
+      "key": "[\"candidate\",\"set-cookie\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/vip-pro\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/home\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/main\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"v2/result/:type/:id\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"answer-log\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"memberlist\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"orders\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"class\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/forgetPassword\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/walkman\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/c/:code\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"library\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/article\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/jc\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"answer\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"yszc\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"answer-book\"]"
+    },
+    {
+      "kind": "storage",
+      "namespace": "session-storage",
+      "key": "call:window.sessionStorage.getItem"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"history\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/labellisten\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"candidate\",\"/login\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/agreement\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "network",
+      "key": "[\"candidate\",\"/api/enterprise-pro/hailiang/oauth/result\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/article_sign_result\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"scfwxy\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "network",
+      "key": "[\"candidate\",\"\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/essaylisten\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/typing-practice\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"result/:type/:id\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"essay-history\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"pay\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "network",
+      "key": "[\"literal\",\"/api/study/customer/v1/login/msg\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"purchase\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"index\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"candidate\",\"/:pathMatch(.*)\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"answer-book2\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"/ielts\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"solution\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"user\"]"
+    },
+    {
+      "kind": "endpoint",
+      "namespace": "route",
+      "key": "[\"literal\",\"vocabularyBookDetail\"]"
+    }
+  ]
+}
