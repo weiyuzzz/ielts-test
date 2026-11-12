@@ -3,7 +3,20 @@
 这里的正文与仓库代码一一对应，改代码时顺手改这里，随 PR 一起审阅。
 
 GitHub 上原本只有 1 个 issue（Phase 1 音频改造跟踪），它把「已修复 / 未验证 / 并行冲突 / 验收清单」
-混在一条里。并行冲突已经解决、代码已合入 `main`，所以**归档旧 issue，按「一件事一条」拆成 6 条**。
+混在一条里。并行冲突已经解决、代码已合入 `main`，所以**旧 issue 已删除，按「一件事一条」拆成 6 条**。
+
+## 当前状态（2026-11-12 已同步）
+
+旧 #1 已通过 GraphQL `deleteIssue` 删除（访问返回 410），新 issue 编号 **#2–#7**：
+
+| # | 标题 | 标签 | 文件 |
+|---|---|---|---|
+| 2 | [Voice] 预置考官音频通路实际未启用（题库无 audio 字段） | voice, bug | `new-01-preset-audio-path.md` |
+| 3 | [Voice] Azure / OpenAI 未实机验证，默认音色未定 | voice, help wanted | `new-02-provider-verification.md` |
+| 4 | [Scoring] 0–9 分档描述符缺失，AI 评分只有关键指标 | scoring, help wanted | `new-03-band-descriptors.md` |
+| 5 | [Content] 题库素材未导入 + shadowing 缺失 | content, enhancement | `new-04-bank-media.md` |
+| 6 | [Speaking][Phase 1] 浏览器手工验收与真实设备回归 | voice, test, help wanted | `new-05-phase1-browser.md` |
+| 7 | [Infra] 缺少 CI；提交身份与部署约束 | infra, enhancement | `new-06-ci.md` |
 
 ## 旧 issue 的去向
 
@@ -11,21 +24,13 @@ GitHub 上原本只有 1 个 issue（Phase 1 音频改造跟踪），它把「�
 |---|---|---|
 | #1 [Speaking][Phase 1] 音频性能改造 | 已修复（调度器 / 生命周期 / 录音会话 / complete-answer / metrics） | 已合并进 `main`（`80d58a2`），记录见 `docs/phase2-examiner-voice.md` |
 | 同上 | 并行冲突（`exam-runner` / `exam-service` / `architecture`） | **已解决**，三个文件全部合入 |
-| 同上 | 浏览器 BROWSER-ONLY 待验证 | → `new-05-phase1-browser.md` |
-| 同上 | 设计权衡（LRU 单进程 / finish 独立请求 / ScriptProcessor 回退） | → `new-06-ci.md` 第三节 |
+| 同上 | 浏览器 BROWSER-ONLY 待验证 | → #6 |
+| 同上 | 设计权衡（LRU 单进程 / finish 独立请求 / ScriptProcessor 回退） | → #7 第三节 |
 
-## 新 issue（6 条，按优先级）
+## 排序理由
 
-| 文件 | 标题 | 标签 |
-|---|---|---|
-| `new-01-preset-audio-path.md` | 预置考官音频通路未启用（题库无 audio 字段） | voice, bug |
-| `new-02-provider-verification.md` | Azure / OpenAI 未实机验证，默认音色未定 | voice, help wanted |
-| `new-03-band-descriptors.md` | 0–9 分档描述符缺失，AI 评分只有关键指标 | scoring, help wanted |
-| `new-04-bank-media.md` | 题库素材未导入（范文 / 思路 / 关键词 / 跟读音频），shadowing 缺失 | content, enhancement |
-| `new-05-phase1-browser.md` | Phase 1 浏览器手工验收与真实设备回归 | voice, test, help wanted |
-| `new-06-ci.md` | 缺少 CI；提交身份与部署约束 | infra, enhancement |
-
-排在前面的更接近「功能实际不可用」，排在后面的更接近「工程质量」。
+编号越小越接近「功能实际不可用」：#2 是死代码，#3 让自然度结论悬空；#4–#5 是能力缺口；
+#6–#7 更偏工程质量。
 
 ## 同步
 
