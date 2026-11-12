@@ -113,13 +113,22 @@ await check("complete the rest of the exam (incl. silence, short Part 3 answer �
   }
   assert.equal(followUps, 0, "a full mock follows the fixed bank script and invents no follow-ups");
 });
-await check("full mock: 3 Part 1 topics / 11 questions, one cue card, bank questions only", async () => {
+await check("full mock: 11 Part 1 across 3 topics, one cue card, Part 3 follows the card topic", async () => {
   view = (await req(`/api/speaking/sessions/${fullId}`)).body;
   const p1 = view.steps.filter((s) => s.part === 1);
+  const p2 = view.steps.filter((s) => s.part === 2);
+  const p3 = view.steps.filter((s) => s.part === 3);
   assert.equal(p1.length, 11);
   assert.equal(new Set(p1.map((s) => s.topic)).size, 3);
-  assert.equal(view.steps.filter((s) => s.part === 2).length, 1);
-  assert.equal(view.steps.filter((s) => s.part === 3).length, 4);
+  assert.equal(p2.length, 1, "exactly one cue card");
+  // PR #9 changed Part 3 to draw ONLY the chosen card's own topic questions
+  // (min(config.part3.questions, available)), and the bank has 1–7 Part 3
+  // questions per topic, so the LENGTH is data-dependent. The invariant that
+  // matters is that Part 3 stays on the Part 2 topic — assert that instead of
+  // the old fixed count of 4 (which used to be met by borrowing other topics).
+  assert.ok(p3.length >= 1 && p3.length <= 4, `Part 3 length ${p3.length} outside 1..4`);
+  assert.equal(new Set(p3.map((s) => s.topic)).size, 1, "Part 3 must not mix topics");
+  assert.equal(p3[0].topic, p2[0].topic, "Part 3 topic must equal the cue card topic");
   assert.ok(view.steps.every((s) => s.generator === "bank"), "every question comes from the active bank");
   assert.deepEqual(view.steps.map((s) => s.stepIndex), view.steps.map((_, i) => i));
 });
