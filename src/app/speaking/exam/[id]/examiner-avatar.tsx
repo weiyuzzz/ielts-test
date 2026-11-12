@@ -175,9 +175,6 @@ export function ExaminerAvatar({ speaking, listening, preparing = false, name }:
         {/* collar */}
         <path d="M50 100 q10 8 20 0" stroke="#e0e7ff" strokeWidth="1.4" fill="none" />
       </svg>
-      <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-zinc-500 ring-1 ring-zinc-200">
-        {speaking ? "Speaking" : listening ? "Listening" : preparing ? "Waiting" : "Ready"}
-      </span>
     </div>
   );
 }

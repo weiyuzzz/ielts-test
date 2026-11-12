@@ -57,6 +57,8 @@ export const clampPitch = (v: number) => Math.min(2, Math.max(-2, Number.isFinit
 /**
  * Built-in presets. `id` is what the UI and the session snapshot store; the
  * voice names are the real engine identifiers, so a preset never guesses.
+ * Kokoro grades are the engine's own quality metadata — several MALE voices
+ * are perfectly natural (C+/C), they just grade below af_heart (A).
  */
 export const VOICE_PRESETS: VoiceProfile[] = [
   {
@@ -81,7 +83,7 @@ export const VOICE_PRESETS: VoiceProfile[] = [
   },
   {
     id: "openai-marin",
-    name: "OpenAI · Marin (expressive, en-GB leaning)",
+    name: "OpenAI · Marin (expressive, en-GB leaning, female)",
     provider: "openai",
     voice: "marin",
     language: "en-GB",
@@ -91,10 +93,75 @@ export const VOICE_PRESETS: VoiceProfile[] = [
     instructions: "",
   },
   {
+    id: "openai-onyx",
+    name: "OpenAI · Onyx (deep male)",
+    provider: "openai",
+    voice: "onyx",
+    language: "en-GB",
+    speed: 0.97,
+    pitch: 0,
+    prosody: { ...DEFAULT_PROSODY },
+    instructions: "",
+  },
+  {
     id: "kokoro-af-heart",
-    name: "Kokoro · af_heart (A-grade, local)",
+    name: "Kokoro · af_heart (A-grade, female)",
     provider: "kokoro",
     voice: "af_heart",
+    language: "en-GB",
+    speed: 0.95,
+    prosody: { ...DEFAULT_PROSODY },
+  },
+  {
+    id: "kokoro-af-bella",
+    name: "Kokoro · af_bella (A- female)",
+    provider: "kokoro",
+    voice: "af_bella",
+    language: "en-GB",
+    speed: 0.95,
+    prosody: { ...DEFAULT_PROSODY },
+  },
+  {
+    id: "kokoro-bf-emma",
+    name: "Kokoro · bf_emma (B- British female)",
+    provider: "kokoro",
+    voice: "bf_emma",
+    language: "en-GB",
+    speed: 0.95,
+    prosody: { ...DEFAULT_PROSODY },
+  },
+  {
+    id: "kokoro-am-michael",
+    name: "Kokoro · am_michael (C+ male)",
+    provider: "kokoro",
+    voice: "am_michael",
+    language: "en-GB",
+    speed: 0.95,
+    prosody: { ...DEFAULT_PROSODY },
+  },
+  {
+    id: "kokoro-am-fenrir",
+    name: "Kokoro · am_fenrir (C+ male, high energy)",
+    provider: "kokoro",
+    voice: "am_fenrir",
+    language: "en-GB",
+    speed: 0.95,
+    prosody: { ...DEFAULT_PROSODY },
+  },
+  {
+    id: "kokoro-bm-george",
+    name: "Kokoro · bm_george (C British male)",
+    provider: "kokoro",
+    voice: "bm_george",
+    language: "en-GB",
+    speed: 0.95,
+    prosody: { ...DEFAULT_PROSODY },
+  },
+  {
+    id: "kokoro-bm-fable",
+    name: "Kokoro · bm_fable (C British male, storytelling)",
+    provider: "kokoro",
+    voice: "bm_fable",
     language: "en-GB",
     speed: 0.95,
     prosody: { ...DEFAULT_PROSODY },
@@ -115,6 +182,34 @@ export const DEFAULT_PROFILE_ID = "azure-sonia";
 
 export function presetById(id: string): VoiceProfile | undefined {
   return VOICE_PRESETS.find((p) => p.id === id);
+}
+
+/**
+ * The gender a voice IMPLIES to a listener — used to keep the digital human's
+ * identity and its voice consistent (a "Sarah" avatar must never speak with a
+ * male voice). Returns null when the voice carries no gender signal.
+ * Kokoro naming: a/b = accent, f/m = gender. Azure/OpenAI names are mapped
+ * explicitly; unknown custom voices return null.
+ */
+export function impliedVoiceGender(profile: Pick<VoiceProfile, "provider" | "voice"> | null | undefined): "male" | "female" | null {
+  if (!profile) return null;
+  const v = profile.voice || "";
+  if (profile.provider === "kokoro") {
+    if (/^[ab]f_/.test(v)) return "female";
+    if (/^[ab]m_/.test(v)) return "male";
+    return null;
+  }
+  if (profile.provider === "azure") {
+    if (/^(en-[A-Za-z]{2}-)?(sonia|libby|aria|jenny|ema|michelle|ava|clara)/i.test(v)) return "female";
+    if (/^(en-[A-Za-z]{2}-)?(ryan|daniel|guy|george|andrew|brian)/i.test(v)) return "male";
+    return null;
+  }
+  if (profile.provider === "openai") {
+    if (/^(marin|alloy|nova|shimmer|coral)/i.test(v)) return "female";
+    if (/^(onyx|echo|fable|ash|sage)/i.test(v)) return "male";
+    return null;
+  }
+  return null;
 }
 
 /** Copy so a caller can never mutate a shared preset. */
@@ -155,6 +250,12 @@ export function resolveVoiceProfile(pref?: string | null): VoiceProfile {
       const base = presetById("azure-sonia")!;
       return { ...clone(base), id: `azure:${raw}`, voice: raw, name: `Azure · ${raw}` };
     }
+
+    // A bare voice name that belongs to a preset resolves BACK to that preset
+    // (stable id, e.g. TTS_VOICE=af_heart → "kokoro-af-heart", not a synthetic
+    // "kokoro:af_heart") so UI selects and cache identities stay canonical.
+    const byVoice = VOICE_PRESETS.find((p) => p.voice === raw);
+    if (byVoice) return clone(byVoice);
 
     // Legacy Kokoro voice names (af_heart, bf_emma, am_michael …) were the value
     // of `examinerVoice` before profiles existed — keep them working verbatim.

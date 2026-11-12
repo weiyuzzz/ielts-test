@@ -161,7 +161,7 @@ function sampleAnswer(raw: unknown): SampleAnswer | null {
     paragraphs,
     ...(paragraphsZh.length ? { paragraphsZh } : {}),
     ...(variantLabel ? { variantLabel } : {}),
-    source: source(r.source, "来源未标注"),
+    source: source(r.source, "Unlabelled source"),
     // An AI draft is never auto-promoted, whatever the file claims.
     reviewStatus: (r.source as LearningSource | undefined)?.kind === "ai-draft" ? "draft" : review,
     targetBandHint: hint,
@@ -234,7 +234,7 @@ function vocabGroups(raw: unknown): VocabGroup[] {
   return raw
     .map((g) => {
       const r = (g ?? {}) as Record<string, unknown>;
-      const title = str(r.title, LIMITS.label) || "语料扩展";
+      const title = str(r.title, LIMITS.label) || "Vocabulary expansion";
       const items = Array.isArray(r.items)
         ? r.items
             .map((it) => {
@@ -282,7 +282,7 @@ export function sanitizeLearning(raw: unknown, where = "learning"): SanitizeResu
       follow = {
         url: url.url!,
         voiceProfile: typeof f.voiceProfile === "string" ? f.voiceProfile.trim() : voice,
-        source: source(f.source, "来源未标注"),
+        source: source(f.source, "Unlabelled source"),
         ...(typeof f.durationMs === "number" && Number.isFinite(f.durationMs) ? { durationMs: Math.max(0, Math.round(f.durationMs)) } : {}),
       };
     }

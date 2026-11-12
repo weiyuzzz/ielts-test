@@ -4,7 +4,7 @@
  *  - Anthropic Messages API
  *  - Azure Speech: Neural TTS + Pronunciation Assessment (audio-based)
  */
-import { ProviderError, type ASRProvider, type LLMProvider, type TTSProvider, type PronunciationProvider, type ChatMessage, type TTSSynthesisOptions } from "./types";
+import { ProviderError, type ASRProvider, type LLMProvider, type TTSProvider, type PronunciationProvider, type ChatMessage, type TTSSynthesisOptions, type TTSSynthesisResult } from "./types";
 import { prepareExaminerSpeech, toAzureSsmlForAct } from "./tts-text";
 import { assertSafeEndpoint } from "./url-guard";
 import { clampSpeed, resolveVoiceProfile } from "@/lib/speaking/voice-profile";
@@ -307,12 +307,64 @@ export function openAITTS(): TTSProvider {
     });
   };
 
+  /**
+   * Kokoro captioned speech: the same engine, same input, but the response
+   * carries WORD-LEVEL TIMESTAMPS measured on the actual audio. Those make
+   * word-anchored lip-sync possible (tier A) instead of duration guessing.
+   * The /dev endpoints live at the container ROOT even when TTS_BASE_URL
+   * points at /v1. Best-effort: any failure falls back to the plain endpoint.
+   */
+  const captioned = async (text: string, opts: TTSSynthesisOptions | undefined): Promise<TTSSynthesisResult | null> => {
+    if (!kokoroLike || process.env.KOKORO_WORD_TIMESTAMPS === "0") return null;
+    try {
+      const capBase = base.replace(/\/v1\/?$/, "");
+      const profile = resolveProfile(opts);
+      const prepared = prepareExaminerSpeech({ text, speechAct: opts?.speechAct ?? "question", profile });
+      const explicit = opts?.voice && opts.voice !== "auto" ? opts.voice : "";
+      const voice = explicit || profile.voice || process.env.TTS_VOICE || "af_heart";
+      const res = await fetch(`${capBase}/dev/captioned_speech`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "kokoro",
+          input: useSsml ? prepared.ssml : prepared.plain,
+          voice,
+          response_format: format === "wav" ? "wav" : "mp3",
+          speed: clampSpeed(prepared.speed),
+          stream: false,
+          return_timestamps: true,
+          ...(useSsml ? { ssml: true, allow_voice_tags: true } : {}),
+        }),
+        signal: opts?.signal,
+      });
+      if (!res.ok) return null;
+      const j = (await res.json()) as {
+        audio?: string;
+        audio_format?: string;
+        timestamps?: { word: string; start_time: number; end_time: number }[];
+      };
+      if (!j.audio) return null;
+      const words = (j.timestamps ?? [])
+        .filter((t) => Number.isFinite(t.start_time) && Number.isFinite(t.end_time))
+        .map((t) => ({ word: t.word, start: t.start_time, end: t.end_time }));
+      return {
+        audio: Buffer.from(j.audio, "base64"),
+        mimeType: j.audio_format || ttsMime(format),
+        ...(words.length ? { words } : {}),
+      };
+    } catch {
+      return null;
+    }
+  };
+
   return {
     id: "openai-compatible-tts",
     model,
     location: "server",
     supports: { ssml: useSsml, instructions: neural, style: false, pitch: false },
     async synthesize(text, opts) {
+      const withWords = await captioned(text, opts);
+      if (withWords) return withWords;
       const res = await check(await request(text, opts, false), "openai-tts");
       return { audio: Buffer.from(await res.arrayBuffer()), mimeType: ttsMime(res.headers.get("content-type")?.includes("wav") ? "wav" : format) };
     },

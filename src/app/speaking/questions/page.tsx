@@ -37,7 +37,7 @@ export default async function Questions() {
     <>
       <PageHeader
         title="Question learning library"
-        subtitle="题库里的题目与学习素材：示范答案、思路拆解、关键词组与跟读。考试只朗读题目本身，学习素材不会出现在模考里。"
+        subtitle="Bank questions with learning material: sample answers, idea breakdowns, key phrases and shadowing. The exam reads the question itself only — learning material never appears in the mock test."
       />
       <LearningBrowser
         items={items}

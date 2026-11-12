@@ -1,6 +1,7 @@
 import { getCurrentUser } from "@/lib/server/user";
 import { capabilities } from "@/lib/ai/registry";
 import { PageHeader, Card } from "@/components/ui";
+import { normalizeModelId } from "@/lib/avatar/models";
 import { SettingsForm } from "./settings-form";
 import { VoiceLab } from "./voice-lab";
 
@@ -17,11 +18,12 @@ export default async function Settings() {
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <SettingsForm
-            initial={{ displayName: user?.displayName ?? "Candidate", targetBand: user?.targetBand ?? 7, examDate: user?.examDate ?? "", examinerVoice: saved, showSubtitles: user?.showSubtitles ?? true }}
+            initial={{ displayName: user?.displayName ?? "Candidate", targetBand: user?.targetBand ?? 7, examDate: user?.examDate ?? "", examinerVoice: saved, examinerGender: user?.examinerGender === "male" ? "male" : "female", examinerModel: normalizeModelId(user?.examinerModel, user?.examinerGender === "male" ? "male" : "female"), showSubtitles: user?.showSubtitles ?? true }}
             serverTts={tts.location === "server"}
             ttsVoice={tts.voice}
             ttsStreaming={tts.streaming}
             profiles={tts.profiles}
+            defaultProfileId={tts.defaultProfileId}
           />
           <VoiceLab
             serverTts={tts.location === "server"}

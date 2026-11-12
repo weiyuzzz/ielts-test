@@ -14,8 +14,7 @@ import { tencentSoePronunciation } from "./tencent-soe";
 import { tencentAsr } from "./tencent-asr";
 import { SPEECH_ACT_LIST } from "@/lib/speaking/speech-act";
 import { readAiConfig, envOverridesFor, withEnvOverrides, type ProviderKey } from "@/lib/server/ai-config";
-
-import { DEFAULT_PROFILE_ID, VOICE_PRESETS, resolveVoiceProfile, type VoiceProviderId } from "@/lib/speaking/voice-profile";
+import { VOICE_PRESETS, impliedVoiceGender, resolveVoiceProfile, type VoiceProviderId } from "@/lib/speaking/voice-profile";
 
 const hasOpenAI = () => !!(process.env.OPENAI_API_KEY || process.env.LLM_API_KEY || process.env.ASR_API_KEY);
 
@@ -151,7 +150,9 @@ export const TIMEOUTS = {
   llmMs: Number(process.env.LLM_TIMEOUT_MS || 60000),
   llmFollowUpMs: Number(process.env.LLM_FOLLOWUP_TIMEOUT_MS || 8000),
   // Long Part 2 instructions take >10 s on local/CPU engines.
-  ttsMs: Number(process.env.TTS_TIMEOUT_MS || 30000),
+  // 120s default: local CPU engines (Kokoro in docker) need 10-60s per line,
+  // and a 30s cap turned long lines into 502s → robotic browser fallback.
+  ttsMs: Number(process.env.TTS_TIMEOUT_MS || 120000),
   pronMs: Number(process.env.PRONUNCIATION_TIMEOUT_MS || 30000),
 };
 
@@ -178,8 +179,13 @@ export function capabilities() {
       profiles: VOICE_PRESETS.map((p) => ({
         id: p.id, name: p.name, provider: p.provider, voice: p.voice,
         speed: p.speed, pitch: p.pitch ?? 0, hasStyle: !!p.style,
+        gender: impliedVoiceGender(p),
       })),
-      defaultProfileId: DEFAULT_PROFILE_ID,
+      /** The default the UI should preselect: the deployment's ACTUALLY usable
+       *  profile (env-resolved), never a hardcoded preset whose provider may
+       *  be unconfigured — selecting that would 502 and fall back to the
+       *  robotic browser voice. */
+      defaultProfileId: active.id,
       activeProfile: { id: active.id, name: active.name, provider: active.provider, voice: active.voice, speed: active.speed },
       availability: ttsAvailability(),
       speechActs: SPEECH_ACT_LIST.map((a) => ({ id: a.id, label: a.label })),

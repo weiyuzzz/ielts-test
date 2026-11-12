@@ -8,7 +8,7 @@ import { RecorderError, listInputDevices, type Recording } from "@/lib/audio/rec
 import { RecordingSession } from "@/lib/audio/recording-session";
 import {
   BrowserTranscriber, browserAsrSupported, speak, speakPreset, disposeAudio,
-  warmupSpeech, promoteTTS, audioMetrics, type ScriptLine,
+  warmupSpeech, promoteTTS, waitForTTS, ttsScheduler, keyOf, audioMetrics, type ScriptLine,
 } from "@/lib/audio/speech";
 import { AudioPreloader, classifyScriptLines, type PreloadEntry } from "@/lib/audio/audio-resources";
 import { outcomeOf, type PlaybackOutcome } from "@/lib/audio/audio-lifecycle";
@@ -18,7 +18,9 @@ import type { SpeakingExamConfig } from "@/lib/speaking/config";
 import type { ExaminerSpeechAct } from "@/lib/speaking/speech-act";
 import { budgetForPart, formatClock, OFFICIAL_RANGE, PART_TITLE, partProgress, partRemaining } from "@/lib/speaking/part-timing";
 import { primeEnvelope } from "@/lib/audio/examiner-envelope";
-import { ExaminerAvatar } from "./examiner-avatar";
+import { ExaminerAvatar3D } from "@/components/examiner/examiner-avatar-3d";
+import { normalizeGender, normalizeModelId, preloadExaminerModel, type ExaminerGender } from "@/lib/avatar/models";
+import { fetchVisemeTrack } from "@/lib/lipsync/controller";
 
 interface StepView {
   id: string; stepIndex: number; part: number; kind: string; topic: string; examinerLead: string; promptText: string; cuePoints: string[];
@@ -34,6 +36,9 @@ interface SessionView {
     config: SpeakingExamConfig;
     /** Frozen at session creation, so a settings change cannot change the examiner mid-test. */
     voiceProfile: { id: string; voice: string; provider: string } | null;
+    /** Frozen visual identity (digital human), pairs with the frozen voice. */
+    examinerGender?: "male" | "female";
+    examinerModel?: string;
   };
   steps: StepView[];
 }
@@ -50,6 +55,8 @@ type CountdownResult = "timeout" | "early" | "repeat" | "device" | "aborted";
 interface Props {
   sessionId: string; voice: string; showSubtitlesDefault: boolean; serverTts: boolean;
   browserAsr: boolean; asrAvailable: boolean;
+  /** Examiner look from the user's saved preference; the session snapshot wins once loaded. */
+  gender: ExaminerGender; modelId?: string;
   /** Engine identity for the TTS cache key (model/format changes must not reuse old audio). */
   ttsModel?: string | null; ttsFormat?: string | null;
 }
@@ -103,6 +110,16 @@ interface ScriptPlan {
   firstQuestionAudioUrl: string | null;
 }
 
+/** Kicks off the opening line's viseme-track fetch during the mic check, so
+ *  word one of the exam is already lip-synced when the examiner starts. */
+function MicWarmUp({ lines }: { lines: ScriptLine[] }) {
+  useEffect(() => {
+    const text = lineText(lines);
+    if (text.trim()) void fetchVisemeTrack(text);
+  }, [lines]);
+  return null;
+}
+
 /**
  * Build a PRIORITISED resource plan for the whole session. Unlike the old
  * `examLines()` (which flattened everything into one FIFO order), backups and
@@ -142,7 +159,7 @@ function buildScriptPlan(v: SessionView, profileId: string): ScriptPlan {
   };
 }
 
-export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, browserAsr, asrAvailable, ttsModel, ttsFormat }: Props) {
+export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDefault, serverTts, browserAsr, asrAvailable, ttsModel, ttsFormat }: Props) {
   const router = useRouter();
   const [view, setView] = useState<SessionView | null>(null);
   const [phase, setPhase] = useState<Phase>("loading");
@@ -169,9 +186,11 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
   /** Seconds left in the part that is running now (null before the first tick). */
   const [partLeft, setPartLeft] = useState<number | null>(null);
   /** Dev-only: shows how many preloaded resources are ready (subscribable state). */
-  const [readiness, setReadiness] = useState<{ ready: number; total: number } | null>(null);
+  const [readiness, setReadiness] = useState<{ ready: number; total: number; tts: { priority: number; status: string }[] } | null>(null);
   /** Session acquired during setup, handed to the mic check before the exam starts. */
   const [micSession, setMicSession] = useState<RecordingSession | null>(null);
+  /** True while the opening audio is being warmed after the start click. */
+  const [preparing, setPreparing] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
   const recSessionRef = useRef<RecordingSession | null>(null);
@@ -186,6 +205,9 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
   /** Voice profile frozen when this session was created (falls back to the current
    *  setting only for sessions recorded before profiles existed). */
   const voiceRef = useRef(voice);
+  /** Visual examiner identity, frozen with the session snapshot once loaded. */
+  const [examinerGender, setExaminerGender] = useState<ExaminerGender>(gender);
+  const [examinerModel, setExaminerModel] = useState<string | undefined>(modelId);
   /** Which part is being timed, and when it started. Reset on every part change. */
   const partClock = useRef<{ part: number; startedAt: number } | null>(null);
   /** The part whose time ran out (null when none). The loop closes it at a safe point. */
@@ -217,10 +239,16 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
           // must never change the examiner halfway through a test.
           const profileId = v.session.voiceProfile?.id ?? voice;
           voiceRef.current = profileId;
+          // Same for the digital human's identity: resume restores the same person.
+          const frozenGender = normalizeGender(v.session.examinerGender ?? gender);
+          const frozenModel = normalizeModelId(v.session.examinerModel ?? modelId, frozenGender);
+          setExaminerGender(frozenGender);
+          setExaminerModel(frozenModel);
+          preloadExaminerModel(frozenModel); // warm the HTTP cache while the setup screen shows
           // One coordinator for TTS + preset bank audio + fixed examiner lines.
           const preloader = new AudioPreloader({ voice: profileId, profile: profileId, serverTts, model: ttsModel, format: ttsFormat });
           preloaderRef.current = preloader;
-          const unsub = preloader.subscribe((s) => setReadiness({ ready: s.readyCount, total: s.totalCount }));
+          const unsub = preloader.subscribe((s) => setReadiness({ ready: s.readyCount, total: s.totalCount, tts: s.tts.map((t) => ({ priority: t.priority, status: t.status })) }));
           unsubscribeRef.current = unsub;
           const plan = buildScriptPlan(v, profileId);
           planRef.current = plan;
@@ -254,7 +282,7 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
       preloaderRef.current = null;
       disposeAudio();
     };
-  }, [load, router, sessionId, serverTts, voice, ttsModel, ttsFormat]);
+  }, [load, router, sessionId, serverTts, voice, gender, modelId, ttsModel, ttsFormat]);
 
   // Warn before leaving while the exam is running (state is saved server-side, but the current answer would be lost)
   useEffect(() => {
@@ -324,29 +352,50 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
    * require the candidate to acknowledge before recording starts — the exam
    * must not silently advance on broken audio.
    */
-  async function say(lines: ScriptLine[] | string, signal: AbortSignal, audioUrl?: string | null): Promise<PlaybackOutcome> {
+  async function say(lines: ScriptLine[] | string, signal: AbortSignal, audioUrl?: string | null, presetText?: string): Promise<PlaybackOutcome> {
     const queue: ScriptLine[] = typeof lines === "string" ? [{ text: lines, act: "question" }] : lines;
     const full = lineText(queue);
     if (signal.aborted || !full.trim()) return outcomeOf("interrupted", "none", { aborted: true });
+    // EVERYTHING READY BEFORE THE SWITCH: wait until every line's real audio
+    // exists BEFORE the UI moves to the new question. This runs while the
+    // "Next question…" progress is still showing, so the user never sees a
+    // switched screen with missing audio (the "lost audio" complaint). The
+    // bank-clip path skips this — its own fallback chain handles failure.
+    if (serverTts && !audioUrl) {
+      for (const l of queue) {
+        if (signal.aborted) return outcomeOf("interrupted", "none", { aborted: true });
+        if (!l.text.trim()) continue;
+        await waitForTTS(l.text, voiceRef.current, 180_000, l.act, voiceRef.current);
+      }
+    }
     setSubtitle(full);
     setSpeaking(true);
     setPhase("examiner");
+    // If any line still needs synthesis, say so — silence would look like a
+    // hang. speak() itself waits for the real voice (never the OS fallback).
+    if (serverTts && queue.some((l) => l.text.trim() && !ttsScheduler.get(keyOf(l.text, voiceRef.current, l.act, voiceRef.current)))) {
+      setNotice("The examiner is preparing the audio for this part…");
+    }
     const profileId = voiceRef.current;
     for (const l of queue) promoteTTS(l.text, profileId, l.act, profileId);
     try {
       let outcome: PlaybackOutcome | null = null;
       if (audioUrl) {
-        const preset = await speakPreset(audioUrl, signal);
+        // The bank clip contains the QUESTION text, not the whole turn: the
+        // lip-sync track must be built from the words the clip actually speaks.
+        const preset = await speakPreset(audioUrl, signal, presetText ?? full);
         if (preset.status === "ended" || preset.status === "interrupted") outcome = preset;
         // failed → fall through to TTS (pre-recorded audio is optional)
       }
       if (!outcome) {
         // Speak each part with its own delivery: the acknowledgement stays short
-        // and warm, the lead-in is an introduction, the question rises naturally.
+        // and warm, the lead-in is an introduction, the question itself rises naturally.
+        // noBrowserFallback: a robotic OS voice mid-exam destroys the illusion —
+        // synthesis failure surfaces as the "audio unavailable" panel instead.
         for (const l of queue) {
           if (signal.aborted) return outcomeOf("interrupted", "none", { aborted: true });
           if (!l.text.trim()) continue;
-          const r = await speak(l.text, { serverTts, voice: profileId, act: l.act, profileId, signal });
+          const r = await speak(l.text, { serverTts, voice: profileId, act: l.act, profileId, noBrowserFallback: true, signal });
           outcome = r.outcome;
           if (!r.ok) break;
         }
@@ -363,6 +412,7 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
       return outcome;
     } finally {
       setSpeaking(false);
+      setNotice(null);
     }
   }
 
@@ -573,12 +623,12 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
           // A bank clip may only be used when it was recorded with THIS voice.
           const preset = presetAudioFor(step, voiceRef.current);
           if (step.kind === "cue_card") {
-            if ((await say(lines, signal, preset)).status === "interrupted") return;
+            if ((await say(lines, signal, preset, step.promptText)).status === "interrupted") return;
             setPhase("prep");
             await countdown(step.prepSeconds, 10, signal);
             if (signal.aborted) return;
             if ((await say([{ text: LINES.part2Start, act: "instruction" }], signal)).status === "interrupted") return;
-          } else if ((await say(lines, signal, preset)).status === "interrupted") return;
+          } else if ((await say(lines, signal, preset, step.promptText)).status === "interrupted") return;
           if (signal.aborted) return;
 
           // Prepare the NEXT question while the candidate answers this one.
@@ -686,12 +736,16 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
 
   async function startFromSetup() {
     try {
+      setPreparing(true);
       const plan = planRef.current;
-      // Warm the opening line + first question while the candidate checks the mic.
+      // Warm the opening line + first question and WAIT for them: the user
+      // explicitly wants everything ready before the exam can start (a local
+      // CPU engine can take ~30s per line — the progress bar shows movement).
       await preloaderRef.current?.ensureOpeningAndFirst(
         plan?.firstLines ?? [],
         plan?.firstQuestionAudioUrl ?? null,
         plan?.firstLines[0]?.act ?? "greeting",
+        600_000,
       );
       setDevices(await listInputDevices().catch(() => []));
       setNotice(null);
@@ -701,6 +755,8 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
     } catch (e) {
       setDevices(await listInputDevices().catch(() => []));
       setNotice((e as Error).message);
+    } finally {
+      setPreparing(false);
     }
   }
 
@@ -788,7 +844,15 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
 
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:py-10 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1">
-        {(phase === "loading" || phase === "setup") && (
+        {phase === "loading" && (
+          <div className="rounded-2xl border border-zinc-200 bg-white p-10 text-center">
+            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-zinc-200 border-t-zinc-900" aria-hidden />
+            <p className="mt-4 text-sm font-medium text-zinc-700">Preparing the exam…</p>
+            <p className="mt-1 text-xs text-zinc-400">The examiner is taking the floor — this only takes a moment.</p>
+          </div>
+        )}
+
+        {phase === "setup" && (
           <div className="rounded-2xl border border-zinc-200 bg-white p-6 sm:p-8">
             <h1 className="text-xl font-semibold">{answered > 0 ? "Resume your exam" : "Before you start"}</h1>
             <ul className="mt-4 space-y-2 text-sm text-zinc-600">
@@ -801,15 +865,34 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
             </ul>
             {!asrAvailable && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">No speech recognition is configured. Your answers will be recorded, but they cannot be transcribed or scored.</p>}
             {browserAsr && !browserAsrSupported() && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">This browser does not support built-in speech recognition. Use Chrome, Edge or Safari, or ask the administrator to configure server ASR. Recordings will still be saved.</p>}
-            <label className="mt-6 block text-sm">Microphone
-              <select className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" value={deviceId} onChange={(e) => { setDeviceId(e.target.value); localStorage.setItem("mic-device", e.target.value); }}>
-                <option value="">System default</option>
-                {devices.map((d, i) => <option key={d.deviceId || i} value={d.deviceId}>{d.label || `Microphone ${i + 1}`}</option>)}
-              </select>
-            </label>
-            <button disabled={phase === "loading"} onClick={startFromSetup} className="mt-6 w-full rounded-xl bg-zinc-900 py-3 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50">
-              {phase === "loading" ? "Loading…" : answered > 0 ? "Allow microphone & resume" : "Allow microphone & begin"}
+            <p className="mt-6 text-xs text-zinc-400">On the next step the browser asks for microphone permission, and you can test your mic and pick a device before the exam starts. The exam itself starts only after you pass the microphone check.</p>
+            <button
+              disabled={preparing}
+              onClick={startFromSetup}
+              className="mt-3 w-full rounded-xl bg-zinc-900 py-3 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-60"
+            >
+              {preparing ? "Preparing examiner voice…" : "Continue to microphone check"}
             </button>
+            {preparing && readiness && (() => {
+              // The gate waits ONLY for the opening lines (CURRENT priority);
+              // show their progress so the bar matches when the page advances.
+              const current = readiness.tts.filter((t) => t.priority === 0);
+              const ready = current.filter((t) => t.status === "ready").length;
+              const total = current.length;
+              const pct = total > 0 ? Math.round((ready / total) * 100) : 0;
+              return (
+                <div className="mt-3" aria-label="Examiner voice preparation progress">
+                  <div className="h-1.5 overflow-hidden rounded-full bg-zinc-200">
+                    <div className="h-1.5 rounded-full bg-zinc-900 transition-all" style={{ width: `${Math.max(4, pct)}%` }} />
+                  </div>
+                  <p className="mt-1.5 text-center text-xs text-zinc-400">
+                    {total > 0
+                      ? `Synthesising the opening lines — ${ready}/${total} ready. The microphone check opens when they are done.`
+                      : "Synthesising the opening lines…"}
+                  </p>
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -822,10 +905,15 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
               setPhase("loading");
               run();
             }}
-            title="麦克风检查（考试前）"
-            hint="正式考试就用这条录音通道。对着麦克风说一句话，确认音量条跳动、并试录回放能听到自己的声音，再开始考试。"
+            title="Microphone check (before the exam)"
+            hint="This is the exact recording path used in the exam. Say a sentence, watch the meter move, and play the recording back before you start."
           />
         )}
+        {/* Warm the opening line's viseme track while the candidate checks the
+            mic, so the first spoken sentence is lip-synced from word one. */}
+        {phase === "miccheck" && planRef.current?.firstLines.length ? (
+          <MicWarmUp lines={planRef.current.firstLines} />
+        ) : null}
 
         {phase === "blocked" && blocked && (
           <div className="rounded-2xl border border-amber-200 bg-white p-6">
@@ -845,24 +933,12 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
 
         {step && !["setup", "loading", "blocked"].includes(phase) && (
           <>
-            <div className="flex items-center gap-4">
-              <ExaminerAvatar
-                speaking={speaking}
-                listening={phase === "recording"}
-                preparing={phase === "examiner" || phase === "prep"}
-                name={view?.session.examinerName ?? "Examiner"}
-              />
-              <div className="min-w-0">
-                <div className="text-sm font-medium">{view?.session.examinerName} · Examiner</div>
-                <div className="mt-0.5 text-xs text-zinc-400">{speaking ? "Speaking…" : phase === "recording" ? "Listening" : phase === "prep" ? "Waiting while you prepare" : phase === "uploading" || phase === "advancing" ? "Saving your answer…" : phase === "finishing" ? "Finishing the test" : ""}</div>
-                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400">
-                  <span className="rounded bg-zinc-100 px-1.5 py-0.5">Part {step.part}</span>
-                  <span className="max-w-[12rem] truncate rounded bg-zinc-100 px-1.5 py-0.5">{step.topic}</span>
-                  {activePart !== null && <span className="rounded bg-indigo-50 px-1.5 py-0.5 tabular-nums text-indigo-700">{formatClock(partLeft ?? 0)} left in this part</span>}
-                </div>
-              </div>
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400">
+              <span className="rounded bg-zinc-100 px-1.5 py-0.5">Part {step.part}</span>
+              <span className="max-w-[12rem] truncate rounded bg-zinc-100 px-1.5 py-0.5">{step.topic}</span>
+              {activePart !== null && <span className="rounded bg-indigo-50 px-1.5 py-0.5 tabular-nums text-indigo-700">{formatClock(partLeft ?? 0)} left in this part</span>}
             </div>
-            {showSubs && subtitle && <p className="mt-4 rounded-xl bg-white px-4 py-3 text-sm leading-6 text-zinc-600 ring-1 ring-zinc-200">{subtitle}</p>}
+            {showSubs && subtitle && <p className="mt-4 rounded-xl bg-white px-4 py-3 text-sm leading-6 text-zinc-600 ring-1 ring-zinc-200" />}
 
             <section className="mt-5 rounded-2xl border border-zinc-200 bg-white p-6 sm:p-8">
               <div className="mb-3 flex items-start justify-between gap-3">
@@ -1003,8 +1079,27 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
         )}
         </div>
 
-        {step && !["setup", "loading", "blocked"].includes(phase) && (
-          <aside className="w-full shrink-0 lg:sticky lg:top-6 lg:w-64" aria-label="Time limit for each part">
+        {view && ["loading", "miccheck", "examiner", "prep", "recording", "review", "uploading", "advancing", "finishing"].includes(phase) && (
+          <aside
+            className={`w-full shrink-0 space-y-4 lg:sticky lg:top-6 lg:w-72 ${phase === "miccheck" ? "hidden" : ""}`}
+            aria-label="Examiner and time limits"
+          >
+            {/* Mounted from the mic check onward so the model never reloads
+                mid-exam (a reload would stall the first question and desync
+                the mouth). Sits under the part countdown, larger than before. */}
+            <div className="flex flex-col items-center rounded-2xl border border-zinc-200 bg-white p-4">
+              <ExaminerAvatar3D
+                gender={examinerGender}
+                modelId={examinerModel}
+                speaking={speaking}
+                listening={phase === "recording"}
+                preparing={phase === "examiner" || phase === "prep"}
+                name={view.session.examinerName ?? "Examiner"}
+                className="h-72 w-full"
+              />
+              <div className="text-sm font-medium">{view.session.examinerName}</div>
+              <div className="text-xs text-zinc-400">Your examiner today</div>
+            </div>
             <div className="rounded-2xl border border-zinc-200 bg-white p-4">
               <div className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Time limits</div>
               <p className="mt-1 text-[11px] leading-4 text-zinc-400">Official range per part — the examiner moves on at the upper bound.</p>

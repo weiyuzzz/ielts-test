@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     if (!asr || asr.location !== "server") {
       return Response.json({
         status: "unavailable",
-        reason: "未配置服务端语音识别（ASR_PROVIDER / OPENAI_API_KEY）。录音与回放仍然可用，转写对比暂不可用。",
+        reason: "Server-side ASR is not configured (ASR_PROVIDER / OPENAI_API_KEY). Recording and playback still work; transcript comparison is unavailable.",
       });
     }
 
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
         asr.transcribe(buf, mime, { signal, prompt: hint || undefined }),
       );
       if (!result.text?.trim()) {
-        return Response.json({ status: "failed", error: "识别结果为空，可能录音太短或环境太吵。" });
+        return Response.json({ status: "failed", error: "Empty transcription — the recording may be too short or too noisy." });
       }
       return Response.json({
         status: "ok",

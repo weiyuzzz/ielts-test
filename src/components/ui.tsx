@@ -1,7 +1,7 @@
 import Link from "next/link";
 
-export function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`rounded-2xl border border-zinc-200 bg-white ${className}`}>{children}</div>;
+export function Card({ children, className = "", id }: { children: React.ReactNode; className?: string; id?: string }) {
+  return <div id={id} className={`rounded-2xl border border-zinc-200 bg-white ${className}`}>{children}</div>;
 }
 
 export function PageHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: React.ReactNode }) {

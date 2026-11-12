@@ -83,19 +83,24 @@ export class AudioPreloader {
   /**
    * Gate before the exam starts: only the opening utterance (one or more lines)
    * and the first question's resources. Backup voices are explicitly NOT awaited.
+   * `timeoutMs` overrides the constructor default — the exam start uses a long
+   * one because the candidate explicitly asked for "everything ready before
+   * the exam begins" (a local CPU engine can take ~30s per line).
    */
   async ensureOpeningAndFirst(
     opening: ScriptLineLike | ScriptLineLike[],
     firstQuestionAudioUrl: string | null,
     act: ExaminerSpeechAct = "question",
+    timeoutMs?: number,
   ): Promise<ReadinessSnapshot> {
     if (this.disposed) return this.snapshot();
+    const gate = timeoutMs ?? this.readyTimeoutMs;
     const jobs: Promise<unknown>[] = [];
     if (this.serverTts) {
       const openingLines = toLines(opening);
       jobs.push(...openingLines
         .filter((l) => l.text.trim())
-        .map((l) => waitForTTS(l.text, this.voice, this.readyTimeoutMs, l.act ?? act, this.profile)));
+        .map((l) => waitForTTS(l.text, this.voice, gate, l.act ?? act, this.profile)));
       if (!openingLines.length) jobs.push(loadVoices());
     } else {
       jobs.push(loadVoices()); // browser fallback voice list
@@ -106,7 +111,7 @@ export class AudioPreloader {
     let timer: ReturnType<typeof setTimeout> | undefined;
     await Promise.race([
       Promise.allSettled(jobs),
-      new Promise<void>((r) => { timer = setTimeout(r, this.readyTimeoutMs + 1000); }),
+      new Promise<void>((r) => { timer = setTimeout(r, gate + 1000); }),
     ]);
     if (timer) clearTimeout(timer); // do not keep the event loop / exam alive
     audioMetrics.record("audio_ready_ms", performance.now() - t0, this.serverTts ? "cache-miss" : "browser", "opening gate");

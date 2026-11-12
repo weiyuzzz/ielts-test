@@ -202,11 +202,11 @@ export function ReportView({ sessionId }: { sessionId: string }) {
 
       {a?.status === "unscored" && (
         <Card className="mb-6 border-zinc-200 bg-zinc-50 p-6">
-          <h2 className="font-semibold">本次模考未评分</h2>
-          <p className="mt-2 text-sm leading-6 text-zinc-600">考试流程已按 IELTS 口语规范完整走完。当前没有接入 AI 评分服务，因此不生成任何分数也不会用启发式估算分数。</p>
-          <p className="mt-2 text-sm leading-6 text-zinc-600">你仍可在下方逐题查看题目、录音回放与转写文本。配置 <code className="rounded bg-white px-1">LLM_PROVIDER</code> / <code className="rounded bg-white px-1">OPENAI_API_KEY</code>（或 Anthropic）后，可对本次考试重新评分。</p>
+          <h2 className="font-semibold">This mock test is unscored</h2>
+          <p className="mt-2 text-sm leading-6 text-zinc-600">The exam ran through the full IELTS Speaking flow. No AI scoring service is connected, so no scores are generated and no heuristic estimates are used.</p>
+          <p className="mt-2 text-sm leading-6 text-zinc-600">You can still review each question below — prompt, recording playback and transcript. Configure <code className="rounded bg-white px-1">LLM_PROVIDER</code> / <code className="rounded bg-white px-1">OPENAI_API_KEY</code> (or Anthropic) to re-score this session.</p>
           {a.notes && a.notes.length > 0 && <p className="mt-3 text-xs text-zinc-500">{a.notes[a.notes.length - 1]}</p>}
-          <button onClick={retry} disabled={retrying} className="mt-4 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm disabled:opacity-50">{retrying ? "Re-checking…" : "重新评分"}</button>
+          <button onClick={retry} disabled={retrying} className="mt-4 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm disabled:opacity-50">{retrying ? "Re-checking…" : "Re-score"}</button>
         </Card>
       )}
 
@@ -217,10 +217,10 @@ export function ReportView({ sessionId }: { sessionId: string }) {
               <div className="text-xs font-medium uppercase tracking-wide text-zinc-400">Overall band (estimate)</div>
               <div className="mt-2 flex items-baseline gap-3">
                 {a.isComplete ? <Band value={a.overallBand} size="lg" /> : <span className="text-2xl font-semibold text-zinc-400">—</span>}
-                {!a.isComplete && <Badge tone="amber">未出总分</Badge>}
+                {!a.isComplete && <Badge tone="amber">No overall band</Badge>}
               </div>
               <p className="mt-3 text-sm leading-6 text-zinc-600">{rep.report?.summary}</p>
-              {!a.isComplete && <p className="mt-3 text-xs leading-5 text-amber-700">四个评分标准各占 25%。发音（P）未评估，因此不显示正式总分；下方仅展示已评估的维度。</p>}
+              {!a.isComplete && <p className="mt-3 text-xs leading-5 text-amber-700">The four criteria each count for 25%. Pronunciation (P) was not assessed, so no official overall band is shown; only the assessed dimensions appear below.</p>}
               <dl className="mt-5 grid grid-cols-2 gap-3 text-xs">
                 <div><dt className="text-zinc-400">Words spoken</dt><dd className="font-medium tabular-nums">{m.totalWords ?? "–"}</dd></div>
                 <div><dt className="text-zinc-400">Speech rate</dt><dd className="font-medium tabular-nums">{m.wpm ? `${m.wpm} wpm` : "–"}</dd></div>
@@ -277,13 +277,13 @@ export function ReportView({ sessionId }: { sessionId: string }) {
                 const crit = CRITERIA.find((c) => c.key === d);
                 return (
                   <div key={d} className="mb-6 last:mb-0">
-                    <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-400">{DIMENSION_LABELS[d]} · {crit?.labelZh}</h3>
-                    <p className="mb-2 text-xs leading-5 text-zinc-400">评分依据：{crit?.indicators.join(" / ")}</p>
+                    <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-400">{DIMENSION_LABELS[d]}</h3>
+                    <p className="mb-2 text-xs leading-5 text-zinc-400">Criteria: {crit?.indicators.join(" / ")}</p>
                     <ul className="space-y-3">
                       {list.map((f) => (
                         <li key={f.id} className="rounded-xl bg-zinc-50 p-3.5 text-sm">
                           <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-xs">
-                            <Badge tone={f.kind === "strength" ? "green" : "indigo"}>{f.kind === "strength" ? "亮点" : f.kind === "error" ? "错误" : "待改进"}</Badge><Badge>{f.category}</Badge>
+                            <Badge tone={f.kind === "strength" ? "green" : "indigo"}>{f.kind === "strength" ? "Strength" : f.kind === "error" ? "Error" : "To improve"}</Badge><Badge>{f.category}</Badge>
                             {f.answerId && answerIndex.has(f.answerId) && <span className="text-zinc-400">Answer #{answerIndex.get(f.answerId)}</span>}
                             {f.possibleAsrError && <Badge tone="amber">may be a recognition error</Badge>}
                           </div>

@@ -22,7 +22,7 @@ export default async function Practice({
     <>
       <PageHeader
         title="Shadowing practice"
-        subtitle="跟读示范答案：先听原音，再录自己的声音，回放比对。转写差异只是参考信息，不是发音诊断，也不计入 IELTS 评分。"
+        subtitle="Shadow sample answers: listen first, record yourself, then compare. Transcript differences are reference only — not a pronunciation diagnosis and not part of your IELTS score."
       />
       <ShadowingStudio
         topics={topics}

@@ -112,7 +112,7 @@ export async function runScoring(assessmentId: string): Promise<void> {
         promptVersion: null, llmProvider: null, llmModel: null,
         metrics: metrics as unknown as Record<string, unknown>,
         audioAnalysis: (sessionAudio ?? null) as unknown as Record<string, unknown> | null,
-        notes: [...notes, `未接入 AI 评分（未配置 LLM_PROVIDER / DEEPSEEK_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY / DASHSCOPE_API_KEY / GEMINI_API_KEY）。本次只完成模考流程，不生成任何分数。${diagnostics.note}（${DIAGNOSTIC_VERSION}）`],
+        notes: [...notes, `AI scoring is not configured (no LLM_PROVIDER / DEEPSEEK_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY / DASHSCOPE_API_KEY / GEMINI_API_KEY). The mock flow completed without any scores being generated. ${diagnostics.note} (${DIAGNOSTIC_VERSION})`],
         asrProvider: asrProviders.join(",") || null, completedAt: new Date(),
       }).where(eq(assessments.id, a.id));
       return;

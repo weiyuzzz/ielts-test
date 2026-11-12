@@ -132,13 +132,13 @@ export function practiceHints(diff: WordDiff, stats: SpeechStats): string[] {
   const hints: string[] = [];
   if (diff.refWords === 0) return hints;
   if (diff.missing.length >= Math.max(2, Math.round(diff.refWords * 0.15))) {
-    hints.push(`有 ${diff.missing.length} 处参考词未出现在转写中，先放慢语速逐句跟读，再整段连读。`);
+    hints.push(`${diff.missing.length} reference words are missing from the transcript. Slow down and shadow sentence by sentence first, then read the whole passage through.`);
   }
   if (diff.changed.length) {
-    hints.push(`有 ${diff.changed.length} 处表达与示范不同（不一定是错误），可对比两种说法。`);
+    hints.push(`${diff.changed.length} phrasings differ from the model (not necessarily errors) — compare the two versions.`);
   }
-  if (stats.wpm && stats.wpm > 190) hints.push(`语速约 ${stats.wpm} wpm，偏快；示范答案按 130–160 wpm 更易听清。`);
-  if (stats.wpm && stats.wpm < 90 && diff.refWords > 20) hints.push(`语速约 ${stats.wpm} wpm，偏慢；先练熟句子再提速。`);
-  if (!diff.missing.length && !diff.changed.length) hints.push("转写与示范几乎一致，可以尝试脱稿复述。");
+  if (stats.wpm && stats.wpm > 190) hints.push(`Speaking rate is about ${stats.wpm} wpm — a bit fast; the model answer reads at 130–160 wpm, which is easier to follow.`);
+  if (stats.wpm && stats.wpm < 90 && diff.refWords > 20) hints.push(`Speaking rate is about ${stats.wpm} wpm — a bit slow; master the sentences first, then speed up.`);
+  if (!diff.missing.length && !diff.changed.length) hints.push("The transcript nearly matches the model — try retelling it without the text.");
   return hints;
 }

@@ -142,7 +142,7 @@ export function parseBank(raw: unknown): ParsedBank {
   if (!topics.length) throw new BankImportError("No usable topics found", "invalid_bank");
   return {
     season: b.season,
-    region: typeof b.region === "string" ? b.region.slice(0, 40) : "大陆地区",
+    region: typeof b.region === "string" ? b.region.slice(0, 40) : "Mainland China",
     label: typeof b.label === "string" ? b.label.slice(0, 160) : undefined,
     source: typeof b.source === "string" ? b.source.slice(0, 300) : undefined,
     topics,

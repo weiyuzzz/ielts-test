@@ -2,8 +2,9 @@ import { after } from "next/server";
 import { db } from "@/db";
 import { examSessions, examQuestions, questions, answerRecords, audioAssets, transcripts, assessments, users } from "@/db/schema";
 import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
-import { resolveConfig, EXAMINER_NAMES, type SpeakingExamConfig, type SpeakingMode } from "@/lib/speaking/config";
+import { resolveConfig, EXAMINER_NAMES_BY_GENDER, type SpeakingExamConfig, type SpeakingMode } from "@/lib/speaking/config";
 import { resolveVoiceProfile, sanitizeProfile, type VoiceProfile } from "@/lib/speaking/voice-profile";
+import { normalizeGender, normalizeModelId, examinerModelById } from "@/lib/avatar/models";
 import { asrTimingFromConfig } from "@/lib/speaking/asr-policy";
 import { canSubmitAnswer, canRepeat, decideAdvance, canFinish, type MachineState, type MachineError } from "@/lib/speaking/exam-machine";
 import { LINES, templateFollowUp, generateFollowUp } from "@/lib/speaking/examiner";
@@ -69,7 +70,12 @@ export async function createSession(user: User, mode: SpeakingMode) {
   if (!bank) throw new HttpError(500, "No active question bank. Import one in /admin.", "no_active_bank");
   const pool = await db.select().from(questions).where(eq(questions.setId, bank.id));
   const used = await usedTopics(user.id);
-  const examinerName = EXAMINER_NAMES[Math.floor(Math.random() * EXAMINER_NAMES.length)];
+  // The examiner's identity (name, look, voice pairing) is frozen here: a
+  // settings change must never swap the person mid-test (see getSessionView).
+  const examinerGender = normalizeGender(user.examinerGender);
+  const examinerModelId = normalizeModelId(user.examinerModel, examinerGender);
+  // The name belongs to the chosen model: look, name and voice are one person.
+  const examinerName = examinerModelById(examinerModelId)?.displayName ?? EXAMINER_NAMES_BY_GENDER[examinerGender][0];
   type StepDraft = Omit<typeof examQuestions.$inferInsert, "sessionId" | "stepIndex">;
   const steps: StepDraft[] = [];
   const opening = mode === "full" ? `${LINES.openingFull(examinerName, LINES.greetingPeriod())} ${LINES.idComplete} ` : "";
@@ -162,7 +168,7 @@ export async function createSession(user: User, mode: SpeakingMode) {
   return db.transaction(async (tx) => {
     const [s] = await tx
       .insert(examSessions)
-      .values({ userId: user.id, module: "speaking", mode, examinerName, configSnapshot: { ...config, bankSeason: bank.season, bankRegion: bank.region, voiceProfile: resolveVoiceProfile(user.examinerVoice) } as unknown as Record<string, unknown>, totalSteps: steps.length })
+      .values({ userId: user.id, module: "speaking", mode, examinerName, configSnapshot: { ...config, bankSeason: bank.season, bankRegion: bank.region, examinerGender, examinerModel: examinerModelId, voiceProfile: resolveVoiceProfile(user.examinerVoice) } as unknown as Record<string, unknown>, totalSteps: steps.length })
       .returning();
     await tx.insert(examQuestions).values(steps.map((st, i) => ({ ...st, sessionId: s.id, stepIndex: i })));
     return s;
@@ -208,7 +214,7 @@ export async function getSessionView(user: User, id: string) {
   const ts = answers.length ? await db.select().from(transcripts).where(inArray(transcripts.answerId, answers.map((a) => a.id))).orderBy(desc(transcripts.createdAt)) : [];
   const [assessment] = await db.select({ id: assessments.id, status: assessments.status }).from(assessments).where(eq(assessments.sessionId, s.id)).orderBy(desc(assessments.startedAt)).limit(1);
   return {
-    session: { id: s.id, mode: s.mode, status: s.status, currentStep: s.currentStep, examinerName: s.examinerName, startedAt: s.startedAt, completedAt: s.completedAt, config: s.configSnapshot as unknown as SpeakingExamConfig, voiceProfile: resolveSessionVoice(s.configSnapshot) },
+    session: { id: s.id, mode: s.mode, status: s.status, currentStep: s.currentStep, examinerName: s.examinerName, startedAt: s.startedAt, completedAt: s.completedAt, config: s.configSnapshot as unknown as SpeakingExamConfig, voiceProfile: resolveSessionVoice(s.configSnapshot), examinerGender: normalizeGender((s.configSnapshot as { examinerGender?: unknown }).examinerGender), examinerModel: normalizeModelId((s.configSnapshot as { examinerModel?: unknown }).examinerModel, normalizeGender((s.configSnapshot as { examinerGender?: unknown }).examinerGender)) },
     steps: steps.map((st) => {
       const a = answers.find((x) => x.examQuestionId === st.id);
       const t = a ? ts.find((x) => x.answerId === a.id) : undefined;

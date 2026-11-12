@@ -85,19 +85,18 @@ function ttsHeaders(extra: Record<string, string>, tts: TTSProvider, p: TtsParam
 }
 
 function audioResponse(clip: CachedClip, cache: string, tts: TTSProvider, p: TtsParams, synthesisMs = 0): Response {
-  return new Response(new Uint8Array(clip.audio), {
-    headers: ttsHeaders(
-      {
-        "Content-Type": clip.mimeType,
-        "Content-Length": String(clip.audio.byteLength),
-        "X-TTS-Cache": cache,
-        "X-TTS-Synthesis-Ms": String(Math.round(synthesisMs)),
-        "Server-Timing": `tts;dur=${Math.round(synthesisMs)};desc="${cache}"`,
-      },
-      tts,
-      p,
-    ),
-  });
+  const headers: Record<string, string> = {
+    "Content-Type": clip.mimeType,
+    "Content-Length": String(clip.audio.byteLength),
+    "X-TTS-Cache": cache,
+    "X-TTS-Synthesis-Ms": String(Math.round(synthesisMs)),
+    "Server-Timing": `tts;dur=${Math.round(synthesisMs)};desc="${cache}"`,
+  };
+  // Engine-measured word times ride along for word-anchored lip-sync.
+  if (clip.words?.length) {
+    headers["X-TTS-Words"] = Buffer.from(JSON.stringify(clip.words)).toString("base64");
+  }
+  return new Response(new Uint8Array(clip.audio), { headers: ttsHeaders(headers, tts, p) });
 }
 
 async function collect(body: ReadableStream<Uint8Array>): Promise<Uint8Array[]> {
@@ -138,7 +137,7 @@ async function buffered(tts: TTSProvider, p: TtsParams, key: string, requestSign
       const signal = mergeSignals(jobSignal, requestSignal);
       const r = await withTimeout(tts.id, TIMEOUTS.ttsMs, (timeoutSignal) =>
         tts.synthesize(p.text, { voice: p.profile.voice, profile: p.profile, speechAct: p.act, signal: mergeSignals(signal, timeoutSignal) }));
-      const out: CachedClip = { audio: new Uint8Array(r.audio), mimeType: r.mimeType };
+      const out: CachedClip = { audio: new Uint8Array(r.audio), mimeType: r.mimeType, ...(r.words?.length ? { words: r.words } : {}) };
       putClip(key, out);
       return out;
     });

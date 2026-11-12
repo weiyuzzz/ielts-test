@@ -59,13 +59,12 @@ interface CreateRecTaskResult {
 async function defaultClient(creds: { secretId: string; secretKey: string; region: string }): Promise<AsrSdkClient> {
   // Lazy require so the SDK stays a runtime dependency only of this provider.
   const sdk = await import("tencentcloud-sdk-nodejs-asr");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const AsrClient = (sdk as any).asr.v20190614.Client;
+  const AsrClient = sdk.asr.v20190614.Client;
   return new AsrClient({
     credential: { secretId: creds.secretId, secretKey: creds.secretKey },
     region: creds.region,
     profile: { httpProfile: { endpoint: "asr.tencentcloudapi.com" } },
-  }) as AsrSdkClient;
+  }) as unknown as AsrSdkClient;
 }
 
 export function tencentAsr(opts: TencentAsrOptions = {}): ASRProvider {
