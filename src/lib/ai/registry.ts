@@ -5,11 +5,12 @@
  *   ASR_PROVIDER=openai | browser | none        (default: openai if a key exists, else browser)
  *   LLM_PROVIDER=openai | deepseek | anthropic | none  (default: whichever key exists, else none)
  *   TTS_PROVIDER=openai | azure | browser       (default: auto — configured service, else browser)
- *   PRONUNCIATION_PROVIDER=azure | none         (default: azure if key+region exist, else none)
+ *   PRONUNCIATION_PROVIDER=azure | tencent-soe | none  (default: azure if key+region exist, else tencent-soe if Tencent credentials exist, else none)
  */
 import type { ASRProvider, LLMProvider, TTSProvider, PronunciationProvider } from "./types";
 import { ProviderError } from "./types";
 import { openAIASR, openAILLM, deepseekLLM, qwenLLM, geminiLLM, anthropicLLM, openAITTS, azureTTS, azurePronunciation } from "./providers";
+import { tencentSoePronunciation } from "./tencent-soe";
 import { SPEECH_ACT_LIST } from "@/lib/speaking/speech-act";
 import { readAiConfig, envOverridesFor, withEnvOverrides, type ProviderKey } from "@/lib/server/ai-config";
 
@@ -136,8 +137,10 @@ export function ttsAvailability() {
 
 export function getPronunciation(): PronunciationProvider | null {
   return withCfg("pronunciation", () => {
-    const p = process.env.PRONUNCIATION_PROVIDER || (process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION ? "azure" : "none");
-    return p === "azure" ? azurePronunciation() : null;
+    const p = process.env.PRONUNCIATION_PROVIDER || (process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION ? "azure" : process.env.TENCENT_SECRET_ID && process.env.TENCENT_SECRET_KEY ? "tencent-soe" : "none");
+    if (p === "azure") return azurePronunciation();
+    if (p === "tencent-soe") return tencentSoePronunciation();
+    return null;
   });
 }
 

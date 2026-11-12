@@ -59,7 +59,7 @@ stateDiagram-v2
 | ASRProvider | OpenAI 兼容 `/audio/transcriptions`（词级时间戳）；Browser Web Speech | `ASR_PROVIDER` |
 | LLMProvider | OpenAI 兼容 Chat Completions；DeepSeek（`deepseek`，默认 `https://api.deepseek.com/v1` + `deepseek-chat`，`DEEPSEEK_API_KEY`/`LLM_API_KEY`）；Qwen（`qwen`，DashScope 兼容模式，`DASHSCOPE_API_KEY`/`QWEN_API_KEY`）；Gemini（`gemini`，OpenAI 兼容端点，`GEMINI_API_KEY`）；Anthropic Messages。所有 OpenAI 兼容出站请求先经 `src/lib/ai/url-guard.ts` 的 `assertSafeEndpoint()` 校验（http/https、拒绝内网/环回/云元数据、DNS 复核；`ALLOW_LOCAL_AI_ENDPOINTS=1` 放行自建引擎）。采样参数：每次调用 opts → `LLM_TEMPERATURE`/`LLM_MAX_TOKENS` → 默认 0.2/2500。备用评分模型：`LLM_FALLBACK_PROVIDER`（+ `LLM_FALLBACK_MODEL/API_KEY/BASE_URL`），仅主 Provider 失败时使用、同一套 rubric 与校验，切换必记录 | `LLM_PROVIDER` / `LLM_FALLBACK_*` |
 | TTSProvider | OpenAI 兼容 `/audio/speech`（含本地 Kokoro）、Azure Neural TTS、浏览器 speechSynthesis；由 `VoiceProfile.provider` 选择，能力通过 `supports` 声明 | `TTS_PROVIDER` / `EXAMINER_PROFILE` / 用户设置 |
-| PronunciationProvider | Azure Pronunciation Assessment（非脚本模式，ReferenceText=转写文本） | `PRONUNCIATION_PROVIDER` |
+| PronunciationProvider | Azure Pronunciation Assessment（非脚本模式，ReferenceText=转写文本）；腾讯云智聆口语评测（`tencent-soe`，`src/lib/ai/tencent-soe.ts`：纯 TS TC3 签名零依赖，Init+Transmit 分片流，段落 ≤120 词/组——有词级时间戳时按句子边界分组并用真实时间戳切音频逐组评测后词数加权聚合，`TENCENT_SECRET_ID/KEY/SOE_REGION/SOE_SCORE_COEFF`） | `PRONUNCIATION_PROVIDER` |
 
 所有调用都经过 `withTimeout()`，超时会真正 abort 请求。业务代码只依赖接口。
 
