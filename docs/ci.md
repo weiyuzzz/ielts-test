@@ -24,6 +24,8 @@ npx tsx --test tests/audio-perf.test.ts      # 24
 npx tsx --test tests/scoring-rubric.test.ts  # 14
 npx tsx --test tests/bank-learning.test.ts   # 14（1 项需要 DATABASE_URL，此处 SKIP）
 npx tsx --test tests/learning-store.test.ts  # 7
+npx tsx --test tests/bank-data.test.ts       # 4（题库脏数据守卫）
+npx tsx --test tests/ai-config.test.ts       # 8（后台 AI 配置）
 npm run build
 ```
 

@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { Card, Badge } from "@/components/ui";
+import { AiSettings } from "./ai-settings";
 
 interface AudioDecision {
   source: "preset" | "tts" | "blocked";
@@ -171,6 +172,8 @@ export function AdminView() {
           </label>
         </Card>
       )}
+
+      <AiSettings />
 
       <Card className="p-5">
         <h2 className="mb-3 font-semibold">季度题库</h2>

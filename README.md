@@ -29,8 +29,8 @@ npm run build && npx next start -p 3100   # 生产；开发用 npm run dev -p 31
 - 两类音频严格分开：`questions.questionAudioUrl`（考官朗读题干，音色必须等于本场考试音色，否则回退 TTS）与 `learning.followAudio`（跟读示范，永不进入考试）。
 - `/speaking/questions`：Part 筛选 / 搜索 / 展开示范答案、思路、关键词，逐段播放与复制。
 - `/speaking/practice`：听原音 → 录音 → 回放 → ASR 转写 → 词级差异对比。无 ASR 时仍可录音回放；录音只存在页面内，不写入考试成绩。
-- 内容诚信：AI 起草的素材强制 `reviewStatus = draft`，UI 标注「未审核草稿」；当前 548 题中仅 6 题有素材、0 题有授权录音，报告见 `docs/phase3-question-learning.md`。
-- 题库只收**大陆**题：文档里 6 个非大陆 Part 1 主题（31 题）与 7 张非大陆卡一律不导入。当季大陆题库为 Part 1 210 题 / 33 主题、Part 2 58 卡、Part 3 280 题；对账方式与逐主题差异见 `docs/bank-audit.md`，解析脚本为 `scripts/parse-bank-doc.py`。
+- 内容诚信：AI 起草的素材强制 `reviewStatus = draft`，UI 标注「未审核草稿」；当前 549 题中仅 6 题有素材、0 题有授权录音，报告见 `docs/phase3-question-learning.md`。
+- 题库只收**大陆**题：文档里 6 个非大陆 Part 1 主题（31 题）与 7 张非大陆卡一律不导入。当季大陆题库为 Part 1 211 题 / 33 主题、Part 2 58 卡、Part 3 280 题；对账方式与逐主题差异见 `docs/bank-audit.md`，解析脚本为 `scripts/parse-bank-doc.py`。
 
 ### 生产环境的 Sidecar 存储（必读）
 
@@ -200,6 +200,16 @@ Part 1 超时不会再问你 Part 1 的题，Part 3 超时直接收尾并进入�
 | 考官语音 | 浏览器 speechSynthesis | 配置任一 TTS 服务后自动切换 |
 | 评分 | **不评分** | 未接入 AI 时只走完整考试流程，录音/转写/回放照常可用 |
 | Pronunciation | **不评估** | 不会根据文本估算发音 |
+
+## AI 服务配置（后台 `/admin`）
+
+LLM 评分、考官语音、转写、发音评测都能在 `/admin` 的「AI 服务」面板里配置，**保存即生效，无需重启**：
+
+- 每个服务独立开关：关掉 LLM → 考试照常完成、报告显示「未评分」（绝不伪造分数）；关掉 TTS → 回退浏览器语音；关掉 ASR → 用浏览器 Web Speech。
+- `provider = 自动` 沿用环境变量；显式选择后以面板为准（可填 Base URL / Model / Voice / Region）。
+- 密钥只写入服务器上的 `storage/ai-config.json`（已 gitignore），接口只回传 `••••后四位`，**永远不会发到浏览器**。
+- 该文件是**单实例**配置：多实例部署请用环境变量/密钥管理，或让各实例共享同一卷。
+- 设置了 `ADMIN_TOKEN` 时，保存操作需要页面上方的管理令牌。
 
 ## 测试
 ```bash

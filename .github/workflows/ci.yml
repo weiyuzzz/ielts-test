@@ -68,6 +68,15 @@ jobs:
       - name: Learning sidecar storage tests
         run: npx tsx --test tests/learning-store.test.ts
 
+      - name: Bank data integrity
+        run: npx tsx --test tests/bank-data.test.ts
+
+      - name: AI config tests
+        run: npx tsx --test tests/ai-config.test.ts
+
+      - name: Per-part timing tests
+        run: npx tsx --test tests/part-timing.test.ts
+
       - name: Production build
         env:
           DATABASE_URL: postgresql://build:build@127.0.0.1:5432/build

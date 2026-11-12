@@ -98,12 +98,44 @@ def topic_name_zh(raw: str) -> str:
 
 
 def squeeze(s: str) -> str:
-    """Collapse whitespace and drop the space the document puts before `?`."""
+    """Collapse whitespace and tidy the punctuation the document spaces badly."""
     s = re.sub(r"\s+", " ", s).strip()
-    return re.sub(r"\s+([?？!！,，.。;；:：])", r"\1", s)
+    s = re.sub(r"\s+([?？!！,，.。;；:：])", r"\1", s)
+    # `tired,do` and `most?Why`: the source omits the space after punctuation.
+    s = re.sub(r"([,;:?!？])(?=[A-Za-z])", r"\1 ", s)
+    return s
 
 
-def parse_part1(text: str) -> tuple[list[dict], list[str]]:
+def ascii_question(s: str) -> str:
+    """The bank stores English questions terminated with `?`, never with `？`."""
+    return s.replace("？", "?").strip()
+
+
+# A few rows pack two questions into one cell: the second question's English half
+# lands inside the first one's Chinese hint. Splitting them keeps English out of
+# `textZh` — `tests/bank-data.test.ts` guards exactly this corruption.
+EMBEDDED = re.compile(
+    r"^(?P<zh1>[\u4e00-\u9fa5][^A-Za-z]{0,90}?)\s*"
+    r"(?P<en2>[A-Z][A-Za-z0-9 ,'’\-\u2019\(\)\./:;!&%]{2,150}?[?？])\s*"
+    r"(?P<zh2>[\u4e00-\u9fa5].*)$"
+)
+
+
+def split_cell(en: str, zh: str) -> list[tuple[str, str]]:
+    """`Do u prefer...? 你更喜欢...? How much time...? 你每周...?` -> two questions."""
+    m = EMBEDDED.match(zh)
+    if not m:
+        return [(en, zh)]
+    first_zh = m.group("zh1").strip()
+    if not first_zh.endswith(("？", "?")):
+        first_zh += "？"  # keep the Chinese hint phrased as the question it is
+    return [
+        (en, first_zh),
+        (ascii_question(m.group("en2")), m.group("zh2").strip()),
+    ]
+
+
+def parse_part1(text: str) -> tuple[list[dict], list[str], list[str]]:
     start = text.find("Part1口语素材库-IELTS")
     if start < 0:
         raise SystemExit("Part 1 table header not found — is this the right document?")
@@ -113,7 +145,7 @@ def parse_part1(text: str) -> tuple[list[dict], list[str]]:
         limit = len(seg)
 
     rows = list(ROW_HEAD.finditer(seg[:limit]))
-    out, problems = [], []
+    out, problems, notes = [], [], []
 
     for i, m in enumerate(rows):
         end = rows[i + 1].start() if i + 1 < len(rows) else limit
@@ -135,24 +167,26 @@ def parse_part1(text: str) -> tuple[list[dict], list[str]]:
                 continue
             if re.search(r"如\s*$", body[max(0, c.start() - 8):c.start()]):
                 continue  # `如 Is this the right size for you?` inside 语料扩展
-            k = norm(en)
-            if not k or k in seen:
-                continue
-            seen.add(k)
-            cells.append({"text": en, "textZh": zh})
+            for one_en, one_zh in split_cell(ascii_question(en), zh):
+                k = norm(one_en)
+                if not k or k in seen:
+                    continue
+                seen.add(k)
+                cells.append({"text": one_en, "textZh": one_zh})
 
-        if len(cells) != declared:
-            problems.append(
-                f"{name}: document declares {declared}, extracted {len(cells)}"
-                + (" (merged sub-questions)" if len(cells) == declared - 1 else "")
-            )
+        # Only a *shortfall* is a parse failure: a surplus means one document cell
+        # held two questions and we split it, which is intended.
+        if len(cells) < declared:
+            problems.append(f"{name}: document declares {declared}, extracted only {len(cells)}")
+        elif len(cells) > declared:
+            notes.append(f"{name}: document declares {declared}, 抽出 {len(cells)}（合并单元格已拆分）")
 
         out.append(
             dict(name=name, nameZh=name_zh, region=region or "", kind=kind,
                  declared=declared, examinees=examinees, questions=cells)
         )
 
-    return out, problems
+    return out, problems, notes
 
 
 def slug(name: str) -> str:
@@ -217,7 +251,7 @@ def main() -> int:
         print(f"document dump not found: {doc}", file=sys.stderr)
         return 2
 
-    parsed, problems = parse_part1(doc.read_text(encoding="utf-8"))
+    parsed, problems, notes = parse_part1(doc.read_text(encoding="utf-8"))
     res = apply_to_bank(Path(args.bank), parsed, args.write)
 
     mainland = res["mainland"]
@@ -241,9 +275,14 @@ def main() -> int:
     print("\n题数与文档自述不一致:")
     for p in problems:
         print("  ⚠️", p)
-    unmerged = [p for p in problems if "merged sub-questions" not in p]
+    if not problems:
+        print("  无")
+    if notes:
+        print("\n合并单元格已拆分（题数多于自述，属预期）:")
+        for n in notes:
+            print("  ·", n)
     print("\n已写入" if res["wrote"] else "\n未写入（dry run）")
-    return 1 if unmerged else 0
+    return 1 if problems else 0
 
 
 if __name__ == "__main__":

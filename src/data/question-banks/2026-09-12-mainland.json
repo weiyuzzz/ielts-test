@@ -294,7 +294,7 @@
      "textZh": "你感到疲惫的时候会做什么？"
     },
     {
-     "text": "When you feel tired,do you still go out with your frineds？",
+     "text": "When you feel tired, do you still go out with your frineds?",
      "textZh": "当你感到疲惫的时候，你还会和朋友出去吗？"
     }
    ],
@@ -322,7 +322,7 @@
      "textZh": "你经常骑自行车吗？"
     },
     {
-     "text": "What transport do you often use when travelling？",
+     "text": "What transport do you often use when travelling?",
      "textZh": "你旅行时经常使用什么交通工具？"
     }
    ],
@@ -367,7 +367,11 @@
     },
     {
      "text": "Do u prefer to study in the mornings or in the afternoon?",
-     "textZh": "你更喜欢在早上还是下午学习 How much time do u spend on your studies each week? 你每周花多少时间在学习上？"
+     "textZh": "你更喜欢在早上还是下午学习？"
+    },
+    {
+     "text": "How much time do u spend on your studies each week?",
+     "textZh": "你每周花多少时间在学习上？"
     },
     {
      "text": "What technology do u use when u study?",
@@ -418,7 +422,7 @@
      "textZh": "你是否怀念学生时代？"
     },
     {
-     "text": "Who helps u the most？Why？",
+     "text": "Who helps u the most? Why?",
      "textZh": "谁对你帮助最大？为什么？"
     }
    ],
@@ -530,7 +534,7 @@
      "textZh": "你在学校里学过家乡的历史吗？"
     },
     {
-     "text": "Did u learn about the culture of your hometown in your childhood？",
+     "text": "Did u learn about the culture of your hometown in your childhood?",
      "textZh": "你在童年时学过家乡的文化吗？"
     }
    ],
@@ -578,7 +582,7 @@
      "textZh": "你计划在这里住很长时间吗？"
     },
     {
-     "text": "Please describe the room u live in？",
+     "text": "Please describe the room u live in?",
      "textZh": "描述你居住的房间？"
     },
     {
@@ -598,7 +602,7 @@
      "textZh": "你在公寓经常做什么？"
     },
     {
-     "text": "What makes u feel pleasant in your home？",
+     "text": "What makes u feel pleasant in your home?",
      "textZh": "什么让你在家里感到愉快？"
     },
     {
@@ -990,11 +994,11 @@
      "textZh": "你使用耳机吗？"
     },
     {
-     "text": "What type of headphones do you use？",
+     "text": "What type of headphones do you use?",
      "textZh": "你用什么类型的耳机？"
     },
     {
-     "text": "When would you use headphones？",
+     "text": "When would you use headphones?",
      "textZh": "你在什么时候使用耳机？"
     },
     {
@@ -1214,7 +1218,7 @@
    "examinees": 497,
    "part1": [
     {
-     "text": "Do you like science？",
+     "text": "Do you like science?",
      "textZh": "你喜欢科学吗？"
     },
     {

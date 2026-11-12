@@ -11,9 +11,19 @@ import type { ASRProvider, LLMProvider, TTSProvider, PronunciationProvider } fro
 import { ProviderError } from "./types";
 import { openAIASR, openAILLM, anthropicLLM, openAITTS, azureTTS, azurePronunciation } from "./providers";
 import { SPEECH_ACT_LIST } from "@/lib/speaking/speech-act";
+import { readAiConfig, envOverridesFor, withEnvOverrides, type ProviderKey } from "@/lib/server/ai-config";
 import { DEFAULT_PROFILE_ID, VOICE_PRESETS, resolveVoiceProfile, type VoiceProviderId } from "@/lib/speaking/voice-profile";
 
 const hasOpenAI = () => !!(process.env.OPENAI_API_KEY || process.env.LLM_API_KEY || process.env.ASR_API_KEY);
+
+/**
+ * Apply the /admin AI config to process.env for the duration of a synchronous
+ * provider construction. The provider factories capture their settings at
+ * construction time, so restoring the env afterwards is safe.
+ */
+function withCfg<T>(key: ProviderKey, fn: () => T): T {
+  return withEnvOverrides(envOverridesFor(readAiConfig(), key), fn);
+}
 
 export const browserASR: ASRProvider = {
   id: "browser-web-speech",
@@ -33,28 +43,34 @@ export const browserTTS: TTSProvider = {
 };
 
 export function getASR(): ASRProvider | null {
-  const p = process.env.ASR_PROVIDER || (process.env.OPENAI_API_KEY || process.env.ASR_API_KEY ? "openai" : "browser");
-  if (p === "openai") return openAIASR();
-  if (p === "browser") return browserASR;
-  return null;
+  return withCfg("asr", () => {
+    const p = process.env.ASR_PROVIDER || (process.env.OPENAI_API_KEY || process.env.ASR_API_KEY ? "openai" : "browser");
+    if (p === "openai") return openAIASR();
+    if (p === "browser") return browserASR;
+    return null;
+  });
 }
 
 export function getLLM(): LLMProvider | null {
-  const p = process.env.LLM_PROVIDER || (hasOpenAI() ? "openai" : process.env.ANTHROPIC_API_KEY ? "anthropic" : "none");
-  if (p === "openai") return openAILLM();
-  if (p === "anthropic") return anthropicLLM();
-  return null;
+  return withCfg("llm", () => {
+    const p = process.env.LLM_PROVIDER || (hasOpenAI() ? "openai" : process.env.ANTHROPIC_API_KEY ? "anthropic" : "none");
+    if (p === "openai") return openAILLM();
+    if (p === "anthropic") return anthropicLLM();
+    return null;
+  });
 }
 
 export function getTTS(): TTSProvider {
-  const p = process.env.TTS_PROVIDER;
-  if (p === "azure") return azureTTS();
-  if (p === "openai") return openAITTS();
-  if (p === "browser") return browserTTS;
-  // Auto: never fall back to the mechanical browser voice when a real engine is configured.
-  if (process.env.TTS_BASE_URL || process.env.TTS_API_KEY || process.env.OPENAI_API_KEY) return openAITTS();
-  if (process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION) return azureTTS();
-  return browserTTS;
+  return withCfg("tts", () => {
+    const p = process.env.TTS_PROVIDER;
+    if (p === "azure") return azureTTS();
+    if (p === "openai") return openAITTS();
+    if (p === "browser") return browserTTS;
+    // Auto: never fall back to the mechanical browser voice when a real engine is configured.
+    if (process.env.TTS_BASE_URL || process.env.TTS_API_KEY || process.env.OPENAI_API_KEY) return openAITTS();
+    if (process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION) return azureTTS();
+    return browserTTS;
+  });
 }
 
 const hasAzureSpeech = () => !!(process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION);
@@ -66,6 +82,7 @@ const hasServerTts = () => !!(process.env.TTS_BASE_URL || process.env.TTS_API_KE
  * would be worse than telling the caller the voice is unavailable.
  */
 export function getTTSFor(provider: VoiceProviderId): TTSProvider {
+  return withCfg("tts", () => {
   if (provider === "azure") {
     if (!hasAzureSpeech()) throw new ProviderError("azure-tts", "config", "AZURE_SPEECH_KEY / AZURE_SPEECH_REGION not configured");
     return azureTTS();
@@ -75,21 +92,24 @@ export function getTTSFor(provider: VoiceProviderId): TTSProvider {
     return openAITTS();
   }
   return browserTTS;
+  });
 }
 
 /** Which providers this deployment can actually reach — used by the Voice Lab. */
 export function ttsAvailability() {
-  return {
+  return withCfg("tts", () => ({
     azure: hasAzureSpeech(),
     openai: hasServerTts(),
     kokoro: hasServerTts(),
     browser: true,
-  };
+  }));
 }
 
 export function getPronunciation(): PronunciationProvider | null {
-  const p = process.env.PRONUNCIATION_PROVIDER || (process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION ? "azure" : "none");
-  return p === "azure" ? azurePronunciation() : null;
+  return withCfg("pronunciation", () => {
+    const p = process.env.PRONUNCIATION_PROVIDER || (process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION ? "azure" : "none");
+    return p === "azure" ? azurePronunciation() : null;
+  });
 }
 
 export const TIMEOUTS = {
@@ -107,7 +127,8 @@ export function capabilities() {
   const llm = getLLM();
   const tts = getTTS();
   const pron = getPronunciation();
-  const active = resolveVoiceProfile(process.env.EXAMINER_PROFILE || process.env.TTS_VOICE);
+  const cfg = readAiConfig();
+  const active = resolveVoiceProfile(process.env.EXAMINER_PROFILE || cfg.tts.voice || process.env.TTS_VOICE);
   return {
     asr: asr ? { id: asr.id, location: asr.location, model: asr.model ?? null } : null,
     llm: llm ? { id: llm.id, model: llm.model ?? null } : null,
@@ -115,7 +136,7 @@ export function capabilities() {
       id: tts.id,
       location: tts.location,
       model: tts.model ?? null,
-      voice: process.env.TTS_VOICE || (tts.id === "azure-neural-tts" ? process.env.AZURE_TTS_VOICE || "en-GB-SoniaNeural" : "auto"),
+      voice: cfg.tts.voice || process.env.TTS_VOICE || (tts.id === "azure-neural-tts" ? process.env.AZURE_TTS_VOICE || "en-GB-SoniaNeural" : "auto"),
       format: process.env.TTS_FORMAT || "mp3",
       streaming: typeof tts.synthesizeStream === "function",
       supports: tts.supports ?? { ssml: false, instructions: false, style: false, pitch: false },
