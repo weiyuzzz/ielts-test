@@ -560,24 +560,25 @@ async function doSpeak(text: string, opts: SpeakOptions, key: string): Promise<S
       // 2) Not cached yet. The exam experience REQUIRES the real examiner
       //    voice (a robotic browser fallback mid-exam is worse than a short
       //    wait), so wait for the synthesis the scheduler is running/queuing
-      //    at CURRENT priority. Dynamic LLM follow-ups hit the same path.
+      //    at CURRENT priority. If the engine is down (e.g. an MPS crash),
+      //    launchd restarts it within seconds + model warm-up — poll until it
+      //    answers instead of giving up to a truncated stream.
       promoteTTS(text, opts.voice, act, profile);
-      const warmed = await waitForTTS(text, opts.voice, 120_000, act, profile);
+      let warmed = await waitForTTS(text, opts.voice, 120_000, act, profile);
+      for (let attempt = 0; !warmed && attempt < 3 && !opts.signal?.aborted; attempt++) {
+        // Engine crash-restart window: ~5s restart + ~20s model warm-up.
+        await new Promise((r) => setTimeout(r, 10_000));
+        warmed = await waitForTTS(text, opts.voice, 60_000, act, profile);
+      }
       if (warmed) {
         const o = await playClip(warmed, opts.signal);
         if (o.status === "ended") return finish({ ok: true, via: "server-cache", outcome: o });
         if (o.status === "interrupted") return finish({ ok: false, via: "server-cache", outcome: o });
       } else {
-        // 3) Synthesis unavailable even after the wait: try the progressive
-        //    GET stream, then the buffered fallback, before ever falling back
-        //    to the browser voice.
-        const streamOutcome = await playStream(text, opts.voice, act, profile, opts.signal);
-        if (streamOutcome.status === "ended") return finish({ ok: true, via: "server-stream", outcome: streamOutcome });
-        if (streamOutcome.status === "interrupted") return finish({ ok: false, via: "server-stream", outcome: streamOutcome });
-        if (streamOutcome.partial) {
-          // Already audible but truncated: do NOT replay the line.
-          return finish({ ok: false, via: "server-stream", outcome: streamOutcome });
-        }
+        // 3) Synthesis unavailable even after the waits: buffered fallback.
+        //    The progressive stream is deliberately NOT used: the engine's
+        //    chunked streaming drops leading chunks on long lines ("only the
+        //    second half was spoken") and streaming is disabled server-side.
         const clip = await fetchClip(text, opts.voice, act, profile, opts.signal);
         if (clip) {
           const o = await playClip(clip, opts.signal);
