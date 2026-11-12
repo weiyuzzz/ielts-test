@@ -21,10 +21,17 @@
 | GET | /api/tts?text=&voice= | – | audio/* (progressive stream) | 实时播放最高优先级：**不等待** POST 预加载，并取消同文本的预加载任务；`X-TTS-Cache: miss-stream \| hit \| miss`；`X-TTS-Synthesis-Ms` + `Server-Timing` 供性能追踪 |
 | POST | /api/tts | `{text, voice?}` | audio/* | 后台预加载（可取消，客户端断开即中止）；501 表示使用浏览器 TTS |
 | PUT | /api/settings | `{displayName?, targetBand?, examDate?, examinerVoice?, showSubtitles?}` | `{ok,user}` | |
-| GET | /api/admin/banks | `?id=` 可选 | `{banks[], protected}` / `{set, topics[]}` | 列出季度题库；带 `id` 时返回可浏览的题库内容 |
+| GET | /api/admin/banks | `?id=` 可选 | `{banks[], protected}` / `{set, topics[], audio, examinerProfile, learning}` | 列出季度题库（含 `audio.{withAudio,total}`）；带 `id` 时返回题库内容、音频覆盖率、逐题音频/素材状态 |
 | POST | /api/admin/banks | `{bank: {...}, activate?: boolean}` | 201 `{id, season, counts}` | 导入/覆盖同一 season 的题库；写操作在设置 ADMIN_TOKEN 后需 `x-admin-token` |
 | PUT | /api/admin/banks | `{id}` | `{id, active}` | 切换启用题库，考试只从启用题库抽题 |
 
 评分状态新增 `unscored`：未配置 AI 评分时流程照常完成但不产生分数（`overallBand: null`、`dimensions: []`）；AI 失败为 `failed`，均不回退启发式分数。接入 AI 后若四项未全部评估，`overallBand` 仍为 `null`。
 
 `/api/tts` 两个方法共享服务端内存 LRU 缓存（按引擎/音色/文本/格式/语速/韵律生成 key），同一句的并发请求只合成一次。文本上限 1500 字符，需携带 `ielts_uid` cookie。
+
+## 学习与跟读（Phase 3）
+
+| Method | Path | Body | 返回 | 说明 |
+|---|---|---|---|---|
+| GET | /api/learning/questions | `?topicKey=&part=` | `{season, region, questions[], asr:{available,id}}` | 某主题的题目 + 学习素材（示范答案/思路/关键词/跟读音频）+ `followAudio` 可播性。考试链路不调用 |
+| POST | /api/learning/asr | multipart: `audio`(wav/webm), `hint?` | 200 `{status:"ok", text, provider}` / `{status:"unavailable", reason}` / `{status:"failed", error}`；400 `invalid_audio`；413 `audio_too_large` | Shadowing 转写。**不落库**：音频在内存中转写后丢弃，绝不写 `answer_records`/`audio_assets`。缺 ASR 时返回 200 + `unavailable`，页面仍可录音回放 |

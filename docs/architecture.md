@@ -13,6 +13,7 @@ Browser (Next.js client)
 - **LLM 不控制流程**：`decideAdvance()` 决定 next / follow_up / finish；`full` 模考禁用追问、严格走题库脚本，追问仅在练习模式，LLM 措辞经 `sanitizeFollowUp()` 过滤。
 - **题库权威**：`question_sets.is_active` + `season` 决定唯一启用题库，`createSession()` 只从该库按主题抽题（Part 1 = 1 万年保留 + 2 当季，主题下随机）。**Part 3 严格延续 Part 2**：题卡选定后，Part 3 只从该题卡同 `topic_key` 的题集里抽样并按 `order_index` 还原顺序，不跨话题借题；带 Part 3 的考试也只会选择有配套 Part 3 素材的题卡。`configSnapshot` 记录 `bankSeason/bankRegion`。`/admin` 提供导入、切换与内容浏览。
 - **评分可缺省**：未配置 AI 评分时 `runScoring()` 直接落 `unscored`，不产生任何 band；四项各 25%，缺项时无正式总分。
+- **学习素材与考试物理隔离**（Phase 3）：学习素材存在 `src/data/learning/<season>.json`（sidecar，按自然键 `season+topicKey+part+归一化题干` 关联），考试侧只经 `lib/content/projection.ts` 的白名单投影出题，不读该文件；两类音频（考官题干音频 / 学习跟读音频）字段、播放器与校验规则完全分开。详见 `docs/phase3-question-learning.md`。
 
 ## 2. 考试状态机（`src/lib/speaking/exam-machine.ts`）
 ```mermaid

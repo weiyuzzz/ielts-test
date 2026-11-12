@@ -13,6 +13,7 @@ import { withTimeout } from "@/lib/ai/types";
 import { saveAudio, extForMime, readAudio } from "./storage";
 import { ensureSeed } from "./seed";
 import { activeBank } from "./bank-service";
+import { projectExamStep } from "@/lib/content/projection";
 import { HttpError } from "./user";
 import { runScoring } from "./report-service";
 
@@ -211,13 +212,16 @@ export async function getSessionView(user: User, id: string) {
     steps: steps.map((st) => {
       const a = answers.find((x) => x.examQuestionId === st.id);
       const t = a ? ts.find((x) => x.answerId === a.id) : undefined;
-      return {
-        id: st.id, stepIndex: st.stepIndex, part: st.part, kind: st.kind, topic: st.topic, examinerLead: st.examinerLead, promptText: st.promptText,
-        cuePoints: st.cuePoints ?? [], generator: st.generator, prepSeconds: st.prepSeconds, answerSeconds: st.answerSeconds, status: st.status, repeatCount: st.repeatCount,
-        questionAudioUrl: st.questionId ? audioByQuestion.get(st.questionId)?.url ?? null : null,
-        questionVoiceProfile: st.questionId ? audioByQuestion.get(st.questionId)?.profile ?? null : null,
-        answer: a ? { id: a.id, attempt: a.attempt, status: a.status, durationMs: a.durationMs, audioAssetId: a.audioAssetId, transcript: t ? { status: t.status, text: t.text, provider: t.provider } : null } : null,
-      };
+      // Whitelisted projection: an exam step can only ever carry exam fields.
+      // Study material lives elsewhere and is not part of this shape.
+      return projectExamStep(
+        st,
+        {
+          url: st.questionId ? audioByQuestion.get(st.questionId)?.url ?? null : null,
+          profile: st.questionId ? audioByQuestion.get(st.questionId)?.profile ?? null : null,
+        },
+        a ? { id: a.id, attempt: a.attempt, status: a.status, durationMs: a.durationMs, audioAssetId: a.audioAssetId, transcript: t ? { status: t.status, text: t.text, provider: t.provider } : null } : null,
+      );
     }),
     assessment: assessment ?? null,
   };
