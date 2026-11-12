@@ -33,6 +33,8 @@ export interface ProviderConfig {
   apiKey?: string;
   /** Two-credential providers (e.g. Tencent Cloud): the access-key id. */
   secretId?: string;
+  /** Tencent Cloud account-level AppID (shared by sub-accounts). */
+  appId?: string;
   voice?: string;
   region?: string;
   /** LLM only: sampling temperature 0–2 (overrides LLM_TEMPERATURE). */
@@ -74,7 +76,7 @@ const DEFAULTS: AiConfig = {
 
 const PROVIDER_IDS: Record<ProviderKey, string[]> = {
   llm: ["auto", "openai", "deepseek", "qwen", "gemini", "anthropic", "none"],
-  asr: ["auto", "openai", "browser", "none"],
+  asr: ["auto", "openai", "tencent-asr", "browser", "none"],
   tts: ["auto", "openai", "azure", "browser"],
   pronunciation: ["auto", "azure", "tencent-soe", "none"],
 };
@@ -103,12 +105,14 @@ function sanitizeProvider(key: ProviderKey, raw: unknown): ProviderConfig {
   const model = str(r.model, 120);
   const apiKey = str(r.apiKey, 500);
   const secretId = str(r.secretId, 200);
+  const appId = str(r.appId, 60);
   const voice = str(r.voice, 120);
   const region = str(r.region, 60);
   if (baseUrl) out.baseUrl = baseUrl;
   if (model) out.model = model;
   if (apiKey) out.apiKey = apiKey;
   if (secretId) out.secretId = secretId;
+  if (appId) out.appId = appId;
   if (voice) out.voice = voice;
   if (region) out.region = region;
   if (key === "llm") {
@@ -194,7 +198,7 @@ function mergeProvider(cur: ProviderConfig, p?: Partial<ProviderConfig> & { clea
   if (!p) return out;
   if (typeof p.enabled === "boolean") out.enabled = p.enabled;
   if (typeof p.provider === "string" && p.provider.trim()) out.provider = p.provider.trim();
-  for (const f of ["baseUrl", "model", "voice", "region", "secretId"] as const) {
+  for (const f of ["baseUrl", "model", "voice", "region", "secretId", "appId"] as const) {
     if (typeof p[f] === "string") {
       const v = (p[f] as string).trim();
       if (v) out[f] = v; else delete out[f];
@@ -225,6 +229,7 @@ export function publicAiConfig(): PublicAiConfig {
     ...(p.baseUrl ? { baseUrl: p.baseUrl } : {}),
     ...(p.model ? { model: p.model } : {}),
     ...(p.secretId ? { secretId: p.secretId } : {}),
+    ...(p.appId ? { appId: p.appId } : {}),
     ...(p.voice ? { voice: p.voice } : {}),
     ...(p.region ? { region: p.region } : {}),
     ...(p.temperature !== undefined ? { temperature: p.temperature } : {}),
@@ -288,6 +293,11 @@ export function envOverridesFor(cfg: AiConfig, key: ProviderKey): Record<string,
     if (p.secretId) out.TENCENT_SECRET_ID = p.secretId;
     if (p.apiKey) out.TENCENT_SECRET_KEY = p.apiKey;
     if (p.region) out.TENCENT_SOE_REGION = p.region;
+  }
+  if (key === "asr" && p.provider === "tencent-asr") {
+    if (p.secretId) out.TENCENT_SECRET_ID = p.secretId;
+    if (p.apiKey) out.TENCENT_SECRET_KEY = p.apiKey;
+    if (p.appId) out.TENCENT_APP_ID = p.appId;
   }
   if (key === "tts" && p.provider === "azure" && p.region) out.AZURE_SPEECH_REGION = p.region;
   return out;

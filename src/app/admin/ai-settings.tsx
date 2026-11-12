@@ -10,6 +10,7 @@ interface Prov {
   baseUrl?: string;
   model?: string;
   secretId?: string;
+  appId?: string;
   voice?: string;
   region?: string;
   /** Numeric sampling fields (LLM only); the draft carries them as strings. */
@@ -34,7 +35,7 @@ interface Draft extends Omit<Prov, NumericField> {
 }
 type Drafts = Record<ProviderKey, Draft>;
 
-const PROVIDERS: Record<ProviderKey, { label: string; hint: string; options: { id: string; label: string }[]; fields: ("baseUrl" | "model" | "voice" | "region" | "secretId" | "temperature" | "maxTokens")[] }> = {
+const PROVIDERS: Record<ProviderKey, { label: string; hint: string; options: { id: string; label: string }[]; fields: ("baseUrl" | "model" | "voice" | "region" | "secretId" | "appId" | "temperature" | "maxTokens")[] }> = {
   llm: {
     label: "语言评分 LLM（FC / LR / GRA，发音维度需音频证据）",
     hint: "关闭后考试仍可完成，但报告会是「未评分」，绝不伪造分数。所有 Provider 使用同一套评分标准与校验。",
@@ -62,14 +63,15 @@ const PROVIDERS: Record<ProviderKey, { label: string; hint: string; options: { i
   },
   asr: {
     label: "语音转写 ASR",
-    hint: "关闭后使用浏览器 Web Speech；没有 ASR 时录音与回放仍可用，但不会自动评分。",
+    hint: "关闭后使用浏览器 Web Speech；没有 ASR 时录音与回放仍可用，但不会自动评分。腾讯云填 App ID（控制台「账号信息」页）+ Secret ID + API Key，Model 填引擎如 16k_en。",
     options: [
       { id: "auto", label: "自动（按环境变量）" },
       { id: "openai", label: "OpenAI 兼容 Whisper" },
+      { id: "tencent-asr", label: "腾讯云录音文件识别极速版（国内直连，词级时间戳）" },
       { id: "browser", label: "浏览器 Web Speech" },
       { id: "none", label: "关闭" },
     ],
-    fields: ["baseUrl", "model"],
+    fields: ["baseUrl", "model", "secretId", "appId"],
   },
   pronunciation: {
     label: "发音评测（P 维度）",
@@ -89,7 +91,7 @@ const KEYS: ProviderKey[] = ["llm", "tts", "asr", "pronunciation"];
 function toDrafts(c: Cfg): Drafts {
   const one = (p: Prov): Draft => ({
     enabled: p.enabled, provider: p.provider,
-    baseUrl: p.baseUrl ?? "", model: p.model ?? "", secretId: p.secretId ?? "", voice: p.voice ?? "", region: p.region ?? "",
+    baseUrl: p.baseUrl ?? "", model: p.model ?? "", secretId: p.secretId ?? "", appId: p.appId ?? "", voice: p.voice ?? "", region: p.region ?? "",
     temperature: p.temperature !== undefined ? String(p.temperature) : "",
     maxTokens: p.maxTokens !== undefined ? String(p.maxTokens) : "",
     hasKey: p.hasKey, keyHint: p.keyHint, apiKey: "", clearKey: false,
@@ -144,7 +146,7 @@ export function AiSettings() {
         patch[k] = {
           enabled: d.enabled,
           provider: d.provider,
-          baseUrl: d.baseUrl, model: d.model, secretId: d.secretId, voice: d.voice, region: d.region,
+          baseUrl: d.baseUrl, model: d.model, secretId: d.secretId, appId: d.appId, voice: d.voice, region: d.region,
           ...(k === "llm" && d.temperature.trim() && Number.isFinite(temp) ? { temperature: temp } : {}),
           ...(k === "llm" && d.maxTokens.trim() && Number.isFinite(tokens) ? { maxTokens: tokens } : {}),
           ...(d.apiKey.trim() ? { apiKey: d.apiKey.trim() } : {}),
@@ -212,11 +214,11 @@ export function AiSettings() {
               <div className="mt-2 grid grid-cols-2 gap-2">
                 {meta.fields.map((f) => (
                   <label key={f} className="block text-xs text-zinc-500">
-                    {f === "baseUrl" ? "Base URL" : f === "model" ? "Model" : f === "voice" ? "Voice" : f === "temperature" ? "Temperature (0–2)" : f === "maxTokens" ? "Max tokens" : f === "secretId" ? "Secret ID（腾讯云）" : "Region"}
+                    {f === "baseUrl" ? "Base URL" : f === "model" ? "Model" : f === "voice" ? "Voice" : f === "temperature" ? "Temperature (0–2)" : f === "maxTokens" ? "Max tokens" : f === "secretId" ? "Secret ID（腾讯云）" : f === "appId" ? "App ID（腾讯云）" : "Region"}
                     <input
                       value={d[f] as string}
                       onChange={(e) => set(k, { [f]: e.target.value } as Partial<Draft>)}
-                      placeholder={f === "baseUrl" ? "https://api.openai.com/v1" : f === "model" ? "gpt-4o-mini" : f === "voice" ? "en-GB-SoniaNeural" : f === "temperature" ? "0.2" : f === "maxTokens" ? "2500" : f === "secretId" ? "SecretId" : "eastus"}
+                      placeholder={f === "baseUrl" ? "https://api.openai.com/v1" : f === "model" ? "gpt-4o-mini" : f === "voice" ? "en-GB-SoniaNeural" : f === "temperature" ? "0.2" : f === "maxTokens" ? "2500" : f === "secretId" ? "SecretId" : f === "appId" ? "AppID" : "eastus"}
                       className="mt-1 w-full rounded-lg border border-zinc-200 px-2 py-1.5 text-sm"
                     />
                   </label>
