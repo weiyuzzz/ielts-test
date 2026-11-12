@@ -818,13 +818,8 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
             </ul>
             {!asrAvailable && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">No speech recognition is configured. Your answers will be recorded, but they cannot be transcribed or scored.</p>}
             {browserAsr && !browserAsrSupported() && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">This browser does not support built-in speech recognition. Use Chrome, Edge or Safari, or ask the administrator to configure server ASR. Recordings will still be saved.</p>}
-            <label className="mt-6 block text-sm">Microphone
-              <select className="mt-1 w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" value={deviceId} onChange={(e) => { setDeviceId(e.target.value); localStorage.setItem("mic-device", e.target.value); }}>
-                <option value="">System default</option>
-                {devices.map((d, i) => <option key={d.deviceId || i} value={d.deviceId}>{d.label || `Microphone ${i + 1}`}</option>)}
-              </select>
-            </label>
-            <button disabled={phase === "loading"} onClick={startFromSetup} className="mt-6 w-full rounded-xl bg-zinc-900 py-3 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50">
+            <p className="mt-6 text-xs text-zinc-400">On the next step the browser asks for microphone permission, and you can test your mic and pick a device before the exam starts.</p>
+            <button disabled={phase === "loading"} onClick={startFromSetup} className="mt-3 w-full rounded-xl bg-zinc-900 py-3 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50">
               {phase === "loading" ? "Loading…" : answered > 0 ? "Allow microphone & resume" : "Allow microphone & begin"}
             </button>
           </div>
