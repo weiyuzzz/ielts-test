@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui";
-import { listInputDevices, requestMicPermission } from "@/lib/audio/recorder";
+import { MicCheck } from "@/components/mic-check";
 import { loadVoices, speak, warmupSpeech } from "@/lib/audio/speech";
 
 interface S { displayName: string; targetBand: number; examDate: string; examinerVoice: string; showSubtitles: boolean }
@@ -11,9 +11,7 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
   const [s, setS] = useState(initial);
   const [saved, setSaved] = useState<string | null>(null);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [mic, setMic] = useState("");
-  const [micMsg, setMicMsg] = useState<string | null>(null);
 
   useEffect(() => {
     warmupSpeech();
@@ -22,7 +20,6 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
     // avoid a synchronous setState inside the effect body.
     const storedMic = localStorage.getItem("mic-device") || "";
     const t = setTimeout(() => setMic(storedMic), 0);
-    listInputDevices().then(setDevices).catch(() => {});
     return () => clearTimeout(t);
   }, []);
 
@@ -32,16 +29,6 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
     const j = await res.json();
     setSaved(res.ok ? "Saved" : j.error || "Failed");
   }
-  async function enableMic() {
-    try {
-      await requestMicPermission();
-      setDevices(await listInputDevices());
-      setMicMsg("Microphone access granted.");
-    } catch (e) {
-      setMicMsg((e as Error).message);
-    }
-  }
-
   const field = "mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400";
   return (
     <Card className="space-y-5 p-6">
@@ -82,17 +69,12 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
         {saved && <span className="text-sm text-zinc-500">{saved}</span>}
       </div>
       <hr className="border-zinc-100" />
-      <div>
-        <h3 className="text-sm font-semibold">Microphone</h3>
-        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-          <select className={field} value={mic} onChange={(e) => { setMic(e.target.value); localStorage.setItem("mic-device", e.target.value); }}>
-            <option value="">System default</option>
-            {devices.map((d, i) => <option key={d.deviceId || i} value={d.deviceId}>{d.label || `Microphone ${i + 1}`}</option>)}
-          </select>
-          <button onClick={enableMic} className="shrink-0 rounded-lg border border-zinc-200 px-4 py-2 text-sm">Allow & refresh list</button>
-        </div>
-        {micMsg && <p className="mt-2 text-xs text-zinc-500">{micMsg}</p>}
-      </div>
+      <MicCheck
+        deviceId={mic}
+        onDeviceChange={(id) => { setMic(id); localStorage.setItem("mic-device", id); }}
+        title="麦克风调试"
+        hint="点「试录 3 秒」再回放：能听到自己的声音就说明这条录音通道正常。这里和正式考试用的是同一个采集方式。"
+      />
     </Card>
   );
 }
