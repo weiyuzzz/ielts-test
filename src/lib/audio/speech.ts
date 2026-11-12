@@ -19,6 +19,8 @@ import { TtsScheduler, TTS_PRIORITY, ttsTaskKey, type TtsPriority, type TtsTaskS
 import { SPEECH_ACTS, type ExaminerSpeechAct } from "@/lib/speaking/speech-act";
 import { AudioLifecycle, PlaybackGuard, outcomeOf, type PlaybackOutcome } from "./audio-lifecycle";
 import { audioMetrics, installDevTrace, type AudioSource } from "./metrics";
+import { lipSync, type PlaybackMode } from "@/lib/lipsync/controller";
+import type { WordSpan } from "@/lib/lipsync/types";
 
 export { TTS_PRIORITY } from "./tts-scheduler";
 export type { TtsPriority, TtsTaskSnapshot } from "./tts-scheduler";
@@ -184,7 +186,31 @@ function pickVoice(pref: string): SpeechSynthesisVoice | undefined {
 }
 
 // ------------------------------------------------------------------ server TTS clip cache
-export interface Clip { url: string; audio: HTMLAudioElement }
+export interface Clip {
+  url: string;
+  audio: HTMLAudioElement;
+  /** The text this clip was synthesized from (lip-sync track identity). */
+  text?: string;
+  /** Engine-measured word timestamps (X-TTS-Words), for word-anchored lip-sync. */
+  words?: WordSpan[];
+}
+
+/** Decode the base64 `X-TTS-Words` header into WordSpans. */
+function parseWordHeader(header: string | null): WordSpan[] | undefined {
+  if (!header) return undefined;
+  try {
+    const j = JSON.parse(atob(header)) as { word: string; start: number; end: number }[];
+    // Engines timestamp punctuation tokens too ("?"); the track's words are
+    // text words only, so punctuation must be dropped or anchors never match.
+    const words = Array.isArray(j)
+      ? j.filter((w) => typeof w?.word === "string" && Number.isFinite(w?.start) && Number.isFinite(w?.end) && !/^[\p{P}\p{S}\s]+$/u.test(w.word))
+        .map((w, i) => ({ word: w.word, start: w.start, end: w.end, index: i }))
+      : [];
+    return words.length ? words : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /** Model/format identity — set from /api/config so a config change never reuses old audio. */
 let ttsModel = "auto";
@@ -232,13 +258,14 @@ async function fetchClip(text: string, voice: string, act: ExaminerSpeechAct, pr
       signal,
     });
     if (!res.ok) return null;
+    const words = parseWordHeader(res.headers.get("X-TTS-Words"));
     const blob = await res.blob();
     if (!blob.size) return null;
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
     audio.preload = "auto";
     audio.load(); // decode ahead of time → no startup gap at play()
-    return { url, audio };
+    return { url, audio, text, ...(words ? { words } : {}) };
   } catch {
     return null;
   }
@@ -349,7 +376,13 @@ export function ttsSnapshot(): TtsTaskSnapshot[] {
 }
 
 // ------------------------------------------------------------------ playback primitives
-function bindAudio(audio: HTMLAudioElement, signal: AbortSignal | undefined, lifecycle: AudioLifecycle, source: AudioSource): Promise<PlaybackOutcome> {
+function bindAudio(
+  audio: HTMLAudioElement,
+  signal: AbortSignal | undefined,
+  lifecycle: AudioLifecycle,
+  source: AudioSource,
+  lipsync: { mode: PlaybackMode; text: string; words?: WordSpan[] },
+): Promise<PlaybackOutcome> {
   return new Promise((resolve) => {
     let done = false;
     let started = false;
@@ -363,6 +396,7 @@ function bindAudio(audio: HTMLAudioElement, signal: AbortSignal | undefined, lif
       audio.onerror = null;
       audio.onplaying = null;
       signal?.removeEventListener("abort", onAbort);
+      lipSync.end(); // stop the mouth immediately on interrupt/failure/end
       if (status === "interrupted") lifecycle.send("INTERRUPT");
       else if (status === "failed") lifecycle.send("FAIL");
       else lifecycle.send("END");
@@ -377,6 +411,8 @@ function bindAudio(audio: HTMLAudioElement, signal: AbortSignal | undefined, lif
       started = true;
       clearTimeout(watchdog);
       lifecycle.send("PLAY");
+      // Sound is actually coming out now: the viseme track follows THIS element's clock.
+      lipSync.begin({ mode: lipsync.mode, text: lipsync.text, element: audio, wordAnchors: lipsync.words });
       audioMetrics.record("playback_start_delay_ms", performance.now() - t0, source);
       audioMetrics.record("audio_ready_ms", performance.now() - t0, source);
     };
@@ -398,7 +434,7 @@ function playClip(clip: Clip, signal?: AbortSignal): Promise<PlaybackOutcome> {
   lifecycle.send("READY");
   lifecycle.subscribe((s, prev) => audioMetrics.recordState("tts-clip", s, prev));
   try { audio.currentTime = 0; } catch { /* not seekable yet */ }
-  return bindAudio(audio, signal, lifecycle, "cache-hit");
+  return bindAudio(audio, signal, lifecycle, "cache-hit", { mode: "clip", text: clip.text ?? "", words: clip.words });
 }
 
 /** Progressive playback: audio starts at the first sentence the engine produces. */
@@ -409,11 +445,11 @@ function playStream(text: string, voice: string, act: ExaminerSpeechAct, profile
   const lifecycle = new AudioLifecycle("tts-stream");
   lifecycle.send("LOAD");
   lifecycle.subscribe((s, prev) => audioMetrics.recordState("tts-stream", s, prev));
-  return bindAudio(audio, signal, lifecycle, "stream");
+  return bindAudio(audio, signal, lifecycle, "stream", { mode: "stream", text });
 }
 
 /** Pre-recorded bank audio, played through the SAME single-owner guard. */
-export function speakPreset(url: string, signal?: AbortSignal): Promise<PlaybackOutcome> {
+export function speakPreset(url: string, signal?: AbortSignal, text?: string): Promise<PlaybackOutcome> {
   const key = `preset:${url}`;
   const begun = guard.begin(key);
   if (!begun) return Promise.resolve(outcomeOf("interrupted", "preset", { aborted: false }));
@@ -425,7 +461,7 @@ export function speakPreset(url: string, signal?: AbortSignal): Promise<Playback
   lifecycle.send("LOAD");
   lifecycle.send("READY");
   lifecycle.subscribe((s, prev) => audioMetrics.recordState("preset", s, prev));
-  return bindAudio(audio, signal, lifecycle, "preset").then((o) => {
+  return bindAudio(audio, signal, lifecycle, "preset", { mode: "preset", text: text ?? "" }).then((o) => {
     guard.finish(begun.generation, key);
     return o;
   });
@@ -560,6 +596,7 @@ async function doSpeak(text: string, opts: SpeakOptions, key: string): Promise<S
     lifecycle.subscribe((s, prev) => audioMetrics.recordState("browser-voice", s, prev));
     const t0 = performance.now();
     let done = false;
+    const startedAt = performance.now();
     const heartbeat = setInterval(() => {
       if (speechSynthesis.speaking && !speechSynthesis.paused) {
         speechSynthesis.pause();
@@ -572,11 +609,22 @@ async function doSpeak(text: string, opts: SpeakOptions, key: string): Promise<S
       done = true;
       clearTimeout(max);
       clearInterval(heartbeat);
+      lipSync.end(); // browser mode mouth stops with the utterance
       lifecycle.send(status === "ended" ? "END" : status === "interrupted" ? "INTERRUPT" : "FAIL");
       if (status === "ended") audioMetrics.record("playback_start_delay_ms", performance.now() - t0, "browser");
       resolve(outcomeOf(status, "browser", { aborted: status === "interrupted" }));
     }
-    u.onstart = () => lifecycle.send("PLAY");
+    // Browser mode has no <audio> element: wall-clock sampling, corrected by
+    // word boundaries where the browser fires them. Always "approximate".
+    const wordOffsets = wordCharOffsets(text);
+    u.onstart = () => {
+      lifecycle.send("PLAY");
+      lipSync.begin({ mode: "browser", text, element: null, startedAtWallMs: startedAt });
+    };
+    u.onboundary = (ev) => {
+      const wi = wordIndexForChar(wordOffsets, ev.charIndex ?? 0);
+      if (wi >= 0) lipSync.onBrowserBoundary(wi, (performance.now() - startedAt) / 1000);
+    };
     u.onend = () => end("ended");
     u.onerror = () => end("failed");
     opts.signal?.addEventListener("abort", () => {
@@ -592,8 +640,26 @@ async function doSpeak(text: string, opts: SpeakOptions, key: string): Promise<S
   return finish({ ok: browserOutcome.status === "ended", via: "browser", outcome: browserOutcome });
 }
 
+/** Word start offsets (char index) for browser boundary→word mapping. */
+function wordCharOffsets(text: string): number[] {
+  const offs: number[] = [];
+  const re = /\S+/g;
+  for (let m = re.exec(text); m; m = re.exec(text)) offs.push(m.index);
+  return offs;
+}
+
+function wordIndexForChar(offsets: number[], charIndex: number): number {
+  let idx = -1;
+  for (let i = 0; i < offsets.length; i++) {
+    if (offsets[i] <= charIndex) idx = i;
+    else break;
+  }
+  return idx;
+}
+
 /** Stop all audio and cancel every queued synthesis task (exam exit / unload). */
 export function stopSpeaking(): void {
+  lipSync.end();
   guard.interrupt();
   stopLiveAudio();
   ttsScheduler.cancelBelow(TTS_PRIORITY.CURRENT);
@@ -601,6 +667,7 @@ export function stopSpeaking(): void {
 
 /** Full teardown: also releases clip URLs and preset blobs. */
 export function disposeAudio(): void {
+  lipSync.end();
   guard.dispose();
   stopLiveAudio();
   ttsScheduler.dispose();

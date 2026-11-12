@@ -57,13 +57,24 @@ export interface TTSProvider extends ProviderInfo {
     style: boolean;
     pitch: boolean;
   };
-  synthesize(text: string, opts?: TTSSynthesisOptions): Promise<{ audio: Buffer; mimeType: string }>;
+  synthesize(text: string, opts?: TTSSynthesisOptions): Promise<TTSSynthesisResult>;
   /**
    * Optional progressive synthesis. When available the API route pipes the audio
    * straight to the browser, so playback starts at the first spoken sentence
    * instead of waiting for the whole line to be generated.
    */
   synthesizeStream?(text: string, opts?: TTSSynthesisOptions): Promise<TTSStream | null>;
+}
+
+/**
+ * Synthesis result. `words` are OPTIONAL engine-measured word timestamps in
+ * real audio seconds (e.g. Kokoro's captioned-speech endpoint). When present
+ * the API route forwards them so lip-sync can word-anchor instead of guessing.
+ */
+export interface TTSSynthesisResult {
+  audio: Buffer;
+  mimeType: string;
+  words?: { word: string; start: number; end: number }[];
 }
 
 export interface PronunciationResult {

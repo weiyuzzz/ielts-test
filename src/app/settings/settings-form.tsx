@@ -4,8 +4,12 @@ import { Card } from "@/components/ui";
 import { MicCheck } from "@/components/mic-check";
 import { loadVoices, speak, warmupSpeech } from "@/lib/audio/speech";
 
-interface S { displayName: string; targetBand: number; examDate: string; examinerVoice: string; showSubtitles: boolean }
+interface S { displayName: string; targetBand: number; examDate: string; examinerVoice: string; examinerGender: "male" | "female"; showSubtitles: boolean }
 interface ProfileOption { id: string; name: string; provider: string }
+
+/** Voice presets that belong to each examiner identity (image ↔ voice pairing). */
+const GENDER_VOICE_PRESET: Record<"male" | "female", string> = { female: "azure-sonia", male: "azure-ryan" };
+const GENDER_NAME: Record<"male" | "female", string> = { female: "Sarah", male: "James" };
 
 export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profiles }: { initial: S; serverTts: boolean; ttsVoice: string; ttsStreaming: boolean; profiles: ProfileOption[] }) {
   const [s, setS] = useState(initial);
@@ -29,6 +33,19 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
     const j = await res.json();
     setSaved(res.ok ? "Saved" : j.error || "Failed");
   }
+
+  /**
+   * Examiner identity: the digital human AND the voice belong to one person.
+   * Switching gender re-pairs the voice automatically — but only when the
+   * current voice is "auto" or one of the two gender presets, so a deliberate
+   * Voice Lab / custom choice is never clobbered silently.
+   */
+  function pickGender(gender: "male" | "female") {
+    const paired = GENDER_VOICE_PRESET[gender];
+    const swappable = s.examinerVoice === "auto" || Object.values(GENDER_VOICE_PRESET).includes(s.examinerVoice);
+    setS({ ...s, examinerGender: gender, examinerVoice: swappable ? paired : s.examinerVoice });
+  }
+
   const field = "mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400";
   return (
     <Card className="space-y-5 p-6">
@@ -40,6 +57,22 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
           </select>
         </label>
         <label className="text-sm">Exam date<input type="date" className={field} value={s.examDate} onChange={(e) => setS({ ...s, examDate: e.target.value })} /></label>
+        <label className="text-sm">Examiner
+          <div className="mt-1 grid grid-cols-2 gap-2">
+            {(["female", "male"] as const).map((g) => (
+              <button
+                key={g}
+                type="button"
+                onClick={() => pickGender(g)}
+                className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${s.examinerGender === g ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300"}`}
+              >
+                <span className="block font-medium">{g === "female" ? "Female examiner" : "Male examiner"}</span>
+                <span className={`mt-0.5 block text-xs ${s.examinerGender === g ? "text-zinc-300" : "text-zinc-400"}`}>{GENDER_NAME[g]} · {GENDER_VOICE_PRESET[g].split("-")[1]}</span>
+              </button>
+            ))}
+          </div>
+          <span className="mt-1 block text-xs text-zinc-400">The digital examiner and the voice are paired; the choice is frozen when a test starts.</span>
+        </label>
         <label className="text-sm">Examiner voice {serverTts ? "(voice profile)" : "(browser voice)"}
           {serverTts ? (
             <>
@@ -65,7 +98,7 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={s.showSubtitles} onChange={(e) => setS({ ...s, showSubtitles: e.target.checked })} /> Show examiner subtitles during the test</label>
       <div className="flex items-center gap-3">
         <button onClick={save} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700">Save</button>
-        <button onClick={() => speak("Good morning. My name is Sarah. Could I see your identification, please?", { serverTts, voice: s.examinerVoice, act: "greeting", profileId: s.examinerVoice })} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm">Test voice</button>
+        <button onClick={() => speak(`Good morning. My name is ${GENDER_NAME[s.examinerGender]}. Could I see your identification, please?`, { serverTts, voice: s.examinerVoice, act: "greeting", profileId: s.examinerVoice })} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm">Test voice</button>
         {saved && <span className="text-sm text-zinc-500">{saved}</span>}
       </div>
       <hr className="border-zinc-100" />

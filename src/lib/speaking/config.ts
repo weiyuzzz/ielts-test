@@ -91,3 +91,13 @@ export const SPEAKING_MODES: { mode: SpeakingMode; title: string; description: s
 ];
 
 export const EXAMINER_NAMES = ["Daniel", "Sarah", "James", "Emma"];
+
+/**
+ * Examiner identity is gendered so the visual digital human, the voice and the
+ * spoken name always belong to the same person. `examinerName` is drawn from
+ * the pool matching the session's frozen gender.
+ */
+export const EXAMINER_NAMES_BY_GENDER: Record<"male" | "female", string[]> = {
+  male: ["Daniel", "James", "Oliver"],
+  female: ["Sarah", "Emma", "Charlotte"],
+};

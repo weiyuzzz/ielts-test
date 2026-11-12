@@ -17,6 +17,8 @@ import { createHash } from "node:crypto";
 export interface CachedClip {
   audio: Uint8Array;
   mimeType: string;
+  /** Engine-measured word timestamps (real seconds) when the engine provides them. */
+  words?: { word: string; start: number; end: number }[];
 }
 
 const MAX_ENTRIES = Number(process.env.TTS_CACHE_ENTRIES || 80);

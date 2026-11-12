@@ -24,6 +24,8 @@ export const users = pgTable("users", {
   targetBand: real("target_band").notNull().default(7),
   examDate: text("exam_date"),
   examinerVoice: text("examiner_voice").notNull().default("auto"),
+  /** Visual examiner identity ("male" | "female"), paired with the voice in settings. */
+  examinerGender: text("examiner_gender").notNull().default("female"),
   showSubtitles: boolean("show_subtitles").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
