@@ -54,3 +54,20 @@ automatically when no CUDA device is present.
   `docker start kokoro-tts`.
 - Lip-sync quality is unchanged: `/dev/phonemize` and `/dev/captioned_speech`
   (word timestamps) are served by this engine either way.
+
+## Keep it running (macOS launchd, crash auto-restart)
+
+PyTorch MPS has a known stability issue (`MPSGraph` over-release crash) that
+can kill the engine mid-exam. A launchd keepalive service restarts it within
+seconds — installed automatically, or manually:
+
+```bash
+cp scripts/tts-engine/com.ielts.kokoro-tts.plist ~/Library/LaunchAgents/
+cp ~/tts-engine/Kokoro-FastAPI/run-engine.sh ~/tts-engine/Kokoro-FastAPI/  # if missing
+chmod +x ~/tts-engine/Kokoro-FastAPI/run-engine.sh
+launchctl load ~/Library/LaunchAgents/com.ielts.kokoro-tts.plist
+```
+
+- `launchctl unload ~/Library/LaunchAgents/com.ielts.kokoro-tts.plist` to stop
+- If the engine dies mid-exam, the affected line shows the "audio unavailable"
+  panel — the exam continues from the subtitles; the next line plays normally.
