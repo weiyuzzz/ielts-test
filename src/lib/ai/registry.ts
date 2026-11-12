@@ -2,7 +2,7 @@
  * Provider selection. Business logic calls getASR()/getLLM()/getTTS()/getPronunciation()
  * and never references a vendor directly.
  *
- *   ASR_PROVIDER=openai | browser | none        (default: openai if a key exists, else browser)
+ *   ASR_PROVIDER=openai | tencent-asr | browser | none  (default: openai if a key exists, else tencent-asr if Tencent credentials+AppID exist, else browser)
  *   LLM_PROVIDER=openai | deepseek | anthropic | none  (default: whichever key exists, else none)
  *   TTS_PROVIDER=openai | azure | browser       (default: auto — configured service, else browser)
  *   PRONUNCIATION_PROVIDER=azure | tencent-soe | none  (default: azure if key+region exist, else tencent-soe if Tencent credentials exist, else none)
@@ -11,6 +11,7 @@ import type { ASRProvider, LLMProvider, TTSProvider, PronunciationProvider } fro
 import { ProviderError } from "./types";
 import { openAIASR, openAILLM, deepseekLLM, qwenLLM, geminiLLM, anthropicLLM, openAITTS, azureTTS, azurePronunciation } from "./providers";
 import { tencentSoePronunciation } from "./tencent-soe";
+import { tencentFlashAsr } from "./tencent-asr";
 import { SPEECH_ACT_LIST } from "@/lib/speaking/speech-act";
 import { readAiConfig, envOverridesFor, withEnvOverrides, type ProviderKey } from "@/lib/server/ai-config";
 
@@ -46,8 +47,9 @@ export const browserTTS: TTSProvider = {
 
 export function getASR(): ASRProvider | null {
   return withCfg("asr", () => {
-    const p = process.env.ASR_PROVIDER || (process.env.OPENAI_API_KEY || process.env.ASR_API_KEY ? "openai" : "browser");
+    const p = process.env.ASR_PROVIDER || (process.env.OPENAI_API_KEY || process.env.ASR_API_KEY ? "openai" : process.env.TENCENT_SECRET_ID && process.env.TENCENT_APP_ID ? "tencent-asr" : "browser");
     if (p === "openai") return openAIASR();
+    if (p === "tencent-asr") return tencentFlashAsr();
     if (p === "browser") return browserASR;
     return null;
   });
