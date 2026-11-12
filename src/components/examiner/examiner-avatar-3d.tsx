@@ -21,10 +21,12 @@ import { ExaminerAvatar } from "@/app/speaking/exam/[id]/examiner-avatar";
 import { examinerEnvelope } from "@/lib/audio/examiner-envelope";
 import { lipSync } from "@/lib/lipsync/controller";
 import { visemeIndex } from "@/lib/lipsync/types";
-import { EXAMINER_MODELS, OCULUS_TO_VISEME, type ExaminerGender } from "@/lib/avatar/models";
+import { DEFAULT_MODEL_BY_GENDER, examinerModelById, normalizeModelId, OCULUS_TO_VISEME, type ExaminerGender } from "@/lib/avatar/models";
 
 interface Props {
   gender: ExaminerGender;
+  /** Which examiner look ("f1"…"f5"/"m1"…"m5"); falls back to the gender default. */
+  modelId?: string;
   speaking: boolean;
   listening: boolean;
   preparing?: boolean;
@@ -113,7 +115,8 @@ export function ExaminerAvatar3D(props: Props) {
       scene.add(rim);
 
       // --- model ------------------------------------------------------------
-      const model = EXAMINER_MODELS[props.gender];
+      const modelId = normalizeModelId(props.modelId ?? DEFAULT_MODEL_BY_GENDER[props.gender], props.gender);
+      const model = examinerModelById(modelId) ?? examinerModelById(DEFAULT_MODEL_BY_GENDER[props.gender])!;
       let rig: Rig | null = null;
       try {
         const loader = new GLTFLoaderCtor();
