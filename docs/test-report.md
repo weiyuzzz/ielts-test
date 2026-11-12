@@ -2,6 +2,25 @@
 
 运行环境：沙箱 Node 22 + PostgreSQL，生产构建（`next build` + `next start`）。Provider 配置：ASR=browser-web-speech，LLM=none，TTS=browser，Pronunciation=none（沙箱里没有 API Key）。
 
+## 当前状态（2026-11-13，Phase 3 收尾）
+
+> 下面是**当前**的测试规模。本文其余章节是 Phase 1 时期的历史快照（数字偏旧），保留作为当时的记录，不要当作最新结果。
+
+| 检查 | 数量 | 说明 |
+|---|---:|---|
+| `tests/unit.test.ts` | 30 | 状态机 / 评分 / 指标 / TTS 文本 |
+| `tests/audio-perf.test.ts` | 24 | 音频调度与生命周期 |
+| `tests/scoring-rubric.test.ts` | 14 | 0–9 判据、引用合法性、单调性 |
+| `tests/bank-learning.test.ts` | 14 | 学习素材与音频策略；其中 1 项需要 `DATABASE_URL` |
+| `tests/learning-store.test.ts` | 7 | Sidecar 原子写 / 并发 / 配置诊断 |
+| `tests/integration.mjs` | 28 实际执行 | 共 31 项定义，3 项 TTS 检查在无服务端 TTS 时跳过 |
+| `tests/migration-check.mjs` | 1 | 迁移链与 `schema.ts` 逐列一致 |
+
+本地（无 PostgreSQL）无法执行：`integration.mjs` 的数据库相关项、`migration-check.mjs`、
+以及 bank-learning 的第 4 项。这些在 GitHub Actions 的 PostgreSQL 16 service 中执行，**以 Actions 结果为准**。
+
+**已知局限**：LLM 评分质量未验证（CI 不调用付费模型）；浏览器/麦克风/真机音频未验收（见 issue #6）。
+
 ## 1. 单元测试 `npx tsx --test tests/unit.test.ts` → **18/18 通过**
 覆盖：状态机（当前步骤校验、模考禁止重答、练习允许重录、陈旧 advance、Part 3 追问规则、沉默不追问、追问上限、Part 1/2 不追问、重复上限、结束条件）、配置、IELTS 取整、指标、评分测试集、语法规则误报、LLM 输出校验（无效 JSON、缺失维度、越界分数、捏造引用被丢弃）、Provider 超时、追问净化、MIME 协商（Chrome/Safari/不支持/抛异常）、WAV 编码。
 

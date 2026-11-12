@@ -31,6 +31,20 @@ npm run build && npx next start -p 3100   # 生产；开发用 npm run dev -p 31
 - `/speaking/practice`：听原音 → 录音 → 回放 → ASR 转写 → 词级差异对比。无 ASR 时仍可录音回放；录音只存在页面内，不写入考试成绩。
 - 内容诚信：AI 起草的素材强制 `reviewStatus = draft`，UI 标注「未审核草稿」；当前 508 题中仅 6 题有素材、0 题有授权录音，报告见 `docs/phase3-question-learning.md`。
 
+### 生产环境的 Sidecar 存储（必读）
+
+学习素材是**文件**，不是数据库行，所以部署时必须给它一个**可写且持久**的目录：
+
+```bash
+LEARNING_CONTENT_DIR=/var/lib/bandnine/learning
+```
+
+- 不设置时使用默认路径 `./src/data/learning` —— 这是**源码目录**。在只读镜像、Serverless 或容器里重启即失效的环境下，导入会失败或素材在重新部署后丢失。
+- 写入是**原子替换**（先写同目录临时文件再 `rename`），进程内对同一 season 串行化，避免并发导入互相覆盖。
+- **多实例部署不保证一致**：单进程锁无法跨进程/跨实例。若横向扩容，需要把该目录放到共享持久卷，或改用对象存储/数据库（后续工作）。
+- `/admin` 导入返回的 `warnings` 会带上写入失败原因；运维可用 `probeContentDir()` 做一次写探针。
+- 该目录只影响学习素材；考试题目、答题记录、评分结果始终在 PostgreSQL 中。
+
 ## 季度题库与后台
 
 ### 数据源
@@ -181,11 +195,20 @@ npm run build && npx next start -p 3100   # 生产；开发用 npm run dev -p 31
 ## 测试
 ```bash
 npm run typecheck && npm run lint
-npx tsx --test tests/unit.test.ts                 # 单元测试（30 项）
-npx tsx --test tests/audio-perf.test.ts           # 音频调度/生命周期（24 项）
+npx tsx --test tests/unit.test.ts                 # 状态机 / 评分 / 指标（30）
+npx tsx --test tests/audio-perf.test.ts           # 音频调度与生命周期（24）
+npx tsx --test tests/scoring-rubric.test.ts       # 0–9 判据与引用校验（14）
+npx tsx --test tests/bank-learning.test.ts        # 题库学习素材与音频策略（14，其中 1 项需要 DATABASE_URL）
+npx tsx --test tests/learning-store.test.ts       # Sidecar 原子写 / 并发 / 配置诊断（7）
+
+# 端到端（需要 PostgreSQL）
+npx drizzle-kit push
 npm run build && npx next start -p 3100 &
-node tests/integration.mjs http://localhost:3100  # 端到端 30 项（含题库后台、组卷规则、未评分行为、TTS 缓存）
+node tests/integration.mjs http://localhost:3100  # 28 项实际执行（共 31 项定义，3 项 TTS 检查在无服务端 TTS 时跳过）
+node tests/migration-check.mjs                    # 迁移链与 schema.ts 一致性
 ```
+
+以上数量与 `.github/workflows/ci.yml` 实际执行一致；CI 每次运行都会跑全部 8 类检查。
 
 ## 文档
 - `docs/architecture.md`：架构、数据模型、状态机、题库与语音链路

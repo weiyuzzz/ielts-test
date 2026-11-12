@@ -62,6 +62,12 @@ jobs:
       - name: Scoring rubric tests
         run: npx tsx --test tests/scoring-rubric.test.ts
 
+      - name: Bank learning tests
+        run: npx tsx --test tests/bank-learning.test.ts
+
+      - name: Learning sidecar storage tests
+        run: npx tsx --test tests/learning-store.test.ts
+
       - name: Production build
         env:
           DATABASE_URL: postgresql://build:build@127.0.0.1:5432/build
@@ -118,6 +124,19 @@ jobs:
           --schema ./src/db/schema.ts
           --url="$DATABASE_URL"
           --force
+
+      # Prove the SQL migration chain in ./drizzle reaches the same schema as
+      # schema.ts. PR #9 added columns without a migration, which this catches.
+      - name: Verify migration chain matches the schema
+        run: node tests/migration-check.mjs
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+
+      # Re-run the learning suite here so its DATABASE_URL-gated test
+      # ("importing the same season twice is idempotent") actually executes
+      # instead of being skipped as it is in the static job.
+      - name: Bank learning tests (with database)
+        run: npx tsx --test tests/bank-learning.test.ts
 
       - name: Production build
         run: npm run build

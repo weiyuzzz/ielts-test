@@ -19,9 +19,11 @@ npm ci
 npx next typegen            # 必须先跑，见下
 npm run typecheck           # tsc --noEmit
 npm run lint                # eslint .
-npx tsx --test tests/unit.test.ts          # 30
-npx tsx --test tests/audio-perf.test.ts    # 24
-npx tsx --test tests/scoring-rubric.test.ts # 14
+npx tsx --test tests/unit.test.ts            # 30
+npx tsx --test tests/audio-perf.test.ts      # 24
+npx tsx --test tests/scoring-rubric.test.ts  # 14
+npx tsx --test tests/bank-learning.test.ts   # 14（1 项需要 DATABASE_URL，此处 SKIP）
+npx tsx --test tests/learning-store.test.ts  # 7
 npm run build
 ```
 
@@ -68,11 +70,25 @@ services:
 npm ci
 npx next typegen
 npx drizzle-kit push --dialect postgresql --schema ./src/db/schema.ts --url="$DATABASE_URL" --force
+node tests/migration-check.mjs                        # 迁移链 == schema.ts
+npx tsx --test tests/bank-learning.test.ts            # 14，含需要数据库的幂等导入
 npm run build
 npx next start -p 3100 &                              # 生产服务
 # 轮询 /api/health 直到 200（最多 120s）
-node tests/integration.mjs http://localhost:3100      # 30 项
+node tests/integration.mjs http://localhost:3100      # 28 项实际执行
 ```
+
+### 为什么要在集成 Job 再跑一次 bank-learning
+
+`tests/bank-learning.test.ts` 的第 4 项（同一 season 重复导入幂等）需要真实数据库；
+在 Job A 里没有 `DATABASE_URL` 会被 SKIP。所以在 Job B 里再跑一次，确保它**真的执行**而不是被静默跳过。
+
+### 为什么有 migration-check
+
+`drizzle-kit push` 直接按 `schema.ts` 建表，**不校验 `drizzle/*.sql`**。
+PR #9 加了列却没生成迁移，用户按迁移部署会缺列。`tests/migration-check.mjs` 把全部迁移
+重放进临时 schema，与 `push` 出来的 `public` 逐列对比（表/列/类型/可空/默认值），
+不一致就失败。这样迁移链和 schema 不会再次悄悄分叉。
 
 ### 为什么用 `--url`（且必须同时给 `--dialect` / `--schema`）
 
