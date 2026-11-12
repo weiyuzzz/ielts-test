@@ -171,16 +171,26 @@ export function ExaminerAvatar3D(props: Props) {
           for (const arm of found) arm.rotation.z += rz;
         }
 
-        // Frame head-and-shoulders like the reference portraits. GLB humanoids
-        // arrive in T-pose, so the upper arms are also rotated down into an
-        // A-pose and the camera sits close enough that shoulders fill the frame.
-        const box = new THREE.Box3().setFromObject(root);
-        const size = box.getSize(new THREE.Vector3());
-        const center = box.getCenter(new THREE.Vector3());
-        const headY = box.max.y - size.y * 0.075; // head centre
-        const dist = Math.max(0.45, size.y * 0.42);
-        camera.position.set(center.x, headY + size.y * 0.015, dist);
-        camera.lookAt(center.x, headY - size.y * 0.02, center.z);
+        // Frame head-and-shoulders like the reference portraits. The camera
+        // targets the Head BONE's world position (robust across model rigs —
+        // bbox proportions break on half-body or differently-proportioned
+        // models). GLB humanoids arrive in T-pose, so the upper arms are also
+        // rotated down into an A-pose.
+        const headBone = bones.Head;
+        let headPos = new THREE.Vector3(0, 1.62, 0);
+        let frameScale = 0.85;
+        if (headBone) {
+          headBone.updateWorldMatrix(true, false);
+          headBone.getWorldPosition(headPos);
+        } else {
+          const box = new THREE.Box3().setFromObject(root);
+          const size = box.getSize(new THREE.Vector3());
+          const center = box.getCenter(new THREE.Vector3());
+          headPos = new THREE.Vector3(center.x, box.max.y - size.y * 0.075, center.z);
+          frameScale = Math.max(0.45, size.y * 0.42);
+        }
+        camera.position.set(headPos.x, headPos.y + 0.02, frameScale);
+        camera.lookAt(headPos.x, headPos.y - 0.02, headPos.z);
 
         rig = { renderer, scene, camera, meshes, bones, baseRotations };
       } catch {

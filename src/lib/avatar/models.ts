@@ -29,18 +29,19 @@ export interface ExaminerModel {
 }
 
 export const EXAMINER_MODELS: ExaminerModel[] = [
-  // ---- female (Avaturn base, fair skin, distinct hair colours)
-  { id: "f1", gender: "female", modelUrl: "/avatar/f1.glb", displayName: "Sarah", morphFamily: "oculus15" },
-  { id: "f2", gender: "female", modelUrl: "/avatar/f2.glb", displayName: "Emma", morphFamily: "oculus15" },
-  { id: "f3", gender: "female", modelUrl: "/avatar/f3.glb", displayName: "Charlotte", morphFamily: "oculus15" },
-  { id: "f4", gender: "female", modelUrl: "/avatar/f4.glb", displayName: "Olivia", morphFamily: "oculus15" },
-  { id: "f5", gender: "female", modelUrl: "/avatar/f5.glb", displayName: "Sophie", morphFamily: "oculus15" },
-  // ---- male (AvatarSDK base, distinct suit colours)
-  { id: "m1", gender: "male", modelUrl: "/avatar/m1.glb", displayName: "James", morphFamily: "oculus15" },
-  { id: "m2", gender: "male", modelUrl: "/avatar/m2.glb", displayName: "Daniel", morphFamily: "oculus15" },
-  { id: "m3", gender: "male", modelUrl: "/avatar/m3.glb", displayName: "Oliver", morphFamily: "oculus15" },
-  { id: "m4", gender: "male", modelUrl: "/avatar/m4.glb", displayName: "Henry", morphFamily: "oculus15" },
-  { id: "m5", gender: "male", modelUrl: "/avatar/m5.glb", displayName: "Thomas", morphFamily: "oculus15" },
+  // ---- female: three distinct source people + two hair variants of the
+  //      Avaturn base (public models with full 15-viseme rigs are scarce)
+  { id: "f1", gender: "female", modelUrl: "/avatar/f1.glb", displayName: "Sarah", morphFamily: "oculus15" }, // Avaturn, blonde
+  { id: "f2", gender: "female", modelUrl: "/avatar/f2.glb", displayName: "Emma", morphFamily: "oculus15" }, // RPM, dark ponytail + glasses
+  { id: "f3", gender: "female", modelUrl: "/avatar/f3.glb", displayName: "Olivia", morphFamily: "oculus15" }, // RPM, short dark hair
+  { id: "f4", gender: "female", modelUrl: "/avatar/f4.glb", displayName: "Sophie", morphFamily: "oculus15" }, // Avaturn, black hair
+  { id: "f5", gender: "female", modelUrl: "/avatar/f5.glb", displayName: "Chloe", morphFamily: "oculus15" }, // Avaturn, auburn hair
+  // ---- male: four distinct source people + one suit variant of the AvatarSDK base
+  { id: "m1", gender: "male", modelUrl: "/avatar/m1.glb", displayName: "James", morphFamily: "oculus15" }, // AvatarSDK, auburn hair + beard
+  { id: "m2", gender: "male", modelUrl: "/avatar/m2.glb", displayName: "Daniel", morphFamily: "oculus15" }, // RPM, black hair + glasses
+  { id: "m3", gender: "male", modelUrl: "/avatar/m3.glb", displayName: "Oliver", morphFamily: "oculus15" }, // RPM, white shirt
+  { id: "m4", gender: "male", modelUrl: "/avatar/m4.glb", displayName: "Henry", morphFamily: "oculus15" }, // RPM, yellow sweater
+  { id: "m5", gender: "male", modelUrl: "/avatar/m5.glb", displayName: "Thomas", morphFamily: "oculus15" }, // AvatarSDK, navy shirt
 ];
 
 export const DEFAULT_EXAMINER_GENDER: ExaminerGender = "female";
