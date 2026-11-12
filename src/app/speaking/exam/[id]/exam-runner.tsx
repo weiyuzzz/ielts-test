@@ -8,7 +8,7 @@ import { RecorderError, listInputDevices, type Recording } from "@/lib/audio/rec
 import { RecordingSession } from "@/lib/audio/recording-session";
 import {
   BrowserTranscriber, browserAsrSupported, speak, speakPreset, disposeAudio,
-  warmupSpeech, promoteTTS, ttsScheduler, keyOf, audioMetrics, type ScriptLine,
+  warmupSpeech, promoteTTS, waitForTTS, ttsScheduler, keyOf, audioMetrics, type ScriptLine,
 } from "@/lib/audio/speech";
 import { AudioPreloader, classifyScriptLines, type PreloadEntry } from "@/lib/audio/audio-resources";
 import { outcomeOf, type PlaybackOutcome } from "@/lib/audio/audio-lifecycle";
@@ -356,6 +356,18 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
     const queue: ScriptLine[] = typeof lines === "string" ? [{ text: lines, act: "question" }] : lines;
     const full = lineText(queue);
     if (signal.aborted || !full.trim()) return outcomeOf("interrupted", "none", { aborted: true });
+    // EVERYTHING READY BEFORE THE SWITCH: wait until every line's real audio
+    // exists BEFORE the UI moves to the new question. This runs while the
+    // "Next question…" progress is still showing, so the user never sees a
+    // switched screen with missing audio (the "lost audio" complaint). The
+    // bank-clip path skips this — its own fallback chain handles failure.
+    if (serverTts && !audioUrl) {
+      for (const l of queue) {
+        if (signal.aborted) return outcomeOf("interrupted", "none", { aborted: true });
+        if (!l.text.trim()) continue;
+        await waitForTTS(l.text, voiceRef.current, 180_000, l.act, voiceRef.current);
+      }
+    }
     setSubtitle(full);
     setSpeaking(true);
     setPhase("examiner");
