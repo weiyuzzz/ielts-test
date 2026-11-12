@@ -17,7 +17,7 @@ export interface SpeakingExamConfig {
     answerSeconds: number;
     budgetSeconds: number;
   };
-  part2: { enabled: boolean; prepSeconds: number; answerSeconds: number };
+  part2: { enabled: boolean; prepSeconds: number; answerSeconds: number; budgetSeconds: number };
   part3: {
     enabled: boolean;
     questions: number;
@@ -45,8 +45,10 @@ export interface SpeakingExamConfig {
 const BASE: Omit<SpeakingExamConfig, "mode"> = {
   // Simon / IELTS Speaking test format: Part 1 4–5 min (10–11 questions over 3
   // topics), Part 2 3–4 min (1 min prep + 2 min talk), Part 3 4–5 min (3–6 questions).
-  part1: { enabled: true, seasonalTopics: 2, evergreenQuestions: 3, questionsPerTopic: 4, answerSeconds: 20, budgetSeconds: 300 },
-  part2: { enabled: true, prepSeconds: 60, answerSeconds: 120 },
+  // `budgetSeconds` is the UPPER bound of each part's official range: when it runs
+  // out the examiner moves to the next part (the real test is strictly timed).
+  part1: { enabled: true, seasonalTopics: 2, evergreenQuestions: 3, questionsPerTopic: 4, answerSeconds: 30, budgetSeconds: 300 },
+  part2: { enabled: true, prepSeconds: 60, answerSeconds: 120, budgetSeconds: 240 },
   part3: {
     enabled: true,
     questions: 4,

@@ -14,6 +14,9 @@ import { uploadWithRetry, postJson, UploadError } from "@/lib/audio/upload";
 import { LINES } from "@/lib/speaking/examiner";
 import type { SpeakingExamConfig } from "@/lib/speaking/config";
 import type { ExaminerSpeechAct } from "@/lib/speaking/speech-act";
+import { budgetForPart, formatClock, OFFICIAL_RANGE, PART_TITLE, partProgress, partRemaining } from "@/lib/speaking/part-timing";
+import { primeEnvelope } from "@/lib/audio/examiner-envelope";
+import { ExaminerAvatar } from "./examiner-avatar";
 
 interface StepView {
   id: string; stepIndex: number; part: number; kind: string; topic: string; examinerLead: string; promptText: string; cuePoints: string[];
@@ -159,6 +162,10 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
   const [online, setOnline] = useState(true);
   const [liveText, setLiveText] = useState("");
   const [current, setCurrent] = useState<StepView | null>(null);
+  /** Id of the step whose text the candidate chose to reveal (null = hidden). */
+  const [revealedStepId, setRevealedStepId] = useState<string | null>(null);
+  /** Seconds left in the part that is running now (null before the first tick). */
+  const [partLeft, setPartLeft] = useState<number | null>(null);
   /** Dev-only: shows how many preloaded resources are ready (subscribable state). */
   const [readiness, setReadiness] = useState<{ ready: number; total: number } | null>(null);
 
@@ -175,11 +182,22 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
   /** Voice profile frozen when this session was created (falls back to the current
    *  setting only for sessions recorded before profiles existed). */
   const voiceRef = useRef(voice);
+  /** Which part is being timed, and when it started. Reset on every part change. */
+  const partClock = useRef<{ part: number; startedAt: number } | null>(null);
+  /** The part whose time ran out (null when none). The loop closes it at a safe point. */
+  const partExpired = useRef<number | null>(null);
+  const phaseRef = useRef<Phase>("loading");
+  phaseRef.current = phase;
+  const cfgRef = useRef<SpeakingExamConfig | null>(null);
 
   const load = useCallback(async (): Promise<SessionView> => {
     const res = await fetch(`/api/speaking/sessions/${sessionId}`, { cache: "no-store" });
     const j = await res.json();
     if (!res.ok) throw new Error(j.error || "Could not load exam");
+    cfgRef.current = j.session.config;
+    // A mock test hides the examiner's lines too: a subtitle would simply give
+    // away the question we just hid. Practice modes keep the user's setting.
+    if (j.session.mode === "full") setShowSubs(false);
     setView(j);
     return j;
   }, [sessionId]);
@@ -241,6 +259,31 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
     window.addEventListener("beforeunload", h);
     return () => window.removeEventListener("beforeunload", h);
   }, [phase]);
+
+  /**
+   * Per-part clock, checked twice a second. When a part runs out of time the
+   * examiner closes it: an answer in progress is submitted first (never lost),
+   * then the loop jumps to the next part.
+   */
+  useEffect(() => {
+    const t = setInterval(() => {
+      const clock = partClock.current;
+      const cfg = cfgRef.current;
+      if (!clock || !cfg) return;
+      const budget = budgetForPart(cfg, clock.part);
+      const left = partRemaining(budget, Date.now() - clock.startedAt);
+      setPartLeft(left);
+      if (partExpired.current !== null) return;
+      if (!["examiner", "prep", "recording", "review", "uploading", "advancing"].includes(phaseRef.current)) return;
+      if (left > 0) return;
+      partExpired.current = clock.part;
+      // In the middle of an answer: stop recording so the attempt is saved,
+      // then the loop skips the rest of the part.
+      if (phaseRef.current === "recording" || phaseRef.current === "prep") cdResolve.current?.("early");
+      setNotice("Time is up for this part — the examiner is moving on.");
+    }, 500);
+    return () => clearInterval(t);
+  }, []);
 
   const waitUser = () => new Promise<string>((res) => { userAction.current = res; });
   const act = (v: string) => { const f = userAction.current; userAction.current = null; f?.(v); };
@@ -441,6 +484,39 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
     }
   }
 
+  /**
+   * Close the current part (time is up) and load the next one. Returns the new
+   * view, `finished` when the test is over, or null when the call failed (the
+   * exam then simply continues inside the current part rather than getting stuck).
+   */
+  async function closePart(fromStepIndex: number): Promise<{ finished: boolean; view: SessionView | null }> {
+    try {
+      const r = await postJson<{ finished: boolean; view: SessionView }>(`/api/speaking/sessions/${sessionId}/skip-part`, { fromStep: fromStepIndex });
+      return { finished: !!r.finished, view: r.view ?? null };
+    } catch (e) {
+      setNotice(`Could not close this part: ${(e as Error).message}`);
+      return { finished: false, view: null };
+    }
+  }
+
+  /**
+   * Close the part whose clock ran out, then either finish the test (last part)
+   * or hand back the next part's view. The caller decides what to re-render.
+   */
+  async function handlePartExpiry(signal: AbortSignal, fromStepIndex: number): Promise<{ finished: boolean; view: SessionView | null }> {
+    partExpired.current = null;
+    const closed = await closePart(fromStepIndex);
+    if (!closed.finished) return { finished: false, view: closed.view };
+    setPhase("finishing");
+    const closing = prevNoResponse.current ? `${LINES.noResponse.split(".")[0]}. ${LINES.closing}` : LINES.closing;
+    if ((await say([{ text: closing, act: "closing" }], signal)).status !== "interrupted") {
+      await postJson(`/api/speaking/sessions/${sessionId}/finish`);
+      audioMetrics.endTurn("finished");
+      router.replace(`/speaking/report/${sessionId}`);
+    }
+    return { finished: true, view: null };
+  }
+
   async function run() {
     abortRef.current?.abort();
     const ctrl = new AbortController();
@@ -448,6 +524,7 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
     const signal = ctrl.signal;
     // unlock audio output on iOS/Safari inside the user gesture
     try { if ("speechSynthesis" in window) speechSynthesis.speak(new SpeechSynthesisUtterance("")); } catch { /* ignore */ }
+    primeEnvelope(); // unlock the lip-sync analyser while we still have the gesture
     try {
       let v = await load();
       let first = !v.steps.some((s) => s.status === "answered");
@@ -457,9 +534,36 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
         if (!step) throw new Error("Exam step not found");
         setCurrent(step);
         audioMetrics.startTurn(step.stepIndex);
+        cfgRef.current = cfg;
+        // Entering a new part starts its own clock (this runs in the exam loop,
+        // not during render, so it is safe to write the refs here).
+        if (partClock.current?.part !== step.part) {
+          partClock.current = { part: step.part, startedAt: Date.now() };
+          partExpired.current = null;
+          setPartLeft(budgetForPart(cfg, step.part));
+        }
+
+        // Out of time: the examiner closes the part instead of starting it.
+        // Checked here too, so an expiry during the examiner's own line cannot
+        // swallow a whole part of the test.
+        if (partExpired.current !== null) {
+          const r = await handlePartExpiry(signal, step.stepIndex);
+          if (r.finished) return;
+          if (r.view) {
+            v = r.view;
+            setView(v);
+            const nextPlan = buildScriptPlan(v, voiceRef.current);
+            planRef.current = nextPlan;
+            preloaderRef.current?.replan(nextPlan.entries, nextPlan.presetUrls, nextPlan.firstLines);
+            audioMetrics.endTurn("advanced");
+            continue;
+          }
+        }
 
         let data: { rec: Recording; transcript: string } | null = null;
-        if (step.status !== "answered") {
+        // `skipped` steps are closed parts: re-reading the session must move on,
+        // never re-ask a question whose part is over.
+        if (step.status !== "answered" && step.status !== "skipped") {
           const lines = examinerLines(step, { first, noResponse: prevNoResponse.current });
           first = false;
           // A bank clip may only be used when it was recorded with THIS voice.
@@ -480,6 +584,22 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
               examinerLines(next, { first: false, noResponse: false }),
               presetAudioFor(next, voiceRef.current),
             );
+          }
+
+          // The clock may have run out while the examiner was reading the
+          // question — close the part before opening a recording for it.
+          if (partExpired.current !== null) {
+            const r = await handlePartExpiry(signal, step.stepIndex);
+            if (r.finished) return;
+            if (r.view) {
+              v = r.view;
+              setView(v);
+              const nextPlan = buildScriptPlan(v, voiceRef.current);
+              planRef.current = nextPlan;
+              preloaderRef.current?.replan(nextPlan.entries, nextPlan.presetUrls, nextPlan.firstLines);
+              audioMetrics.endTurn("advanced");
+              continue;
+            }
           }
 
           data = await record(step, signal, cfg);
@@ -533,6 +653,27 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
         planRef.current = plan;
         preloaderRef.current?.replan(plan.entries, plan.presetUrls, plan.firstLines);
         audioMetrics.endTurn("advanced");
+
+        // The part may have run out of time DURING this answer. We let the
+        // attempt finish and be saved first, then close the part — but only if
+        // the session is still inside that same part.
+        const expired = partExpired.current;
+        if (expired !== null) {
+          const nowPart = v.steps.find((s) => s.stepIndex === v.session.currentStep)?.part;
+          if (nowPart === expired) {
+            const r = await handlePartExpiry(signal, v.session.currentStep);
+            if (r.finished) return;
+            if (r.view) {
+              v = r.view;
+              setView(v);
+              const nextPlan = buildScriptPlan(v, voiceRef.current);
+              planRef.current = nextPlan;
+              preloaderRef.current?.replan(nextPlan.entries, nextPlan.presetUrls, nextPlan.firstLines);
+            }
+          } else {
+            partExpired.current = null;
+          }
+        }
       }
     } catch (e) {
       if (!signal.aborted) { setFatal((e as Error).message); setPhase("error"); }
@@ -592,7 +733,18 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
   const critical = cd.total > 0 && cd.left <= 5;
   const hearing = phase === "recording" && level > 0.05;
   const step = current;
+  const reveal = !!step && revealedStepId === step.id;
   const repeatsLeft = step && cfg ? cfg.maxRepeatsPerQuestion - step.repeatCount : 0;
+  const activePart = step?.part ?? null;
+  // Right rail: one row per part, with the official range and the time left.
+  const partRows = parts.map((p) => {
+    const budget = cfg ? budgetForPart(cfg, p) : 300;
+    const group = steps.filter((s) => s.part === p);
+    const done = group.every((s) => s.status === "answered" || s.status === "skipped");
+    const isActive = p === activePart;
+    const left = isActive ? (partLeft ?? budget) : done ? 0 : budget;
+    return { p, budget, left, done, isActive };
+  });
 
   if (phase === "error") {
     return (
@@ -635,7 +787,8 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
       {!online && <div className="bg-amber-50 px-4 py-2 text-center text-xs text-amber-800">You are offline. Recording continues and the upload will retry automatically when the connection returns.</div>}
       {notice && <div className="bg-zinc-900 px-4 py-2 text-center text-xs text-white">{notice} <button className="ml-2 underline" onClick={() => setNotice(null)}>Dismiss</button></div>}
 
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-6 sm:py-10">
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:py-10 lg:flex-row lg:items-start">
+        <div className="min-w-0 flex-1">
         {(phase === "loading" || phase === "setup") && (
           <div className="rounded-2xl border border-zinc-200 bg-white p-6 sm:p-8">
             <h1 className="text-xl font-semibold">{answered > 0 ? "Resume your exam" : "Before you start"}</h1>
@@ -679,19 +832,55 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
 
         {step && !["setup", "loading", "blocked"].includes(phase) && (
           <>
-            <div className="flex items-center gap-3">
-              <div className={`grid h-11 w-11 place-items-center rounded-full bg-zinc-900 text-sm font-semibold text-white ${speaking ? "ring-4 ring-indigo-200" : ""}`}>{view?.session.examinerName[0]}</div>
-              <div>
+            <div className="flex items-center gap-4">
+              <ExaminerAvatar
+                speaking={speaking}
+                listening={phase === "recording"}
+                preparing={phase === "examiner" || phase === "prep"}
+                name={view?.session.examinerName ?? "Examiner"}
+              />
+              <div className="min-w-0">
                 <div className="text-sm font-medium">{view?.session.examinerName} · Examiner</div>
-                <div className="text-xs text-zinc-400">{speaking ? "Speaking…" : phase === "recording" ? "Listening" : phase === "prep" ? "Waiting while you prepare" : phase === "uploading" || phase === "advancing" ? "Saving your answer…" : phase === "finishing" ? "Finishing the test" : ""}</div>
+                <div className="mt-0.5 text-xs text-zinc-400">{speaking ? "Speaking…" : phase === "recording" ? "Listening" : phase === "prep" ? "Waiting while you prepare" : phase === "uploading" || phase === "advancing" ? "Saving your answer…" : phase === "finishing" ? "Finishing the test" : ""}</div>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400">
+                  <span className="rounded bg-zinc-100 px-1.5 py-0.5">Part {step.part}</span>
+                  <span className="max-w-[12rem] truncate rounded bg-zinc-100 px-1.5 py-0.5">{step.topic}</span>
+                  {activePart !== null && <span className="rounded bg-indigo-50 px-1.5 py-0.5 tabular-nums text-indigo-700">{formatClock(partLeft ?? 0)} left in this part</span>}
+                </div>
               </div>
             </div>
             {showSubs && subtitle && <p className="mt-4 rounded-xl bg-white px-4 py-3 text-sm leading-6 text-zinc-600 ring-1 ring-zinc-200">{subtitle}</p>}
 
-            <section className="mt-6 rounded-2xl border border-zinc-200 bg-white p-6 sm:p-8">
-              <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
-                <span>Part {step.part}</span><span>·</span><span>{step.topic}</span>
-                {step.kind === "follow_up" && <span className="rounded bg-indigo-50 px-1.5 py-0.5 normal-case text-indigo-700">follow-up · {step.generator}</span>}
+            <section className="mt-5 rounded-2xl border border-zinc-200 bg-white p-6 sm:p-8">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
+                  <span>Part {step.part}</span><span>·</span><span>{step.topic}</span>
+                  {step.kind === "follow_up" && <span className="rounded bg-indigo-50 px-1.5 py-0.5 normal-case text-indigo-700">follow-up · {step.generator}</span>}
+                </div>
+                {/* Part 2 keeps the cue card on screen (the real test hands it to
+                    you in writing), so the eye only applies to Part 1 / Part 3. */}
+                {step.kind !== "cue_card" && (
+                <button
+                  type="button"
+                  onClick={() => setRevealedStepId(reveal ? null : step.id)}
+                  aria-pressed={reveal}
+                  aria-label={reveal ? "Hide the question text" : "Show the question text"}
+                  title={reveal ? "Hide question" : "Show question"}
+                  className={`shrink-0 rounded-lg border p-1.5 transition-colors ${reveal ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 text-zinc-500 hover:bg-zinc-50"}`}
+                >
+                  {reveal ? (
+                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                      <path d="M3 3l18 18" strokeLinecap="round" />
+                      <path d="M10.6 6.2A9.7 9.7 0 0112 6c5 0 9 4.5 9 6 0 .6-.5 1.6-1.4 2.6M6.2 7.4C4.2 8.8 3 10.6 3 12c0 1.5 4 6 9 6 1.4 0 2.7-.3 3.9-.9" strokeLinecap="round" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                      <path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z" strokeLinecap="round" strokeLinejoin="round" />
+                      <circle cx="12" cy="12" r="2.6" />
+                    </svg>
+                  )}
+                </button>
+                )}
               </div>
               {step.kind === "cue_card" ? (
                 <div>
@@ -700,8 +889,17 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
                   <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-zinc-800">{step.cuePoints.map((c) => <li key={c}>{c}</li>)}</ul>
                   {phase === "prep" && <textarea placeholder="Notes (not saved or assessed)" className="mt-5 h-28 w-full resize-none rounded-lg border border-zinc-200 p-3 text-sm outline-none focus:border-zinc-400" />}
                 </div>
+              ) : reveal ? (
+                <h2 className="text-lg font-semibold leading-7 sm:text-xl">{step.promptText}</h2>
               ) : (
-                <h2 className={`text-lg font-semibold leading-7 sm:text-xl ${showSubs || phase !== "examiner" ? "" : "blur-sm"}`}>{step.promptText}</h2>
+                <div className="flex items-center justify-between gap-3 rounded-xl bg-zinc-50 px-4 py-3">
+                  <div className="text-sm text-zinc-500">
+                    Question hidden — listen to the examiner{phase === "recording" ? ", speak freely" : ""}.
+                  </div>
+                  <button type="button" onClick={() => setRevealedStepId(step.id)} className="shrink-0 text-xs font-medium text-indigo-600 hover:underline">
+                    Show text
+                  </button>
+                </div>
               )}
             </section>
 
@@ -756,10 +954,15 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
                       <button onClick={() => cdResolve.current?.("repeat")} className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm">Ask to repeat ({repeatsLeft})</button>
                     )}
                     <button disabled={!canEarly} onClick={() => cdResolve.current?.("early")} className="rounded-lg bg-zinc-900 px-5 py-2 text-sm font-medium text-white disabled:opacity-30">
-                      {phase === "prep" ? "Start speaking now" : "Finish answer"}
+                      {phase === "prep" ? "Start speaking now" : step.part === 2 ? "Finish answer" : "Next question"}
                     </button>
                   </div>
-                  {phase === "recording" && !canEarly && <p className="mt-2 text-xs text-zinc-400">You can finish after {cfg?.minFinishSeconds}s</p>}
+                  {phase === "recording" && !canEarly && (
+                    <p className="mt-2 text-xs text-zinc-400">
+                      {step.part === 2 ? "You can finish after" : "You can move on after"} {cfg?.minFinishSeconds}s
+                      {step.part !== 2 && cfg ? ` · auto-advance at ${step.answerSeconds}s` : ""}
+                    </p>
+                  )}
                 </>
               )}
               {phase === "review" && review && (
@@ -784,6 +987,44 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
               {phase === "examiner" && <div className="text-sm text-zinc-400">Listen to the examiner…</div>}
             </section>
           </>
+        )}
+        </div>
+
+        {step && !["setup", "loading", "blocked"].includes(phase) && (
+          <aside className="w-full shrink-0 lg:sticky lg:top-6 lg:w-64" aria-label="Time limit for each part">
+            <div className="rounded-2xl border border-zinc-200 bg-white p-4">
+              <div className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Time limits</div>
+              <p className="mt-1 text-[11px] leading-4 text-zinc-400">Official range per part — the examiner moves on at the upper bound.</p>
+              <ul className="mt-3 space-y-3">
+                {partRows.map((r) => {
+                  const low = r.isActive && r.left <= 30;
+                  return (
+                    <li key={r.p}>
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className={`text-sm ${r.isActive ? "font-semibold text-zinc-900" : "text-zinc-500"}`}>Part {r.p}</span>
+                        <span className={`text-sm tabular-nums ${r.done && !r.isActive ? "text-emerald-600" : low ? "text-amber-600" : r.isActive ? "text-zinc-900" : "text-zinc-400"}`}>
+                          {r.done && !r.isActive ? "done" : formatClock(r.left)}
+                        </span>
+                      </div>
+                      <div className="mt-0.5 flex items-center justify-between gap-2 text-[11px] text-zinc-400">
+                        <span className="truncate">{PART_TITLE[r.p] ?? "Questions"}</span>
+                        <span className="shrink-0">{OFFICIAL_RANGE[r.p] ?? ""}</span>
+                      </div>
+                      <div className="mt-1 h-1 overflow-hidden rounded-full bg-zinc-100">
+                        <div
+                          className={`h-1 rounded-full transition-[width] duration-500 ${r.isActive ? (low ? "bg-amber-500" : "bg-zinc-900") : "bg-zinc-300"}`}
+                          style={{ width: `${partProgress(r.budget, r.left) * 100}%` }}
+                        />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="mt-3 border-t border-zinc-100 pt-2 text-[11px] leading-4 text-zinc-400">
+                {cfg ? `Part 1 answers are capped at ${cfg.part1.answerSeconds}s each; you can move on after ${cfg.minFinishSeconds}s.` : ""}
+              </p>
+            </div>
+          </aside>
         )}
       </main>
     </div>

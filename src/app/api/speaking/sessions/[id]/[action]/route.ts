@@ -1,5 +1,5 @@
 import { requireUser, errorResponse, HttpError } from "@/lib/server/user";
-import { advance, repeatQuestion, finishSession, abandonSession, retryScoring, loadOwned } from "@/lib/server/exam-service";
+import { advance, repeatQuestion, finishSession, abandonSession, retryScoring, loadOwned, skipCurrentPart } from "@/lib/server/exam-service";
 import { getReport } from "@/lib/server/report-service";
 
 /** POST advance | repeat | finish | abandon | report(retry scoring) */
@@ -14,6 +14,8 @@ export async function POST(req: Request, ctx: RouteContext<"/api/speaking/sessio
         return Response.json(await advance(user, id, body.fromStep));
       case "repeat":
         return Response.json(await repeatQuestion(user, id, String(body.examQuestionId || "")));
+      case "skip-part":
+        return Response.json(await skipCurrentPart(user, id, body.fromStep));
       case "finish":
         return Response.json(await finishSession(user, id));
       case "abandon":

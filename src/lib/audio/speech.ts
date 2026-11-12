@@ -212,6 +212,15 @@ const stopLiveAudio = () => {
 };
 const guard = new PlaybackGuard(stopLiveAudio);
 
+/**
+ * The <audio> element currently carrying the examiner's voice, or null when the
+ * line is spoken by the browser's own synthesizer (no element exists then).
+ * Read-only hook for the lip-sync meter — it must never change playback.
+ */
+export function currentAudioElement(): HTMLAudioElement | null {
+  return liveAudio;
+}
+
 /** POST warm-up. Honours the scheduler's AbortSignal so a live GET can cancel it. */
 async function fetchClip(text: string, voice: string, act: ExaminerSpeechAct, profile: string | undefined, signal?: AbortSignal): Promise<Clip | null> {
   try {

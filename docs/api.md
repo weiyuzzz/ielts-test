@@ -13,6 +13,7 @@
 | POST | /api/speaking/sessions/:id/advance | `{fromStep}` | `{currentStep, partChanged?, followUp?{text,generator}, finished?, duplicate?}` | 由状态机决定下一步 |
 | POST | /api/speaking/sessions/:id/complete-answer | multipart: 同 `/answers` + `fromStep` | 201 `{answer,advance,timings,view}` / 200 `answer.duplicate:true` | **统一提交**：一次请求完成「保存答案 → 状态机推进 → 返回完整 session view」，客户端无需再 GET。保留幂等键、Session 所有权、并发安全与音频/答题记录；full 模考不做同步 ASR，practice Part 3 保留追问所需的同步转写。`view` 与 GET /api/speaking/sessions/:id 同构 |
 | POST | /api/speaking/sessions/:id/repeat | `{examQuestionId}` | `{remaining}` | 429 表示已达重复上限 |
+| POST | /api/speaking/sessions/:id/skip-part | `{fromStep}` | `{currentStep, finished, skipped, partChanged, view}` | 某一段超时：把该段未答的题标 `skipped`（永远不计入评分），游标跳到下一段首题并返回完整 view；已是最后一段则 `finished: true`、游标停在末题，调用方播完收尾语后照常 `finish`。`fromStep` 过期时返回 `duplicate: true`，不会连跳两段 |
 | POST | /api/speaking/sessions/:id/finish | – | `{status, assessmentId, duplicate}` | 结束考试并异步启动评分 |
 | POST | /api/speaking/sessions/:id/abandon | – | `{status}` | 中途退出 |
 | GET | /api/speaking/sessions/:id/report | – | `{assessment, dimensions[], findings[], report}` | 404 表示尚无评分 |

@@ -390,8 +390,55 @@ export async function advance(user: User, id: string, fromStep: number) {
   return { currentStep: insertAt, followUp: { text, generator } };
 }
 
-export async function repeatQuestion(user: User, id: string, examQuestionId: string) {
+/**
+ * Close the current part and move to the first step of the next one.
+ *
+ * The real examiner does this when a part runs out of time: anything still
+ * unanswered in that part is skipped (never marked answered — a skipped question
+ * must not be scored as an answer). Skipping the last part keeps `currentStep`
+ * where it is and reports `finished`, so the caller can play the closing line
+ * and complete the session.
+ */
+export async function skipCurrentPart(user: User, id: string, fromStep?: number) {
   const s = await loadOwned(user, id);
+  if (s.status !== "in_progress") throw new HttpError(409, "Exam is not in progress", "session_not_active");
+  const { steps } = await machineState(s);
+  const cur = steps.find((x) => x.stepIndex === s.currentStep);
+  if (!cur) throw new HttpError(404, "Exam step not found", "unknown_step");
+  // A stale client (or a double click) must not skip a second part.
+  if (typeof fromStep === "number" && fromStep !== s.currentStep) {
+    return { currentStep: s.currentStep, duplicate: true, finished: false, view: await getSessionView(user, id) };
+  }
+
+  const inPart = steps.filter((x) => x.part === cur.part && x.status !== "answered");
+  // First step of the NEXT part — not simply the next step, which would land on
+  // another question inside the part we are trying to close.
+  const next = steps.find((x) => x.part > cur.part);
+  // Nothing after this part: park the cursor on the LAST step. `canFinish()`
+  // requires currentStep === last index, and every step here is now `skipped`
+  // (never `pending`), so the exam can be completed normally.
+  const target = next ? next.stepIndex : Math.max(...steps.map((x) => x.stepIndex));
+
+  await db.transaction(async (tx) => {
+    if (inPart.length) {
+      await tx
+        .update(examQuestions)
+        .set({ status: "skipped" })
+        .where(and(eq(examQuestions.sessionId, s.id), inArray(examQuestions.id, inPart.map((x) => x.id))));
+    }
+    await tx.update(examSessions).set({ currentStep: target, updatedAt: new Date() }).where(eq(examSessions.id, s.id));
+  });
+
+  return {
+    currentStep: target,
+    finished: !next,
+    skipped: inPart.length,
+    partChanged: !!next && next.part !== cur.part,
+    view: await getSessionView(user, id),
+  };
+}
+
+export async function repeatQuestion(user: User, id: string, examQuestionId: string) {  const s = await loadOwned(user, id);
   const { state } = await machineState(s);
   const r = canRepeat(state, examQuestionId);
   if (!r.ok) machineFail(r.error);
