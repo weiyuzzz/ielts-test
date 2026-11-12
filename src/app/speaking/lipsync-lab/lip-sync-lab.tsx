@@ -10,34 +10,41 @@
  * The readout is written straight to the DOM from one RAF loop — no React
  * state per frame, same rule as the avatar.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ExaminerAvatar3D } from "@/components/examiner/examiner-avatar-3d";
 import { speak, stopSpeaking, disposeAudio, warmupSpeech, configureTtsIdentity, waitForTTS } from "@/lib/audio/speech";
 import { primeEnvelope } from "@/lib/audio/examiner-envelope";
 import { lipSync } from "@/lib/lipsync/controller";
 import { VISEME_CHANNELS } from "@/lib/lipsync/types";
-import { preloadExaminerModel, type ExaminerGender } from "@/lib/avatar/models";
+import { examinerModelById, preloadExaminerModel, type ExaminerGender } from "@/lib/avatar/models";
 
 interface Props {
   serverTts: boolean;
   profiles: { id: string; name: string }[];
   defaultProfileId: string;
   gender: ExaminerGender;
+  /** Which examiner look to show ("f1"…"f5"/"m1"…"m5"). */
+  modelId?: string;
+  /** The examiner's display name, used in the sample line and avatar label. */
+  name?: string;
+  /** Voice preselected from the form ("auto" → the deployment default). */
+  initialVoice?: string;
   /** Embedded in the settings page: no page chrome of its own. */
   embedded?: boolean;
 }
 
-const SAMPLES = [
-  "Hello. My name is Sarah, and I will be your examiner today. Could I see your identification, please?",
-  "I'd like to ask you some questions about yourself. Let's talk about what you do. Do you work, or are you a student?",
-  "Now I'm going to give you a topic, and I'd like you to talk about it for one to two minutes.",
-];
-
-export function LipSyncLab({ serverTts, profiles, defaultProfileId, gender, embedded = false }: Props) {
-  const [text, setText] = useState(SAMPLES[0]);
-  const [voice, setVoice] = useState(defaultProfileId);
-  const [examiner, setExaminer] = useState<ExaminerGender>(gender);
+export function LipSyncLab({ serverTts, profiles, defaultProfileId, gender, modelId, name, initialVoice, embedded = false }: Props) {
+  const examinerName = name ?? examinerModelById(modelId ?? "")?.displayName ?? (gender === "female" ? "Sarah" : "James");
+  const sampleLine = useMemo(
+    () => `Hello. My name is ${examinerName}, and I will be your examiner today. Could I see your identification, please?`,
+    [examinerName],
+  );
+  const preselectedVoice = !initialVoice || initialVoice === "auto" || !profiles.some((p) => p.id === initialVoice) ? defaultProfileId : initialVoice;
+  const [text, setText] = useState(sampleLine);
+  const [prevLine, setPrevLine] = useState(sampleLine);
+  const [prevVoice, setPrevVoice] = useState(preselectedVoice);
+  const [voice, setVoice] = useState(preselectedVoice);
   const [playing, setPlaying] = useState(false);
   const [useBrowserVoice, setUseBrowserVoice] = useState(!serverTts);
   const barRefs = useRef<(HTMLSpanElement | null)[]>([]);
@@ -45,12 +52,24 @@ export function LipSyncLab({ serverTts, profiles, defaultProfileId, gender, embe
   const timeRef = useRef<HTMLSpanElement | null>(null);
   const tierRef = useRef<HTMLSpanElement | null>(null);
 
+  // Follow the examiner chosen in the form above: when its greeting line
+  // changes, reset the text; when the form's voice changes, follow it
+  // (React's adjust-state-on-prop-change pattern).
+  if (prevLine !== sampleLine) {
+    setPrevLine(sampleLine);
+    setText(sampleLine);
+  }
+  if (prevVoice !== preselectedVoice) {
+    setPrevVoice(preselectedVoice);
+    setVoice(preselectedVoice);
+  }
+
   useEffect(() => {
     warmupSpeech();
     configureTtsIdentity(null, null);
     primeEnvelope();
-    preloadExaminerModel(examiner);
-  }, [examiner]);
+    preloadExaminerModel(modelId ?? (gender === "female" ? "f1" : "m1"));
+  }, [gender, modelId]);
 
   // Warm the current line while the page sits idle: if synthesis is still
   // running when Play is clicked, the long wait outlives the browser's user
@@ -125,16 +144,10 @@ export function LipSyncLab({ serverTts, profiles, defaultProfileId, gender, embe
       )}
 
       <div className="flex items-start gap-5 rounded-2xl border border-zinc-200 bg-white p-5">
-        <ExaminerAvatar3D gender={examiner} speaking={playing} listening={false} preparing={false} name={examiner === "female" ? "Sarah" : "James"} className="h-44 w-44 shrink-0" />
+        <ExaminerAvatar3D gender={gender} modelId={modelId} speaking={playing} listening={false} preparing={false} name={examinerName} className="h-44 w-44 shrink-0" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <div className="flex overflow-hidden rounded-lg border border-zinc-200">
-              {(["female", "male"] as const).map((g) => (
-                <button key={g} onClick={() => setExaminer(g)} className={`px-3 py-1.5 ${examiner === g ? "bg-zinc-900 text-white" : "bg-white text-zinc-600"}`}>
-                  {g === "female" ? "Female" : "Male"}
-                </button>
-              ))}
-            </div>
+            <span className="rounded bg-zinc-100 px-2 py-1 font-medium text-zinc-600">{examinerName} · {gender === "female" ? "Female" : "Male"} examiner</span>
             <select value={voice} onChange={(e) => setVoice(e.target.value)} className="rounded-lg border border-zinc-200 px-2 py-1.5">
               {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
@@ -147,9 +160,7 @@ export function LipSyncLab({ serverTts, profiles, defaultProfileId, gender, embe
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <button onClick={play} disabled={playing || !text.trim()} className={`${btn} bg-zinc-900 text-white hover:bg-zinc-700`}>Play</button>
             <button onClick={stop} className={`${btn} border border-zinc-200`}>Stop</button>
-            {SAMPLES.map((s, i) => (
-              <button key={i} onClick={() => setText(s)} className="rounded border border-zinc-200 px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50">Sample {i + 1}</button>
-            ))}
+            <button onClick={() => setText(sampleLine)} className="rounded border border-zinc-200 px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50">Reset text</button>
           </div>
         </div>
       </div>
