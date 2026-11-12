@@ -33,12 +33,15 @@ interface Props {
 export function MicCheck({ deviceId, onDeviceChange, onConfirm, confirmLabel = "一切正常，开始考试", title = "麦克风检查", hint }: Props) {
   const rsRef = useRef<RecordingSession | null>(null);
   const handedOver = useRef(false);
+  /** Set when 关闭 is pressed while an acquire is still pending. */
+  const disposedRef = useRef(false);
   const deviceRef = useRef(deviceId ?? "");
   // Keep the latest device id without writing a ref during render.
   useEffect(() => { deviceRef.current = deviceId ?? ""; }, [deviceId]);
 
   const [ready, setReady] = useState(false);
-  const [status, setStatus] = useState<"init" | "ready" | "error">("init");
+  const [acquiring, setAcquiring] = useState(false);
+  const [status, setStatus] = useState<"off" | "init" | "ready" | "error">("off");
   const [level, setLevel] = useState(0);
   const [peak, setPeak] = useState(0);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
@@ -48,28 +51,52 @@ export function MicCheck({ deviceId, onDeviceChange, onConfirm, confirmLabel = "
   const [tested, setTested] = useState(false);
   const levelTs = useRef(0);
 
-  // Own the session: acquire on mount, release on unmount unless handed over.
-  useEffect(() => {
+  /**
+   * The microphone is ONLY acquired by an explicit user click (browsers ask
+   * for permission then, and the user asked not to be prompted on page load).
+   * 关闭 releases the capture (tracks stop → the browser's recording light goes out).
+   */
+  async function enable() {
+    if (rsRef.current || acquiring) return;
+    disposedRef.current = false;
+    setAcquiring(true);
+    setMsg(null);
+    setStatus("init");
     const rs = new RecordingSession({});
     rsRef.current = rs;
-    let cancelled = false;
-    void (async () => {
-      try {
-        await rs.acquire(deviceRef.current || undefined);
-        if (cancelled) return;
-        setReady(true);
-        setStatus("ready");
-      } catch (e) {
-        if (!cancelled) { setStatus("error"); setMsg((e as Error).message); }
+    try {
+      await rs.acquire(deviceRef.current || undefined);
+      // 关闭 was clicked while the permission prompt was still pending.
+      if (disposedRef.current) { rs.dispose(); return; }
+      setReady(true);
+      setStatus("ready");
+    } catch (e) {
+      if (!disposedRef.current) {
+        rs.dispose();
+        rsRef.current = null;
+        setStatus("error");
+        setMsg((e as Error).message);
       }
-    })();
-    return () => {
-      cancelled = true;
-      if (!handedOver.current) rs.dispose();
-      rsRef.current = null;
-      setReady(false);
-    };
-  }, []);
+    } finally {
+      setAcquiring(false);
+    }
+  }
+
+  /** Release the microphone completely (tracks stop; re-enable asks again). */
+  function disable() {
+    disposedRef.current = true;
+    const rs = rsRef.current;
+    if (rs && !handedOver.current) rs.dispose();
+    rsRef.current = null;
+    setReady(false);
+    setAcquiring(false);
+    setStatus("off");
+    setLevel(0);
+    setPeak(0);
+    setTested(false);
+    setMsg(null);
+    setClip((old) => { if (old) URL.revokeObjectURL(old); return null; });
+  }
 
   // Live level meter (throttled like the exam UI).
   useEffect(() => {
@@ -153,39 +180,57 @@ export function MicCheck({ deviceId, onDeviceChange, onConfirm, confirmLabel = "
           </p>
         </div>
         <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${status === "ready" ? "bg-emerald-50 text-emerald-700" : status === "error" ? "bg-red-50 text-red-700" : "bg-zinc-100 text-zinc-500"}`}>
-          {status === "ready" ? "已连接" : status === "error" ? "不可用" : "连接中…"}
+          {status === "ready" ? "已连接" : status === "error" ? "不可用" : status === "init" ? "连接中…" : "未开启"}
         </span>
       </div>
 
-      <div className="mt-5 flex flex-col items-center">
-        <div className="flex h-16 items-end gap-1.5" aria-label="麦克风音量">
-          {Array.from({ length: bars }).map((_, i) => (
-            <span
-              key={i}
-              className={`w-2 rounded-full transition-all ${heard ? "bg-emerald-500" : "bg-zinc-300"}`}
-              style={{ height: `${Math.max(6, Math.min(56, level * 56 * (0.55 + 0.45 * Math.sin(i * 1.7 + level * 12))))}px`, opacity: level > i / bars ? 1 : 0.3 }}
-            />
-          ))}
+      {status === "off" ? (
+        // Permission is only requested after this explicit click.
+        <div className="mt-5 flex flex-col items-start gap-3">
+          <button
+            onClick={() => void enable()}
+            disabled={acquiring}
+            className="rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+          >
+            {acquiring ? "正在请求麦克风…" : "开启麦克风测试"}
+          </button>
+          <p className="text-xs text-zinc-400">点击后浏览器会请求麦克风权限；关闭后麦克风会完全释放。</p>
+          {msg && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">{msg}</p>}
         </div>
-        <p className={`mt-3 text-xs ${heard ? "text-emerald-700" : "text-zinc-500"}`}>
-          {status !== "ready" ? "等待麦克风…" : heard ? "已检测到声音 ✓" : "还没有检测到声音，请说话或换一个麦克风"}
-        </p>
-      </div>
+      ) : (
+        <>
+          <div className="mt-5 flex flex-col items-center">
+            <div className="flex h-16 items-end gap-1.5" aria-label="麦克风音量">
+              {Array.from({ length: bars }).map((_, i) => (
+                <span
+                  key={i}
+                  className={`w-2 rounded-full transition-all ${heard ? "bg-emerald-500" : "bg-zinc-300"}`}
+                  style={{ height: `${Math.max(6, Math.min(56, level * 56 * (0.55 + 0.45 * Math.sin(i * 1.7 + level * 12))))}px`, opacity: level > i / bars ? 1 : 0.3 }}
+                />
+              ))}
+            </div>
+            <p className={`mt-3 text-xs ${heard ? "text-emerald-700" : "text-zinc-500"}`}>
+              {status !== "ready" ? "等待麦克风…" : heard ? "已检测到声音 ✓" : "还没有检测到声音，请说话或换一个麦克风"}
+            </p>
+          </div>
 
-      <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-        <select
-          className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
-          value={deviceId ?? ""}
-          onChange={(e) => onDeviceChange?.(e.target.value)}
-        >
-          <option value="">系统默认麦克风</option>
-          {devices.map((d, i) => <option key={d.deviceId || i} value={d.deviceId}>{d.label || `麦克风 ${i + 1}`}</option>)}
-        </select>
-        <button onClick={reopen} className="shrink-0 rounded-lg border border-zinc-200 px-3 py-2 text-sm">换设备 / 重新检测</button>
-        <button onClick={runTest} disabled={status !== "ready" || testing} className="shrink-0 rounded-lg border border-zinc-200 px-3 py-2 text-sm disabled:opacity-50">
-          {testing ? "录音中…" : `试录 ${TEST_MS / 1000} 秒`}
-        </button>
-      </div>
+          <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+            <select
+              className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
+              value={deviceId ?? ""}
+              onChange={(e) => onDeviceChange?.(e.target.value)}
+            >
+              <option value="">系统默认麦克风</option>
+              {devices.map((d, i) => <option key={d.deviceId || i} value={d.deviceId}>{d.label || `麦克风 ${i + 1}`}</option>)}
+            </select>
+            <button onClick={reopen} className="shrink-0 rounded-lg border border-zinc-200 px-3 py-2 text-sm">换设备 / 重新检测</button>
+            <button onClick={runTest} disabled={status !== "ready" || testing} className="shrink-0 rounded-lg border border-zinc-200 px-3 py-2 text-sm disabled:opacity-50">
+              {testing ? "录音中…" : `试录 ${TEST_MS / 1000} 秒`}
+            </button>
+            <button onClick={disable} className="shrink-0 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50">关闭麦克风</button>
+          </div>
+        </>
+      )}
 
       {msg && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">{msg}</p>}
       {clip && (

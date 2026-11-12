@@ -19,7 +19,7 @@ import type { ExaminerSpeechAct } from "@/lib/speaking/speech-act";
 import { budgetForPart, formatClock, OFFICIAL_RANGE, PART_TITLE, partProgress, partRemaining } from "@/lib/speaking/part-timing";
 import { primeEnvelope } from "@/lib/audio/examiner-envelope";
 import { ExaminerAvatar3D } from "@/components/examiner/examiner-avatar-3d";
-import { normalizeGender, preloadExaminerModel, type ExaminerGender } from "@/lib/avatar/models";
+import { normalizeGender, normalizeModelId, preloadExaminerModel, type ExaminerGender } from "@/lib/avatar/models";
 
 interface StepView {
   id: string; stepIndex: number; part: number; kind: string; topic: string; examinerLead: string; promptText: string; cuePoints: string[];
@@ -37,6 +37,7 @@ interface SessionView {
     voiceProfile: { id: string; voice: string; provider: string } | null;
     /** Frozen visual identity (digital human), pairs with the frozen voice. */
     examinerGender?: "male" | "female";
+    examinerModel?: string;
   };
   steps: StepView[];
 }
@@ -54,7 +55,7 @@ interface Props {
   sessionId: string; voice: string; showSubtitlesDefault: boolean; serverTts: boolean;
   browserAsr: boolean; asrAvailable: boolean;
   /** Examiner look from the user's saved preference; the session snapshot wins once loaded. */
-  gender: ExaminerGender;
+  gender: ExaminerGender; modelId?: string;
   /** Engine identity for the TTS cache key (model/format changes must not reuse old audio). */
   ttsModel?: string | null; ttsFormat?: string | null;
 }
@@ -147,7 +148,7 @@ function buildScriptPlan(v: SessionView, profileId: string): ScriptPlan {
   };
 }
 
-export function ExamRunner({ sessionId, voice, gender, showSubtitlesDefault, serverTts, browserAsr, asrAvailable, ttsModel, ttsFormat }: Props) {
+export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDefault, serverTts, browserAsr, asrAvailable, ttsModel, ttsFormat }: Props) {
   const router = useRouter();
   const [view, setView] = useState<SessionView | null>(null);
   const [phase, setPhase] = useState<Phase>("loading");
@@ -193,6 +194,7 @@ export function ExamRunner({ sessionId, voice, gender, showSubtitlesDefault, ser
   const voiceRef = useRef(voice);
   /** Visual examiner identity, frozen with the session snapshot once loaded. */
   const [examinerGender, setExaminerGender] = useState<ExaminerGender>(gender);
+  const [examinerModel, setExaminerModel] = useState<string | undefined>(modelId);
   /** Which part is being timed, and when it started. Reset on every part change. */
   const partClock = useRef<{ part: number; startedAt: number } | null>(null);
   /** The part whose time ran out (null when none). The loop closes it at a safe point. */
@@ -226,8 +228,10 @@ export function ExamRunner({ sessionId, voice, gender, showSubtitlesDefault, ser
           voiceRef.current = profileId;
           // Same for the digital human's identity: resume restores the same person.
           const frozenGender = normalizeGender(v.session.examinerGender ?? gender);
+          const frozenModel = normalizeModelId(v.session.examinerModel ?? modelId, frozenGender);
           setExaminerGender(frozenGender);
-          preloadExaminerModel(frozenGender); // warm the HTTP cache while the setup screen shows
+          setExaminerModel(frozenModel);
+          preloadExaminerModel(frozenModel); // warm the HTTP cache while the setup screen shows
           // One coordinator for TTS + preset bank audio + fixed examiner lines.
           const preloader = new AudioPreloader({ voice: profileId, profile: profileId, serverTts, model: ttsModel, format: ttsFormat });
           preloaderRef.current = preloader;
@@ -265,7 +269,7 @@ export function ExamRunner({ sessionId, voice, gender, showSubtitlesDefault, ser
       preloaderRef.current = null;
       disposeAudio();
     };
-  }, [load, router, sessionId, serverTts, voice, gender, ttsModel, ttsFormat]);
+  }, [load, router, sessionId, serverTts, voice, gender, modelId, ttsModel, ttsFormat]);
 
   // Warn before leaving while the exam is running (state is saved server-side, but the current answer would be lost)
   useEffect(() => {
@@ -861,6 +865,7 @@ export function ExamRunner({ sessionId, voice, gender, showSubtitlesDefault, ser
             <div className="flex items-center gap-4">
               <ExaminerAvatar3D
                 gender={examinerGender}
+                modelId={examinerModel}
                 speaking={speaking}
                 listening={phase === "recording"}
                 preparing={phase === "examiner" || phase === "prep"}

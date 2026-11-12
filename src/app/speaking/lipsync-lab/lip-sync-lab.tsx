@@ -24,6 +24,8 @@ interface Props {
   profiles: { id: string; name: string }[];
   defaultProfileId: string;
   gender: ExaminerGender;
+  /** Embedded in the settings page: no page chrome of its own. */
+  embedded?: boolean;
 }
 
 const SAMPLES = [
@@ -32,7 +34,7 @@ const SAMPLES = [
   "Now I'm going to give you a topic, and I'd like you to talk about it for one to two minutes.",
 ];
 
-export function LipSyncLab({ serverTts, profiles, defaultProfileId, gender }: Props) {
+export function LipSyncLab({ serverTts, profiles, defaultProfileId, gender, embedded = false }: Props) {
   const [text, setText] = useState(SAMPLES[0]);
   const [voice, setVoice] = useState(defaultProfileId);
   const [examiner, setExaminer] = useState<ExaminerGender>(gender);
@@ -105,14 +107,22 @@ export function LipSyncLab({ serverTts, profiles, defaultProfileId, gender }: Pr
 
   const btn = "rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-40";
   return (
-    <div className="mx-auto max-w-3xl space-y-5 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">Lip Sync Lab</h1>
-          <p className="text-xs text-zinc-400">数字考官口型验收页 — 观察当前 Viseme、播放时钟与轨道级别。</p>
+    <div className={embedded ? "space-y-5" : "mx-auto max-w-3xl space-y-5 p-6"}>
+      {!embedded && (
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-semibold">Lip Sync Lab</h1>
+            <p className="text-xs text-zinc-400">数字考官口型验收页 — 观察当前 Viseme、播放时钟与轨道级别。</p>
+          </div>
+          <Link href="/speaking" className="text-xs text-zinc-500 underline">Back</Link>
         </div>
-        <Link href="/speaking" className="text-xs text-zinc-500 underline">Back</Link>
-      </div>
+      )}
+      {embedded && (
+        <div>
+          <h2 className="font-semibold">Lip Sync Lab</h2>
+          <p className="mt-0.5 text-xs text-zinc-400">数字考官口型验收 — 试听音色、观察口型与轨道级别。</p>
+        </div>
+      )}
 
       <div className="flex items-start gap-5 rounded-2xl border border-zinc-200 bg-white p-5">
         <ExaminerAvatar3D gender={examiner} speaking={playing} listening={false} preparing={false} name={examiner === "female" ? "Sarah" : "James"} className="h-44 w-44 shrink-0" />

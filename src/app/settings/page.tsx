@@ -1,8 +1,10 @@
 import { getCurrentUser } from "@/lib/server/user";
 import { capabilities } from "@/lib/ai/registry";
 import { PageHeader, Card } from "@/components/ui";
+import { normalizeModelId } from "@/lib/avatar/models";
 import { SettingsForm } from "./settings-form";
 import { VoiceLab } from "./voice-lab";
+import { LipSyncLab } from "@/app/speaking/lipsync-lab/lip-sync-lab";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +19,7 @@ export default async function Settings() {
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <SettingsForm
-            initial={{ displayName: user?.displayName ?? "Candidate", targetBand: user?.targetBand ?? 7, examDate: user?.examDate ?? "", examinerVoice: saved, examinerGender: user?.examinerGender === "male" ? "male" : "female", showSubtitles: user?.showSubtitles ?? true }}
+            initial={{ displayName: user?.displayName ?? "Candidate", targetBand: user?.targetBand ?? 7, examDate: user?.examDate ?? "", examinerVoice: saved, examinerGender: user?.examinerGender === "male" ? "male" : "female", examinerModel: normalizeModelId(user?.examinerModel, user?.examinerGender === "male" ? "male" : "female"), showSubtitles: user?.showSubtitles ?? true }}
             serverTts={tts.location === "server"}
             ttsVoice={tts.voice}
             ttsStreaming={tts.streaming}
@@ -49,6 +51,15 @@ export default async function Settings() {
           </dl>
           <p className="mt-4 text-xs leading-5 text-zinc-400">Providers are configured with server environment variables (see .env.example). API keys never reach the browser.</p>
         </Card>
+      </div>
+      <div id="lipsync-lab" className="mt-6 rounded-2xl border border-zinc-200 bg-white p-6">
+        <LipSyncLab
+          embedded
+          serverTts={tts.location === "server"}
+          profiles={tts.profiles.map((p) => ({ id: p.id, name: p.name }))}
+          defaultProfileId={tts.defaultProfileId}
+          gender={user?.examinerGender === "male" ? "male" : "female"}
+        />
       </div>
     </>
   );

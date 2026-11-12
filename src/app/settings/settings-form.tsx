@@ -3,8 +3,9 @@ import { useEffect, useState } from "react";
 import { Card } from "@/components/ui";
 import { MicCheck } from "@/components/mic-check";
 import { loadVoices, speak, warmupSpeech } from "@/lib/audio/speech";
+import { DEFAULT_MODEL_BY_GENDER, examinerModelById, examinerModelsForGender, normalizeModelId, type ExaminerGender } from "@/lib/avatar/models";
 
-interface S { displayName: string; targetBand: number; examDate: string; examinerVoice: string; examinerGender: "male" | "female"; showSubtitles: boolean }
+interface S { displayName: string; targetBand: number; examDate: string; examinerVoice: string; examinerGender: "male" | "female"; examinerModel: string; showSubtitles: boolean }
 interface ProfileOption { id: string; name: string; provider: string; gender?: "male" | "female" | null }
 
 /** The default voice each provider family pairs with an examiner gender. */
@@ -54,7 +55,7 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
    * Kokoro deployment never gets pointed at an unconfigured Azure preset) and
    * the voice list itself only offers voices matching the chosen gender.
    */
-  function pickGender(gender: "male" | "female") {
+  function pickGender(gender: ExaminerGender) {
     const family = voiceFamily(s.examinerVoice);
     const current = profiles.find((p) => p.id === s.examinerVoice);
     // "auto" counts as MISMATCH: it hides which gender the deployment default
@@ -63,8 +64,19 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
     const genderMatches = !isAuto && (current?.gender == null || current.gender === gender);
     const paired = GENDER_VOICE_BY_FAMILY[family]?.[gender];
     const nextVoice = genderMatches ? s.examinerVoice : paired ?? s.examinerVoice;
-    setS({ ...s, examinerGender: gender, examinerVoice: nextVoice });
+    // Keep the chosen look when it already belongs to the target gender…
+    const modelKept = examinerModelById(s.examinerModel)?.gender === gender;
+    // …otherwise fall back to that gender's default examiner.
+    const nextModel = modelKept ? s.examinerModel : DEFAULT_MODEL_BY_GENDER[gender];
+    setS({ ...s, examinerGender: gender, examinerVoice: nextVoice, examinerModel: nextModel });
   }
+
+  function pickModel(id: string) {
+    setS({ ...s, examinerModel: normalizeModelId(id, s.examinerGender) });
+  }
+
+  /** The five examiner looks available for the chosen gender. */
+  const examinerChoices = examinerModelsForGender(s.examinerGender);
 
   /** Voices offered for the chosen examiner: matching gender only (null-gender voices like "auto" always stay). */
   const genderedProfiles = profiles.filter((p) => p.gender == null || p.gender === s.examinerGender);
@@ -94,7 +106,20 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
               </button>
             ))}
           </div>
-          <span className="mt-1 block text-xs text-zinc-400">The digital examiner and the voice are paired; the choice is frozen when a test starts.</span>
+          <div className="mt-2 grid grid-cols-5 gap-1.5" role="group" aria-label="Examiner looks">
+            {examinerChoices.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => pickModel(m.id)}
+                title={m.displayName}
+                className={`rounded-lg border px-1 py-2 text-center text-xs transition-colors ${s.examinerModel === m.id ? "border-zinc-900 bg-zinc-900 text-white font-medium" : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300"}`}
+              >
+                {m.displayName}
+              </button>
+            ))}
+          </div>
+          <span className="mt-1 block text-xs text-zinc-400">Pick the examiner&apos;s look — the voice always matches the examiner&apos;s gender. The choice is frozen when a test starts.</span>
         </label>
         <label className="text-sm">Examiner voice {serverTts ? "(voice profile)" : "(browser voice)"}
           {serverTts ? (

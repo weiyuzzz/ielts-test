@@ -26,6 +26,8 @@ export const users = pgTable("users", {
   examinerVoice: text("examiner_voice").notNull().default("auto"),
   /** Visual examiner identity ("male" | "female"), paired with the voice in settings. */
   examinerGender: text("examiner_gender").notNull().default("female"),
+  /** Which examiner look (avatar model id, e.g. "f1"…"f5"/"m1"…"m5"). */
+  examinerModel: text("examiner_model"),
   showSubtitles: boolean("show_subtitles").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
