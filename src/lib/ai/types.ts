@@ -76,7 +76,15 @@ export interface PronunciationResult {
 }
 export interface PronunciationProvider extends ProviderInfo {
   /** Expects 16 kHz mono 16-bit PCM WAV. referenceText = ASR transcript (unscripted assessment). */
-  assess(wav: Buffer, referenceText: string, opts?: { signal?: AbortSignal }): Promise<PronunciationResult>;
+  assess(
+    wav: Buffer,
+    referenceText: string,
+    opts?: {
+      signal?: AbortSignal;
+      /** ASR word timings, when available: providers may use them to align audio to reference text. */
+      words?: WordTiming[];
+    },
+  ): Promise<PronunciationResult>;
 }
 
 export class ProviderError extends Error {

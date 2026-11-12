@@ -136,7 +136,7 @@ export async function runScoring(assessmentId: string): Promise<void> {
       for (const inp of inputs) {
         if (inp.noResponse || !inp.text || !inp.wavKey) continue;
         try {
-          const r = await withTimeout(pron.id, TIMEOUTS.pronMs, async (signal) => pron.assess(await readAudio(inp.wavKey!), inp.text, { signal }));
+          const r = await withTimeout(pron.id, TIMEOUTS.pronMs, async (signal) => pron.assess(await readAudio(inp.wavKey!), inp.text, { signal, words: inp.words ?? undefined }));
           await db.insert(pronunciationResults).values({ answerId: inp.answerId, provider: pron.id, status: "completed", accuracy: r.accuracy, fluency: r.fluency, prosody: r.prosody ?? null, completeness: r.completeness ?? null, overall: r.overall, words: r.words });
           pronRows.push({ answerIndex: inp.index, answerId: inp.answerId, overall: r.overall, accuracy: r.accuracy, fluency: r.fluency, prosody: r.prosody, completeness: r.completeness, durationMs: inp.durationMs, words: r.words });
         } catch (e) {

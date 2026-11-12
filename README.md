@@ -131,7 +131,7 @@ Part 1 超时不会再问你 Part 1 的题，Part 3 超时直接收尾并进入�
 - **诚实原则**：特征缺失标 `null` + warning + coverage 徽标（transcript / word timings / VAD / prosody），不伪造数字；停顿阈值可经 `AUDIO_MIN_PAUSE_MS` 等环境变量调整；"I mean" 仅在真实停顿后才计为修复标记，"like/kind of" 永不计入填充词；音高/能量只是描述性证据，**不得**换算成 Pronunciation 分。
 - **声学指标不直接决定 Band**：prompt 明确要求模型把指标当证据而非公式，缺失特征不得臆测或惩罚。
 - **持久化**：逐答案分析存 `audio_analyses` 表，整场汇总存 `assessments.audio_analysis`（JSONB），报告页新增「声学证据」卡片（含分 Part 表）；旧评分记录无该字段时显示为「未分析」，完全向后兼容。迁移：`npx drizzle-kit push`（含 `drizzle/0002_audio_analysis.sql` 与 `0003_scoring_evidence.sql`）。
-- **发音维度（P）**：Azure Pronunciation Assessment 的原始数值（accuracy/fluency/prosody/逐词分）作为 `PRONUNCIATION EVIDENCE` 注入 prompt，由模型对照 [P] rubric 判分——**provider 数值不是 Band，不做 0–100→band 映射**；无 Provider 时 P=not_assessed，绝不用转写推断或用其余三项平均补齐。
+- **发音维度（P）**：Azure Pronunciation Assessment 或**腾讯云智聆口语评测**（国内直连，`tencent-soe`）的原始数值（accuracy/fluency/completeness/逐词分）作为 `PRONUNCIATION EVIDENCE` 注入 prompt，由模型对照 [P] rubric 判分——**provider 数值不是 Band，不做 0–100→band 映射**；无 Provider 时 P=not_assessed，绝不用转写推断或用其余三项平均补齐。腾讯 SOE 段落模式限 120 词/组：有词级时间戳时按句子边界分组并用真实时间戳切分音频逐组评测（词数加权聚合），无时间戳时超长转写如实失败。
 - **评分 LLM（多 Provider 同一标准）**：`LLM_PROVIDER=deepseek | qwen | gemini | openai | anthropic`（或 `/admin` 面板选择），均可配 Model / Base URL / Temperature / Max Tokens；`LLM_FALLBACK_PROVIDER` 可配备用评分模型（同一 rubric，切换必记录）。
 - **出站端点守卫**：所有 OpenAI 兼容 Provider 的 Base URL 在请求前经 `src/lib/ai/url-guard.ts` 校验（仅 http/https、拒绝内网/环回/云元数据地址、DNS 解析复核）；自建 vLLM/Kokoro 部署可显式 `ALLOW_LOCAL_AI_ENDPOINTS=1` 放行。
 

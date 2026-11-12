@@ -9,6 +9,7 @@ interface Prov {
   provider: string;
   baseUrl?: string;
   model?: string;
+  secretId?: string;
   voice?: string;
   region?: string;
   /** Numeric sampling fields (LLM only); the draft carries them as strings. */
@@ -33,7 +34,7 @@ interface Draft extends Omit<Prov, NumericField> {
 }
 type Drafts = Record<ProviderKey, Draft>;
 
-const PROVIDERS: Record<ProviderKey, { label: string; hint: string; options: { id: string; label: string }[]; fields: ("baseUrl" | "model" | "voice" | "region" | "temperature" | "maxTokens")[] }> = {
+const PROVIDERS: Record<ProviderKey, { label: string; hint: string; options: { id: string; label: string }[]; fields: ("baseUrl" | "model" | "voice" | "region" | "secretId" | "temperature" | "maxTokens")[] }> = {
   llm: {
     label: "语言评分 LLM（FC / LR / GRA，发音维度需音频证据）",
     hint: "关闭后考试仍可完成，但报告会是「未评分」，绝不伪造分数。所有 Provider 使用同一套评分标准与校验。",
@@ -72,13 +73,14 @@ const PROVIDERS: Record<ProviderKey, { label: string; hint: string; options: { i
   },
   pronunciation: {
     label: "发音评测（P 维度）",
-    hint: "未配置时 P 维度标为 not_assessed，总分不显示——不会用转写猜发音。",
+    hint: "未配置时 P 维度标为 not_assessed，总分不显示——不会用转写猜发音。腾讯云填 Secret ID（API 密钥页的 SecretId）+ API Key（SecretKey）。",
     options: [
       { id: "auto", label: "自动（按环境变量）" },
       { id: "azure", label: "Azure Pronunciation Assessment" },
+      { id: "tencent-soe", label: "腾讯云智聆口语评测（国内直连）" },
       { id: "none", label: "关闭" },
     ],
-    fields: ["region"],
+    fields: ["region", "secretId"],
   },
 };
 
@@ -87,7 +89,7 @@ const KEYS: ProviderKey[] = ["llm", "tts", "asr", "pronunciation"];
 function toDrafts(c: Cfg): Drafts {
   const one = (p: Prov): Draft => ({
     enabled: p.enabled, provider: p.provider,
-    baseUrl: p.baseUrl ?? "", model: p.model ?? "", voice: p.voice ?? "", region: p.region ?? "",
+    baseUrl: p.baseUrl ?? "", model: p.model ?? "", secretId: p.secretId ?? "", voice: p.voice ?? "", region: p.region ?? "",
     temperature: p.temperature !== undefined ? String(p.temperature) : "",
     maxTokens: p.maxTokens !== undefined ? String(p.maxTokens) : "",
     hasKey: p.hasKey, keyHint: p.keyHint, apiKey: "", clearKey: false,
@@ -142,7 +144,7 @@ export function AiSettings() {
         patch[k] = {
           enabled: d.enabled,
           provider: d.provider,
-          baseUrl: d.baseUrl, model: d.model, voice: d.voice, region: d.region,
+          baseUrl: d.baseUrl, model: d.model, secretId: d.secretId, voice: d.voice, region: d.region,
           ...(k === "llm" && d.temperature.trim() && Number.isFinite(temp) ? { temperature: temp } : {}),
           ...(k === "llm" && d.maxTokens.trim() && Number.isFinite(tokens) ? { maxTokens: tokens } : {}),
           ...(d.apiKey.trim() ? { apiKey: d.apiKey.trim() } : {}),
@@ -210,11 +212,11 @@ export function AiSettings() {
               <div className="mt-2 grid grid-cols-2 gap-2">
                 {meta.fields.map((f) => (
                   <label key={f} className="block text-xs text-zinc-500">
-                    {f === "baseUrl" ? "Base URL" : f === "model" ? "Model" : f === "voice" ? "Voice" : f === "temperature" ? "Temperature (0–2)" : f === "maxTokens" ? "Max tokens" : "Region"}
+                    {f === "baseUrl" ? "Base URL" : f === "model" ? "Model" : f === "voice" ? "Voice" : f === "temperature" ? "Temperature (0–2)" : f === "maxTokens" ? "Max tokens" : f === "secretId" ? "Secret ID（腾讯云）" : "Region"}
                     <input
                       value={d[f] as string}
                       onChange={(e) => set(k, { [f]: e.target.value } as Partial<Draft>)}
-                      placeholder={f === "baseUrl" ? "https://api.openai.com/v1" : f === "model" ? "gpt-4o-mini" : f === "voice" ? "en-GB-SoniaNeural" : f === "temperature" ? "0.2" : f === "maxTokens" ? "2500" : "eastus"}
+                      placeholder={f === "baseUrl" ? "https://api.openai.com/v1" : f === "model" ? "gpt-4o-mini" : f === "voice" ? "en-GB-SoniaNeural" : f === "temperature" ? "0.2" : f === "maxTokens" ? "2500" : f === "secretId" ? "SecretId" : "eastus"}
                       className="mt-1 w-full rounded-lg border border-zinc-200 px-2 py-1.5 text-sm"
                     />
                   </label>
