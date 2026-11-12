@@ -223,6 +223,63 @@ await check("non-audio upload rejected (415)", async () => {
   assert.equal((await req(`/api/speaking/sessions/${id}/answers`, { method: "POST", body: fd })).status, 415);
 });
 
+// ------------------------------------------------------------------ phase-1: unified complete-answer
+function completeForm(step, fromStep, idem, text = GOOD[0]) {
+  const fd = new FormData();
+  fd.append("examQuestionId", step.id);
+  fd.append("idempotencyKey", idem);
+  fd.append("durationMs", "5000");
+  fd.append("fromStep", String(fromStep));
+  fd.append("wav", new Blob([wav(1)], { type: "audio/wav" }), "a.wav");
+  if (text) fd.append("browserTranscript", text);
+  return fd;
+}
+
+await check("complete-answer: ONE request submits, advances and returns the full next-step view", async () => {
+  const id = (await req("/api/speaking/sessions", json({ mode: "part1" }))).body.id;
+  const v0 = (await req(`/api/speaking/sessions/${id}`)).body;
+  const idem = crypto.randomUUID();
+  const t0 = Date.now();
+  const r = await req(`/api/speaking/sessions/${id}/complete-answer`, { method: "POST", body: completeForm(v0.steps[0], 0, idem) });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.ok(r.body.answer.answerId);
+  assert.equal(r.body.answer.status, "answered");
+  assert.equal(r.body.advance.currentStep, 1, "state machine advanced");
+  assert.equal(r.body.view.session.currentStep, 1, "view is authoritative, no extra GET needed");
+  assert.equal(r.body.view.steps[0].status, "answered");
+  assert.ok(r.body.view.steps.length > 1, "next question's full info is present");
+  assert.equal(typeof r.body.timings.advanceMs, "number");
+  assert.equal(r.body.answer.asrDurationMs, 0, "no synchronous ASR wait for this step");
+  console.log("   complete-answer round trip", Date.now() - t0, "ms");
+
+  const again = await req(`/api/speaking/sessions/${id}/complete-answer`, { method: "POST", body: completeForm(v0.steps[0], 0, idem) });
+  assert.equal(again.status, 200);
+  assert.equal(again.body.answer.duplicate, true, "idempotency key is honoured");
+  assert.equal(again.body.answer.answerId, r.body.answer.answerId);
+  assert.equal(again.body.view.session.currentStep, 1, "retry never double-advances");
+
+  const bad = await req(`/api/speaking/sessions/${id}/complete-answer`, { method: "POST", body: completeForm(v0.steps[2], 1, crypto.randomUUID()) });
+  assert.equal(bad.status, 409, "out-of-order step is rejected by the state machine");
+});
+
+await check("complete-answer: full mock never waits on synchronous Part 3 ASR", async () => {
+  const id = (await req("/api/speaking/sessions", json({ mode: "full" }))).body.id;
+  const v = (await req(`/api/speaking/sessions/${id}`)).body;
+  const r = await req(`/api/speaking/sessions/${id}/complete-answer`, { method: "POST", body: completeForm(v.steps[0], 0, crypto.randomUUID()) });
+  assert.equal(r.status, 201);
+  assert.equal(r.body.answer.asrDurationMs, 0, "full mock defers transcription to scoring");
+  assert.equal(r.body.advance.followUp, undefined, "no invented follow-up in a full mock");
+});
+
+await check("complete-answer: legacy /answers and /advance endpoints still work", async () => {
+  const id = (await req("/api/speaking/sessions", json({ mode: "part1" }))).body.id;
+  const v = (await req(`/api/speaking/sessions/${id}`)).body;
+  const a = await answer(id, v.steps[0], { text: GOOD[0] });
+  assert.equal(a.status, 201);
+  const adv = await req(`/api/speaking/sessions/${id}/advance`, json({ fromStep: 0 }));
+  assert.equal(adv.body.currentStep, 1);
+});
+
 // ------------------------------------------------------------------ examiner TTS
 if (cfg.tts && cfg.tts.location === "server") {
   const line = "Thank you. That is the end of the speaking test.";
@@ -232,6 +289,9 @@ if (cfg.tts && cfg.tts.location === "server") {
     assert.equal(r.status, 200);
     assert.ok((r.headers.get("content-type") || "").startsWith("audio/"), "audio content type");
     assert.ok(r.body.byteLength > 1000, "non-empty clip");
+    assert.ok(["hit", "miss", "miss-stream"].includes(r.headers.get("x-tts-cache")), "cache classification header");
+    assert.ok(r.headers.get("x-tts-synthesis-ms") !== null, "synthesis timing header feeds the dev trace");
+    assert.ok(r.headers.get("server-timing") !== null, "Server-Timing header present");
   });
   await check("TTS: repeated line is served from the server cache", async () => {
     const r = await req(url);
@@ -243,6 +303,7 @@ if (cfg.tts && cfg.tts.location === "server") {
     const r = await req("/api/tts", json({ text: "Thank you.", voice: "auto" }));
     assert.equal(r.status, 200);
     assert.ok(r.body.byteLength > 1000);
+    assert.ok(r.headers.get("x-tts-synthesis-ms") !== null);
   });
 } else {
   console.log("SKIP TTS checks (browser TTS active)");

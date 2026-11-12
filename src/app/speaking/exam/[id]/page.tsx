@@ -14,6 +14,8 @@ export default async function ExamPage({ params }: PageProps<"/speaking/exam/[id
       voice={user?.examinerVoice ?? "auto"}
       showSubtitlesDefault={user?.showSubtitles ?? true}
       serverTts={caps.tts.location === "server"}
+      ttsModel={caps.tts.model}
+      ttsFormat={caps.tts.format}
       browserAsr={caps.asr?.location === "browser"}
       asrAvailable={!!caps.asr}
     />

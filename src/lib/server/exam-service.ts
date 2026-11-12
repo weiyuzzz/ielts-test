@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { examSessions, examQuestions, questions, answerRecords, audioAssets, transcripts, assessments, users } from "@/db/schema";
 import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { resolveConfig, EXAMINER_NAMES, type SpeakingExamConfig, type SpeakingMode } from "@/lib/speaking/config";
+import { asrTimingFromConfig } from "@/lib/speaking/asr-policy";
 import { canSubmitAnswer, canRepeat, decideAdvance, canFinish, type MachineState, type MachineError } from "@/lib/speaking/exam-machine";
 import { LINES, templateFollowUp, generateFollowUp } from "@/lib/speaking/examiner";
 import { tokenize } from "@/lib/speaking/metrics";
@@ -198,7 +199,7 @@ export async function submitAnswer(user: User, id: string, form: FormData) {
   const [dup] = await db.select().from(answerRecords).where(eq(answerRecords.idempotencyKey, idem)).limit(1);
   if (dup) {
     if (dup.sessionId !== s.id) throw new HttpError(409, "idempotency key reused");
-    return { answerId: dup.id, status: dup.status, duplicate: true };
+    return { answerId: dup.id, status: dup.status, duplicate: true, asrDurationMs: 0 };
   }
 
   const { state, steps } = await machineState(s);
@@ -239,6 +240,7 @@ export async function submitAnswer(user: User, id: string, form: FormData) {
   });
 
   // Transcript: browser-provided (Web Speech) or server ASR.
+  let asrDurationMs = 0;
   const asr = getASR();
   const browserText = String(form.get("browserTranscript") || "").trim().slice(0, 10000);
   if (!noResponse && asr?.location === "browser") {
@@ -249,10 +251,25 @@ export async function submitAnswer(user: User, id: string, form: FormData) {
     });
   } else if (!noResponse && asr?.location === "server" && main) {
     const prompt = step.promptText;
-    if (step.part === 3 && step.kind === "question") await transcribeAnswer(answer.id, main.storageKey, main.mimeType, prompt);
-    else after(() => transcribeAnswer(answer.id, main.storageKey, main.mimeType, prompt).then(() => undefined));
+    // Only a practice Part 3 follow-up decision needs the transcript before we
+    // advance. A full mock follows the fixed bank script, and runScoring()
+    // backfills any missing transcript, so waiting here would be pure latency.
+    const timing = asrTimingFromConfig(
+      s.mode as SpeakingMode,
+      { part: step.part, kind: step.kind },
+      "server",
+      noResponse,
+      state.steps.filter((x) => x.kind === "follow_up").length,
+      config,
+    );
+    const work = () => transcribeAnswer(answer.id, main.storageKey, main.mimeType, prompt).then(() => undefined);
+    if (timing === "sync") {
+      const asrStart = Date.now();
+      await work();
+      asrDurationMs = Date.now() - asrStart;
+    } else after(work);
   }
-  return { answerId: answer.id, status: answer.status, duplicate: false };
+  return { answerId: answer.id, status: answer.status, duplicate: false, asrDurationMs };
 }
 
 async function currentAnswerSummary(stepId: string) {
@@ -277,7 +294,13 @@ export async function advance(user: User, id: string, fromStep: number) {
   if (decision.type === "finish") return { currentStep: s.currentStep, finished: true };
   if (decision.type === "next") {
     const [u] = await db.update(examSessions).set({ currentStep: decision.nextStep, updatedAt: new Date() }).where(and(eq(examSessions.id, s.id), eq(examSessions.currentStep, fromStep))).returning();
-    return { currentStep: u?.currentStep ?? s.currentStep, partChanged: decision.partChanged };
+    if (!u) {
+      // Lost a race with a concurrent advance (double click / retry). Re-read
+      // the authoritative row instead of returning a stale currentStep.
+      const [fresh] = await db.select({ currentStep: examSessions.currentStep }).from(examSessions).where(eq(examSessions.id, s.id)).limit(1);
+      return { currentStep: fresh?.currentStep ?? s.currentStep, duplicate: true };
+    }
+    return { currentStep: u.currentStep, partChanged: decision.partChanged };
   }
 
   // follow_up: wording from LLM when available, otherwise template. Machine already decided it is allowed.
@@ -353,6 +376,53 @@ export async function retryScoring(user: User, id: string) {
   const [a] = await db.insert(assessments).values({ sessionId: s.id, status: "pending", stage: "queued" }).returning();
   after(() => runScoring(a.id));
   return { assessmentId: a.id, duplicate: false };
+}
+
+/**
+ * Unified per-answer commit: submit + advance + next-step view in ONE request.
+ *
+ * Previously the runner made three round trips per question
+ * (POST /answers → POST /advance → GET /sessions/:id) and each one could be
+ * interrupted by a network hiccup. The server state machine remains the single
+ * source of truth: we reuse submitAnswer() (idempotency key, ownership, audio
+ * and answer records) and advance() (authoritative transition, concurrency
+ * guard) unchanged, then return the full session view so the client never has
+ * to re-fetch it.
+ */
+export interface CompleteAnswerResult {
+  answer: { answerId: string; status: string; duplicate: boolean; asrDurationMs: number };
+  advance: {
+    currentStep: number;
+    finished?: boolean;
+    duplicate?: boolean;
+    partChanged?: boolean;
+    followUp?: { text: string; generator: string };
+  };
+  /** Server-side phase timings, forwarded into the client audio trace. */
+  timings: { submitMs: number; advanceMs: number };
+  /** Full session view — same shape as GET /api/speaking/sessions/:id. */
+  view: Awaited<ReturnType<typeof getSessionView>>;
+}
+
+export async function completeAnswer(user: User, id: string, form: FormData): Promise<CompleteAnswerResult> {
+  const raw = form.get("fromStep");
+  const fromStep = Number(raw);
+  if (!Number.isInteger(fromStep) || fromStep < 0) throw new HttpError(400, "fromStep (integer) required");
+
+  // 1) Persist the answer (idempotent, ownership-checked, state-machine-checked).
+  const submitStart = Date.now();
+  const answer = await submitAnswer(user, id, form);
+  const submitMs = Date.now() - submitStart;
+
+  // 2) Apply the authoritative transition. advance() has its own duplicate
+  //    guard, so a retry with the same idempotency key cannot double-advance.
+  const advanceStart = Date.now();
+  const advanced = await advance(user, id, fromStep);
+  const advanceMs = Date.now() - advanceStart;
+
+  // 3) Return everything the runner needs for the next question in one payload.
+  const view = await getSessionView(user, id);
+  return { answer, advance: advanced as CompleteAnswerResult["advance"], timings: { submitMs, advanceMs }, view };
 }
 
 export { loadOwned };
