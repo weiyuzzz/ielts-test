@@ -4,12 +4,43 @@ import Link from "next/link";
 import { Card, Badge } from "@/components/ui";
 import type { VoiceProfile } from "@/lib/speaking/voice-profile";
 import type { Coverage } from "@/lib/content/store";
-import type { IdeaStage, KeyPhrase, LearningQuestion } from "@/lib/content/types";
+import type { IdeaStage, KeyPhrase, LearningQuestion, QuestionLearningContent, VocabGroup } from "@/lib/content/types";
 import { playStoredAudio, speakStudyText, stopPlayback } from "@/lib/content/playback";
 
 export interface LibraryItem extends LearningQuestion {
   cuePoints: string[];
+  /** Counts only — the full material is fetched when a row is opened. */
+  summary: { hasAnswer: boolean; ideas: number; phrases: number; vocab: number };
   follow: { playable: boolean; url?: string; reason?: string };
+}
+
+/** 考试人数 — shown only when the source document prints a figure. */
+function Examinees({ value }: { value: number | null | undefined }) {
+  if (typeof value !== "number") return null;
+  return (
+    <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] tabular-nums text-zinc-500" title="腾讯文档统计的考试人数（考频参考，不是评分依据）">
+      {value.toLocaleString("zh-CN")} 人考过
+    </span>
+  );
+}
+
+function VocabGroupCard({ g }: { g: VocabGroup }) {
+  return (
+    <div className="rounded-xl border border-zinc-100 bg-white p-3">
+      <div className="text-[11px] font-medium uppercase tracking-wide text-zinc-400">{g.title}</div>
+      {!!g.items.length && (
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1.5">
+          {g.items.map((it, i) => (
+            <span key={i} className="text-xs text-zinc-700">
+              <span className="font-medium">{it.en}</span>
+              {it.zh && <span className="ml-1 text-zinc-400">{it.zh}</span>}
+            </span>
+          ))}
+        </div>
+      )}
+      {g.note && <p className="mt-2 whitespace-pre-wrap text-xs leading-6 text-zinc-500">{g.note}</p>}
+    </div>
+  );
 }
 
 const STAGE_LABEL: Record<IdeaStage, string> = {
@@ -76,6 +107,32 @@ export function LearningBrowser({
   const [playingKey, setPlayingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [engine, setEngine] = useState<"server" | "browser" | null>(null);
+  /** Chinese reference is on by default; the toggle is for people who want English only. */
+  const [showZh, setShowZh] = useState(true);
+  /** Full study material, fetched per topic the first time a row is opened. */
+  const [loaded, setLoaded] = useState<Record<number, QuestionLearningContent>>({});
+  const [loading, setLoading] = useState<Record<string, boolean>>({});
+
+  async function ensureContent(it: LibraryItem) {
+    if (loaded[it.id]) return;
+    const key = `${it.topicKey}:${it.part}`;
+    if (loading[key]) return;
+    setLoading((m) => ({ ...m, [key]: true }));
+    try {
+      const res = await fetch(`/api/learning/questions?topicKey=${encodeURIComponent(it.topicKey)}&part=${it.part}`);
+      if (!res.ok) throw new Error("无法加载学习素材");
+      const j = (await res.json()) as { questions: Array<{ id: number; learning: QuestionLearningContent }> };
+      setLoaded((m) => {
+        const next = { ...m };
+        for (const q of j.questions) next[q.id] = q.learning;
+        return next;
+      });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading((m) => ({ ...m, [key]: false }));
+    }
+  }
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -140,6 +197,13 @@ export function LearningBrowser({
           <span>{visible.length} / {items.length} 题</span>
           <span>示范答案覆盖 {coverage.withSampleAnswer} 题（{coverage.sampleAnswerPercent}%）</span>
           <span>已人工审核 {coverage.reviewed} 题</span>
+          <button
+            type="button"
+            onClick={() => setShowZh((v) => !v)}
+            className={`rounded-md border px-2 py-0.5 ${showZh ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 text-zinc-500"}`}
+          >
+            {showZh ? "中文对照：开" : "中文对照：关"}
+          </button>
           {!serverTts && <span className="text-amber-600">当前无服务端语音引擎，试听将使用浏览器语音</span>}
           {engine === "browser" && <span className="text-amber-600">本次试听使用浏览器语音</span>}
         </div>
@@ -160,19 +224,31 @@ export function LearningBrowser({
           <ul className="divide-y divide-zinc-50">
             {t.items.map((it) => {
               const open = openId === it.id;
-              const sa = it.learning.sampleAnswer;
-              const ideas = it.learning.ideaNotes ?? [];
-              const phrases = it.learning.keyPhrases ?? [];
+              const learning = loaded[it.id] ?? it.learning;
+              const sa = learning.sampleAnswer;
+              const ideas = learning.ideaNotes ?? [];
+              const phrases = learning.keyPhrases ?? [];
+              const vocabGroups = learning.vocabGroups ?? [];
+              const alignedZh = !!sa?.paragraphsZh && sa.paragraphsZh.length === sa.paragraphs.length;
+              const pending = !loaded[it.id] && (loading[`${it.topicKey}:${it.part}`] || it.summary.hasAnswer);
               return (
                 <li key={it.id} className="py-2">
                   <button
-                    onClick={() => { setOpenId(open ? null : it.id); stopPlayback(); }}
+                    onClick={() => {
+                      setOpenId(open ? null : it.id);
+                      stopPlayback();
+                      if (!open) void ensureContent(it);
+                    }}
                     className="flex w-full items-start gap-3 text-left"
                   >
                     <span className="mt-0.5 shrink-0"><Badge tone={it.part === 2 ? "indigo" : "zinc"}>{PART_LABEL[it.part]}</Badge></span>
-                    <span className="flex-1 text-sm text-zinc-800">{it.text}</span>
+                    <span className="flex-1">
+                      <span className="text-sm text-zinc-800">{it.text}</span>
+                      {it.textZh && <span className="mt-0.5 block text-xs text-zinc-400">{it.textZh}</span>}
+                    </span>
+                    <Examinees value={it.examinees} />
                     <span className="shrink-0 text-xs text-zinc-400">
-                      {sa ? (sa.reviewStatus === "reviewed" ? "已审核" : "草稿") : "仅题目"}
+                      {it.summary.hasAnswer ? (sa?.reviewStatus === "reviewed" ? "已审核" : "草稿") : "仅题目"}
                       <span className="ml-2">{open ? "收起" : "展开"}</span>
                     </span>
                   </button>
@@ -188,7 +264,9 @@ export function LearningBrowser({
                         </div>
                       )}
 
-                      {sa ? (
+                      {pending && !sa ? (
+                        <p className="text-xs text-zinc-400">正在加载学习素材…</p>
+                      ) : sa ? (
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="text-xs font-medium text-zinc-500">Sample answer</span>
@@ -198,6 +276,9 @@ export function LearningBrowser({
                             <span className="text-[11px] text-zinc-400">{sa.source.label}</span>
                             {sa.source.url && <a href={sa.source.url} target="_blank" rel="noreferrer" className="text-[11px] text-indigo-600 underline">来源</a>}
                           </div>
+                          {sa.variantLabel && (
+                            <div className="mt-1 text-[11px] text-zinc-400">{sa.variantLabel}</div>
+                          )}
                           <div className="mt-2 space-y-2">
                             {sa.paragraphs.map((p, i) => {
                               const key = `${it.id}:p${i}`;
@@ -210,31 +291,52 @@ export function LearningBrowser({
                                   >
                                     {playingKey === key ? "■" : "▶"}
                                   </button>
-                                  <p className="flex-1 text-sm leading-6 text-zinc-700">{p}</p>
+                                  <p className="flex-1 text-sm leading-6 text-zinc-700">
+                                    {p}
+                                    {showZh && alignedZh && sa.paragraphsZh?.[i] && (
+                                      <span className="mt-1 block text-xs leading-5 text-zinc-400">{sa.paragraphsZh[i]}</span>
+                                    )}
+                                  </p>
                                   <CopyButton text={p} label="复制" />
                                 </div>
                               );
                             })}
                           </div>
+                          {showZh && !alignedZh && !!sa.paragraphsZh?.length && (
+                            <div className="mt-2 rounded-lg bg-white p-3 text-xs leading-6 text-zinc-500">
+                              <div className="mb-1 text-[11px] text-zinc-400">中文翻译</div>
+                              {sa.paragraphsZh.join(" ")}
+                            </div>
+                          )}
                         </div>
                       ) : (
-                        <p className="text-xs text-zinc-400">这道题还没有示范答案。仅题目本身可用于模考练习。</p>
+                        <p className="text-xs text-zinc-400">这道题还没有示范答案。</p>
                       )}
 
                       {!!ideas.length && (
                         <div>
-                          <div className="text-xs font-medium text-zinc-500">思路拆解</div>
-                          <div className="mt-2 space-y-1.5">
+                          <div className="text-xs font-medium text-zinc-500">思路速记</div>
+                          <ol className="mt-2 space-y-2">
                             {ideas.map((n, i) => (
-                              <div key={i} className="flex gap-2 text-sm">
-                                <span className="w-20 shrink-0 text-[11px] uppercase tracking-wide text-zinc-400">{STAGE_LABEL[n.stage] ?? n.stage}</span>
-                                <span className="flex-1 text-zinc-700">
-                                  {n.text}
-                                  {n.textZh && <span className="mt-0.5 block text-xs text-zinc-400">{n.textZh}</span>}
-                                </span>
-                              </div>
+                              <li key={i} className="rounded-lg bg-white p-2.5">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-[11px] font-medium text-zinc-400">{i + 1}</span>
+                                  <span className="text-xs font-medium text-zinc-700">{n.label || STAGE_LABEL[n.stage] || n.stage}</span>
+                                </div>
+                                {!!n.phrases?.length ? (
+                                  <div className="mt-1.5 flex flex-wrap gap-1">
+                                    {n.phrases.map((ph, k) => (
+                                      <span key={k} className="rounded bg-indigo-50 px-1.5 py-0.5 text-[11px] text-indigo-700">{ph}</span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  n.text && <div className="mt-1 text-sm text-zinc-700">{n.text}</div>
+                                )}
+                                {showZh && n.textZh && <div className="mt-1 text-xs leading-5 text-zinc-500">{n.textZh}</div>}
+                                {n.note && <div className="mt-1 text-[11px] leading-5 text-zinc-400">{n.note}</div>}
+                              </li>
                             ))}
-                          </div>
+                          </ol>
                         </div>
                       )}
 
@@ -243,6 +345,15 @@ export function LearningBrowser({
                           <div className="text-xs font-medium text-zinc-500">关键词组</div>
                           <div className="mt-2 grid gap-2 sm:grid-cols-2">
                             {phrases.map((k, i) => <KeyPhraseCard key={i} k={k} />)}
+                          </div>
+                        </div>
+                      )}
+
+                      {!!vocabGroups.length && (
+                        <div>
+                          <div className="text-xs font-medium text-zinc-500">语料扩展</div>
+                          <div className="mt-2 space-y-2">
+                            {vocabGroups.map((g, i) => <VocabGroupCard key={i} g={g} />)}
                           </div>
                         </div>
                       )}

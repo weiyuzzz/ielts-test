@@ -27,6 +27,7 @@ import {
   type QuestionLearningContent,
   type ReviewStatus,
   type SampleAnswer,
+  type VocabGroup,
 } from "./types";
 
 export const LIMITS = {
@@ -38,8 +39,12 @@ export const LIMITS = {
   textZh: 400,
   idea: 400,
   paragraphs: 12,
-  ideaNotes: 8,
-  keyPhrases: 16,
+  ideaNotes: 10,
+  keyPhrases: 18,
+  label: 40,
+  phraseList: 12,
+  vocabGroups: 12,
+  vocabItems: 60,
 } as const;
 
 const SOURCE_KINDS: LearningSourceKind[] = ["team", "ai-draft", "third-party", "imported"];
@@ -148,8 +153,14 @@ function sampleAnswer(raw: unknown): SampleAnswer | null {
   if (!paragraphs.length) return null;
   const review = REVIEW_STATES.includes(r.reviewStatus as ReviewStatus) ? (r.reviewStatus as ReviewStatus) : "draft";
   const hint = typeof r.targetBandHint === "number" && Number.isFinite(r.targetBandHint) ? Math.min(9, Math.max(0, r.targetBandHint)) : null;
+  const paragraphsZh = Array.isArray(r.paragraphsZh)
+    ? r.paragraphsZh.map((p) => str(p, LIMITS.paragraph)).filter(Boolean).slice(0, LIMITS.paragraphs)
+    : [];
+  const variantLabel = str(r.variantLabel, LIMITS.label);
   return {
     paragraphs,
+    ...(paragraphsZh.length ? { paragraphsZh } : {}),
+    ...(variantLabel ? { variantLabel } : {}),
     source: source(r.source, "来源未标注"),
     // An AI draft is never auto-promoted, whatever the file claims.
     reviewStatus: (r.source as LearningSource | undefined)?.kind === "ai-draft" ? "draft" : review,
@@ -180,7 +191,19 @@ function ideaNotes(raw: unknown): IdeaNote[] {
       if (!text) return null;
       const stage: IdeaStage = STAGES.includes(r.stage as IdeaStage) ? (r.stage as IdeaStage) : "main-idea";
       const zh = str(r.textZh, LIMITS.textZh);
-      return { stage, text, ...(zh ? { textZh: zh } : {}) } satisfies IdeaNote;
+      const label = str(r.label, LIMITS.label);
+      const note = str(r.note, LIMITS.idea);
+      const phrases = Array.isArray(r.phrases)
+        ? r.phrases.map((p) => str(p, LIMITS.phrase)).filter(Boolean).slice(0, LIMITS.phraseList)
+        : [];
+      return {
+        stage,
+        text,
+        ...(zh ? { textZh: zh } : {}),
+        ...(label ? { label } : {}),
+        ...(note ? { note } : {}),
+        ...(phrases.length ? { phrases } : {}),
+      } satisfies IdeaNote;
     })
     .filter((x): x is IdeaNote => !!x)
     .slice(0, LIMITS.ideaNotes);
@@ -194,15 +217,40 @@ function keyPhrases(raw: unknown): KeyPhrase[] {
       const phrase = str(r.phrase, LIMITS.phrase);
       if (!phrase) return null;
       const usage = str(r.usage, LIMITS.usage);
+      const example = str(r.example, LIMITS.example);
       return {
         phrase,
         zh: str(r.zh, LIMITS.textZh),
-        example: str(r.example, LIMITS.example),
+        ...(example ? { example } : {}),
         ...(usage ? { usage } : {}),
       } satisfies KeyPhrase;
     })
     .filter((x): x is KeyPhrase => !!x)
     .slice(0, LIMITS.keyPhrases);
+}
+
+function vocabGroups(raw: unknown): VocabGroup[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((g) => {
+      const r = (g ?? {}) as Record<string, unknown>;
+      const title = str(r.title, LIMITS.label) || "语料扩展";
+      const items = Array.isArray(r.items)
+        ? r.items
+            .map((it) => {
+              const x = (it ?? {}) as Record<string, unknown>;
+              const en = str(x.en, LIMITS.phrase);
+              return en ? { en, zh: str(x.zh, LIMITS.textZh) } : null;
+            })
+            .filter((x): x is { en: string; zh: string } => !!x)
+            .slice(0, LIMITS.vocabItems)
+        : [];
+      const note = str(r.note, LIMITS.paragraph);
+      if (!items.length && !note) return null;
+      return { title, items, ...(note ? { note } : {}) } satisfies VocabGroup;
+    })
+    .filter((x): x is VocabGroup => !!x)
+    .slice(0, LIMITS.vocabGroups);
 }
 
 export interface SanitizeResult {
@@ -241,7 +289,13 @@ export function sanitizeLearning(raw: unknown, where = "learning"): SanitizeResu
   }
 
   return {
-    learning: { sampleAnswer: answer, ideaNotes: ideaNotes(r.ideaNotes), keyPhrases: keyPhrases(r.keyPhrases), followAudio: follow },
+    learning: {
+      sampleAnswer: answer,
+      ideaNotes: ideaNotes(r.ideaNotes),
+      keyPhrases: keyPhrases(r.keyPhrases),
+      vocabGroups: vocabGroups(r.vocabGroups),
+      followAudio: follow,
+    },
     warnings,
   };
 }

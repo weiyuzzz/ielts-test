@@ -34,5 +34,5 @@
 
 | Method | Path | Body | 返回 | 说明 |
 |---|---|---|---|---|
-| GET | /api/learning/questions | `?topicKey=&part=` | `{season, region, questions[], asr:{available,id}}` | 某主题的题目 + 学习素材（示范答案/思路/关键词/跟读音频）+ `followAudio` 可播性。考试链路不调用 |
+| GET | /api/learning/questions | `?topicKey=&part=` | `{season, region, questions[], asr:{available,id}}` | 某主题的题目 + 学习素材（示范答案含中文对照、思路速记、关键词、语料扩展、跟读音频）、`examinees` 考试人数、`followAudio` 可播性。考试链路不调用；`/speaking/questions` 展开时按主题调它 |
 | POST | /api/learning/asr | multipart: `audio`(wav/webm), `hint?` | 200 `{status:"ok", text, provider}` / `{status:"unavailable", reason}` / `{status:"failed", error}`；400 `invalid_audio`；413 `audio_too_large` | Shadowing 转写。**不落库**：音频在内存中转写后丢弃，绝不写 `answer_records`/`audio_assets`。缺 ASR 时返回 200 + `unavailable`，页面仍可录音回放 |

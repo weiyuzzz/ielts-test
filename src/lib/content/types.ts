@@ -55,6 +55,14 @@ export interface SampleAnswer {
    * of the whole paragraph.
    */
   paragraphs: string[];
+  /**
+   * Chinese translation, aligned with `paragraphs` when the counts match.
+   * Imported documents often translate a whole answer in one block, so this can
+   * legitimately be a single element — the UI shows it as one block then.
+   */
+  paragraphsZh?: string[];
+  /** e.g. "串题故事：附近景区" or "合并回答（同组共用）" — never an official label. */
+  variantLabel?: string;
   source: LearningSource;
   reviewStatus: ReviewStatus;
   /**
@@ -69,15 +77,21 @@ export type IdeaStage = "main-idea" | "reason" | "example" | "result" | "contras
 
 export interface IdeaNote {
   stage: IdeaStage;
+  /** Original heading from the source ("直接表态 + 受欢迎程度", "观点"). */
+  label?: string;
   text: string;
   textZh?: string;
+  /** The English phrases the step is built from, already split. */
+  phrases?: string[];
+  /** The source's explanation of why those phrases work. */
+  note?: string;
 }
 
 export interface KeyPhrase {
   phrase: string;
   zh: string;
   /** A full English sentence showing the phrase in use. */
-  example: string;
+  example?: string;
   /** When to reach for it (function, register, typical context). */
   usage?: string;
 }
@@ -97,10 +111,26 @@ export interface FollowAudioRef {
   durationMs?: number;
 }
 
+/** One vocabulary item: English form + Chinese gloss. */
+export interface VocabItem {
+  en: string;
+  zh: string;
+}
+
+/** A themed group of expressions ("质量好", "佩戴场景", …). */
+export interface VocabGroup {
+  title: string;
+  items: VocabItem[];
+  /** Free text kept when the source could not be split into items. */
+  note?: string;
+}
+
 export interface QuestionLearningContent {
   sampleAnswer?: SampleAnswer | null;
   ideaNotes?: IdeaNote[];
   keyPhrases?: KeyPhrase[];
+  /** 语料扩展 — themed vocabulary lists from the source document. */
+  vocabGroups?: VocabGroup[];
   followAudio?: FollowAudioRef | null;
 }
 
@@ -114,6 +144,8 @@ export interface LearningQuestion {
   text: string;
   textZh: string | null;
   cuePoints: string[] | null;
+  /** 考试人数 from the source document (null when the document has no figure). */
+  examinees?: number | null;
   learning: QuestionLearningContent;
 }
 
@@ -121,6 +153,7 @@ export const EMPTY_LEARNING: QuestionLearningContent = {
   sampleAnswer: null,
   ideaNotes: [],
   keyPhrases: [],
+  vocabGroups: [],
   followAudio: null,
 };
 
@@ -131,6 +164,7 @@ export function hasLearning(c: QuestionLearningContent | null | undefined): bool
     c.sampleAnswer?.paragraphs?.length ||
     c.ideaNotes?.length ||
     c.keyPhrases?.length ||
+    c.vocabGroups?.length ||
     c.followAudio?.url
   );
 }

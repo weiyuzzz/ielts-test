@@ -64,15 +64,16 @@ export async function activeLearningLibrary() {
     .select({
       id: questions.id, part: questions.part, topic: questions.topic, topicKey: questions.topicKey,
       topicZh: questions.topicZh, text: questions.text, textZh: questions.textZh, cuePoints: questions.cuePoints,
+      examinees: questions.examinees,
     })
     .from(questions)
     .where(and(eq(questions.module, "speaking"), eq(questions.setId, bank.id)))
     .orderBy(questions.part, questions.topicKey, questions.orderIndex);
-  const { index, warnings } = await loadSeasonIndex(bank.season);
+  const { index, examinees, warnings } = await loadSeasonIndex(bank.season);
   return {
     season: bank.season as string | null,
     region: bank.region as string | null,
-    questions: attachLearning(rows, index),
+    questions: attachLearning(rows, index, examinees),
     coverage: computeCoverage(rows, index),
     warnings,
   };

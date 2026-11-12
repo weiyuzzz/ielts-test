@@ -33,6 +33,7 @@ export async function GET(req: Request) {
         text: q.text,
         textZh: q.textZh,
         cuePoints: q.cuePoints ?? [],
+        examinees: q.examinees ?? null,
         learning: q.learning,
         followAudio: decideFollowAudio(q.learning.followAudio),
       }));

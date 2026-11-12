@@ -23,13 +23,15 @@ npm run build && npx next start -p 3100   # 生产；开发用 npm run dev -p 31
 
 ## 学习素材与跟读（Phase 3）
 
+评分口径见 [`docs/scoring-criteria.md`](./docs/scoring-criteria.md)：四项标准与关键指标的整理版（0–9 分档在原文中是图片，文本层没有，不臆造）。
+
 题库只负责「考什么」，学习素材负责「怎么练」，两者物理隔离：
 
 - 学习素材存在 `src/data/learning/<season>.json`，按 `season + topicKey + part + 归一化题干` 关联题目；考试链路从不读这个文件，所以模考里不会出现范文。
 - 两类音频严格分开：`questions.questionAudioUrl`（考官朗读题干，音色必须等于本场考试音色，否则回退 TTS）与 `learning.followAudio`（跟读示范，永不进入考试）。
-- `/speaking/questions`：Part 筛选 / 搜索 / 展开示范答案、思路、关键词，逐段播放与复制。
+- `/speaking/questions`：Part 筛选 / 搜索 / 展开示范答案（中英对照）、思路速记、关键词、语料扩展，逐段播放与复制；每题显示腾讯文档统计的考试人数；素材在展开时才按主题加载，首屏不背 2 MB 数据。
 - `/speaking/practice`：听原音 → 录音 → 回放 → ASR 转写 → 词级差异对比。无 ASR 时仍可录音回放；录音只存在页面内，不写入考试成绩。
-- 内容诚信：AI 起草的素材强制 `reviewStatus = draft`，UI 标注「未审核草稿」；当前 549 题中仅 6 题有素材、0 题有授权录音，报告见 `docs/phase3-question-learning.md`。
+- 内容诚信：素材一律 `reviewStatus = draft`，UI 标注「未审核草稿」；当前 549 题中 **490 题有示范答案**（Part 1 211 / Part 3 279，全部来自腾讯文档原文）、145 题有语料扩展、0 题有授权录音。Part 2 的 58 张卡是「串题故事」共享素材，本期未导入（宁可缺，不可错）。详见 `docs/phase3-question-learning.md`。
 - 题库只收**大陆**题：文档里 6 个非大陆 Part 1 主题（31 题）与 7 张非大陆卡一律不导入。当季大陆题库为 Part 1 211 题 / 33 主题、Part 2 58 卡、Part 3 280 题；对账方式与逐主题差异见 `docs/bank-audit.md`，解析脚本为 `scripts/parse-bank-doc.py`。
 
 ### 生产环境的 Sidecar 存储（必读）

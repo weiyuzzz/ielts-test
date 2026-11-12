@@ -150,6 +150,8 @@ export interface SeasonEntry {
   topicKey: string;
   part: number;
   text: string;
+  /** 考试人数 as printed in the source document (null when it has no figure). */
+  examinees?: number | null;
   learning: QuestionLearningContent;
 }
 
@@ -198,7 +200,14 @@ export function parseSeasonFile(raw: unknown): LoadResult {
       warnings.push(`entry ${i}: duplicate key for "${text.slice(0, 40)}" — last one wins`);
     }
     seen.add(key);
-    entries.push({ topicKey, part, text, learning: hasLearning(learning) ? learning : emptyLearning() });
+    const examinees = typeof x.examinees === "number" && Number.isFinite(x.examinees) ? Math.max(0, Math.round(x.examinees)) : null;
+    entries.push({
+      topicKey,
+      part,
+      text,
+      ...(examinees != null ? { examinees } : {}),
+      learning: hasLearning(learning) ? learning : emptyLearning(),
+    });
   });
   return {
     file: {
@@ -232,17 +241,41 @@ export function buildIndex(entries: SeasonEntry[]): Map<string, QuestionLearning
   return index;
 }
 
-export async function loadSeasonIndex(season: string): Promise<{ index: Map<string, QuestionLearningContent>; warnings: string[] }> {
+/** Map keyed by content key → 考试人数, for the parts the document numbers. */
+export function buildExamineeIndex(entries: SeasonEntry[]): Map<string, number> {
+  const index = new Map<string, number>();
+  for (const e of entries) {
+    if (typeof e.examinees === "number") index.set(contentKey(e.part, e.topicKey, e.text), e.examinees);
+  }
+  return index;
+}
+
+export async function loadSeasonIndex(season: string): Promise<{
+  index: Map<string, QuestionLearningContent>;
+  examinees: Map<string, number>;
+  warnings: string[];
+}> {
   const { file, warnings } = await readSeasonFile(season);
-  return { index: buildIndex(file?.entries ?? []), warnings };
+  const entries = file?.entries ?? [];
+  return { index: buildIndex(entries), examinees: buildExamineeIndex(entries), warnings };
 }
 
 /** Attach content to question rows (or to any object with part/topicKey/text). */
 export function attachLearning<T extends { part: number; topicKey: string; text: string }>(
   rows: T[],
   index: Map<string, QuestionLearningContent>,
-): Array<T & { learning: QuestionLearningContent }> {
-  return rows.map((r) => ({ ...r, learning: index.get(contentKey(r.part, r.topicKey, r.text)) ?? emptyLearning() }));
+  examineeIndex?: Map<string, number>,
+): Array<T & { learning: QuestionLearningContent; examinees: number | null }> {
+  return rows.map((r) => {
+    const key = contentKey(r.part, r.topicKey, r.text);
+    const fromRow = (r as { examinees?: number | null }).examinees;
+    const fromFile = examineeIndex?.get(key);
+    return {
+      ...r,
+      learning: index.get(key) ?? emptyLearning(),
+      examinees: fromFile ?? (typeof fromRow === "number" ? fromRow : null),
+    };
+  });
 }
 
 export interface Coverage {
