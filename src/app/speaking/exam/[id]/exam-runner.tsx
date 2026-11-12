@@ -718,13 +718,14 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
     try {
       setPreparing(true);
       const plan = planRef.current;
-      // Warm the opening line + first question (synthesis takes seconds on a
-      // local engine — the progress bar below is why the click seems to "hang"
-      // without feedback).
+      // Warm the opening line + first question and WAIT for them: the user
+      // explicitly wants everything ready before the exam can start (a local
+      // CPU engine can take ~30s per line — the progress bar shows movement).
       await preloaderRef.current?.ensureOpeningAndFirst(
         plan?.firstLines ?? [],
         plan?.firstQuestionAudioUrl ?? null,
         plan?.firstLines[0]?.act ?? "greeting",
+        600_000,
       );
       setDevices(await listInputDevices().catch(() => []));
       setNotice(null);
@@ -1049,7 +1050,10 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
         </div>
 
         {view && ["miccheck", "examiner", "prep", "recording", "review", "uploading", "advancing", "finishing"].includes(phase) && (
-          <aside className="w-full shrink-0 space-y-4 lg:sticky lg:top-6 lg:w-72" aria-label="Examiner and time limits">
+          <aside
+            className={`w-full shrink-0 space-y-4 lg:sticky lg:top-6 lg:w-72 ${phase === "miccheck" ? "hidden" : ""}`}
+            aria-label="Examiner and time limits"
+          >
             {/* Mounted from the mic check onward so the model never reloads
                 mid-exam (a reload would stall the first question and desync
                 the mouth). Sits under the part countdown, larger than before. */}

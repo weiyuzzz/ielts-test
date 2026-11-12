@@ -553,24 +553,35 @@ async function doSpeak(text: string, opts: SpeakOptions, key: string): Promise<S
       if (o.status === "ended") return finish({ ok: true, via: "server-cache", outcome: o });
       if (o.status === "interrupted") return finish({ ok: false, via: "server-cache", outcome: o });
     } else {
-      // 2) Promote any in-flight warm-up, but NEVER wait on it: go straight to
-      //    the progressive GET stream (dynamic LLM follow-ups take this path).
+      // 2) Not cached yet. The exam experience REQUIRES the real examiner
+      //    voice (a robotic browser fallback mid-exam is worse than a short
+      //    wait), so wait for the synthesis the scheduler is running/queuing
+      //    at CURRENT priority. Dynamic LLM follow-ups hit the same path.
       promoteTTS(text, opts.voice, act, profile);
-      const streamOutcome = await playStream(text, opts.voice, act, profile, opts.signal);
-      if (streamOutcome.status === "ended") return finish({ ok: true, via: "server-stream", outcome: streamOutcome });
-      if (streamOutcome.status === "interrupted") return finish({ ok: false, via: "server-stream", outcome: streamOutcome });
-      if (streamOutcome.partial) {
-        // Already audible but truncated: do NOT replay the line.
-        return finish({ ok: false, via: "server-stream", outcome: streamOutcome });
-      }
-      // 3) Buffered fallback (also repopulates the client cache).
-      const clip = await fetchClip(text, opts.voice, act, profile, opts.signal);
-      if (clip) {
-        const o = await playClip(clip, opts.signal);
-        // Playback has finished (or been aborted): release the temporary blob
-        // URL. The server-side cache retains the clip for any later repeat.
-        releaseClip(clip);
-        if (o.status !== "failed") return finish({ ok: o.status === "ended", via: "server-buffered", outcome: o });
+      const warmed = await waitForTTS(text, opts.voice, 120_000, act, profile);
+      if (warmed) {
+        const o = await playClip(warmed, opts.signal);
+        if (o.status === "ended") return finish({ ok: true, via: "server-cache", outcome: o });
+        if (o.status === "interrupted") return finish({ ok: false, via: "server-cache", outcome: o });
+      } else {
+        // 3) Synthesis unavailable even after the wait: try the progressive
+        //    GET stream, then the buffered fallback, before ever falling back
+        //    to the browser voice.
+        const streamOutcome = await playStream(text, opts.voice, act, profile, opts.signal);
+        if (streamOutcome.status === "ended") return finish({ ok: true, via: "server-stream", outcome: streamOutcome });
+        if (streamOutcome.status === "interrupted") return finish({ ok: false, via: "server-stream", outcome: streamOutcome });
+        if (streamOutcome.partial) {
+          // Already audible but truncated: do NOT replay the line.
+          return finish({ ok: false, via: "server-stream", outcome: streamOutcome });
+        }
+        const clip = await fetchClip(text, opts.voice, act, profile, opts.signal);
+        if (clip) {
+          const o = await playClip(clip, opts.signal);
+          // Playback has finished (or been aborted): release the temporary blob
+          // URL. The server-side cache retains the clip for any later repeat.
+          releaseClip(clip);
+          if (o.status !== "failed") return finish({ ok: o.status === "ended", via: "server-buffered", outcome: o });
+        }
       }
     }
   }
