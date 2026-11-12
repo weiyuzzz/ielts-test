@@ -1,0 +1,170 @@
+{
+  "version": 1,
+  "season": "2026-09-12",
+  "region": "大陆地区",
+  "notes": "Phase 3 首批学习素材。仅覆盖少量题目，用于验证导入/展示/跟读链路；全部为本项目起草的示例答案，未经过人工审核，任何人不得将其描述为官方 Band 8/9 范文。真实音频资源尚未获得授权，followAudio 一律留空。",
+  "entries": [
+    {
+      "topicKey": "hometown",
+      "part": 1,
+      "text": "Where is your hometown?",
+      "learning": {
+        "sampleAnswer": {
+          "paragraphs": [
+            "My hometown is a mid-sized city in the south-east of China, about an hour by train from the coast. It is not a tourist destination, which is probably why it still feels quite relaxed.",
+            "I grew up in a flat near the old town, so most of my childhood memories are of narrow streets and small family shops rather than shopping centres."
+          ],
+          "source": { "kind": "ai-draft", "label": "本项目起草（AI 辅助，未人工审核）" },
+          "reviewStatus": "draft",
+          "targetBandHint": null
+        },
+        "ideaNotes": [
+          { "stage": "main-idea", "text": "Say where it is, then one thing that makes it distinctive.", "textZh": "先说位置，再说一个能让人记住的特点。" },
+          { "stage": "reason", "text": "Explain why you describe it that way (not a tourist city → relaxed).", "textZh": "解释你为什么这样描述：不是旅游城市，所以节奏慢。" },
+          { "stage": "example", "text": "Add a concrete memory: a flat near the old town, small shops.", "textZh": "补一个具体画面：老城区附近的房子、小店。" }
+        ],
+        "keyPhrases": [
+          { "phrase": "mid-sized city", "zh": "中等规模的城市", "example": "I come from a mid-sized city that most people have never heard of.", "usage": "比 big city / small town 更准确，Part 1 描述家乡规模时很好用。" },
+          { "phrase": "about an hour by train from", "zh": "坐火车大约一小时", "example": "It is about an hour by train from the coast.", "usage": "给出大致地理位置，比只说 in the south 更具体。" },
+          { "phrase": "tourist destination", "zh": "旅游目的地", "example": "It is not really a tourist destination, so it stays quiet.", "usage": "用来对比“热闹/安静”，常见于家乡类话题。" }
+        ]
+      }
+    },
+    {
+      "topicKey": "hometown",
+      "part": 1,
+      "text": "What's your hometown famous for?",
+      "learning": {
+        "sampleAnswer": {
+          "paragraphs": [
+            "It is best known for its food, actually. There is a particular kind of rice noodle that people queue for at breakfast, and every family insists theirs is the real version.",
+            "Apart from that, it has a reputation for making ceramics, though that industry is much smaller than it used to be."
+          ],
+          "source": { "kind": "ai-draft", "label": "本项目起草（AI 辅助，未人工审核）" },
+          "reviewStatus": "draft",
+          "targetBandHint": null
+        },
+        "ideaNotes": [
+          { "stage": "main-idea", "text": "Name one thing it is known for — food is the easiest to describe well.", "textZh": "只讲一个最出名的东西，食物最容易讲出细节。" },
+          { "stage": "example", "text": "Give a specific detail: rice noodles at breakfast, queues.", "textZh": "给细节：早餐米粉、排队。" },
+          { "stage": "contrast", "text": "Add a second, fading claim to fame (ceramics) for balance.", "textZh": "再补一个正在衰落的产业，避免答案单薄。" }
+        ],
+        "keyPhrases": [
+          { "phrase": "be best known for", "zh": "以……最为出名", "example": "The region is best known for its tea.", "usage": "比 famous for 更自然，口语里更常见。" },
+          { "phrase": "queue for", "zh": "排队买……", "example": "People queue for an hour just to get a bowl.", "usage": "描述饮食、网红店时非常生动。" },
+          { "phrase": "a reputation for", "zh": "以……闻名／有……的名声", "example": "The town has a reputation for making ceramics.", "usage": "可用于中性或负面名声，比 famous 灵活。" }
+        ]
+      }
+    },
+    {
+      "topicKey": "hometown",
+      "part": 1,
+      "text": "Is there anything you dislike about it?",
+      "learning": {
+        "sampleAnswer": {
+          "paragraphs": [
+            "One thing I find frustrating is the public transport. Buses stop running quite early, so if you do not drive, evenings are limited.",
+            "It is a small complaint though. On balance I would rather have a quiet city with an early bedtime than a noisy one."
+          ],
+          "source": { "kind": "ai-draft", "label": "本项目起草（AI 辅助，未人工审核）" },
+          "reviewStatus": "draft",
+          "targetBandHint": null
+        },
+        "ideaNotes": [
+          { "stage": "main-idea", "text": "Choose ONE drawback and commit to it.", "textZh": "只说一个缺点，态度明确，不要列清单。" },
+          { "stage": "reason", "text": "Explain the practical effect: buses stop early → evenings are limited.", "textZh": "说清实际影响：公交收车早，晚上出行受限。" },
+          { "stage": "contrast", "text": "Balance it at the end so you do not sound negative.", "textZh": "结尾做一次平衡，避免显得全是抱怨。" }
+        ],
+        "keyPhrases": [
+          { "phrase": "find something frustrating", "zh": "觉得某事令人烦躁", "example": "I find the traffic frustrating at rush hour.", "usage": "表达不满但语气克制，比 I hate 更得体。" },
+          { "phrase": "stop running", "zh": "（交通工具）停运", "example": "The last bus stops running at about nine.", "usage": "描述公共交通末班时间。" },
+          { "phrase": "on balance", "zh": "总的来说", "example": "On balance, I prefer living here.", "usage": "Part 1/3 收尾时给出总体判断。" }
+        ]
+      }
+    },
+    {
+      "topicKey": "p2-e0aac9f9",
+      "part": 2,
+      "text": "Describe a noisy place you have been to",
+      "learning": {
+        "sampleAnswer": {
+          "paragraphs": [
+            "The place I want to talk about is a wholesale market in the city where I studied. It sits right next to a main road, and the stalls are packed so tightly that you can barely walk between them.",
+            "I went there on a Saturday morning last winter, mostly to buy fruit with a friend. We ended up staying for nearly two hours because she kept stopping to compare prices.",
+            "What made it so noisy was the layering of sounds. Vendors were shouting prices through small speakers, trolleys were rattling over the concrete, and underneath all of that there was a constant engine noise from the road.",
+            "I remember having to lean in and repeat myself three times before my friend understood a single sentence. That is when it struck me that noise is not just volume — it is the number of things competing for your attention at once."
+          ],
+          "source": { "kind": "ai-draft", "label": "本项目起草（AI 辅助，未人工审核）" },
+          "reviewStatus": "draft",
+          "targetBandHint": null
+        },
+        "ideaNotes": [
+          { "stage": "main-idea", "text": "Name the place and locate it in one sentence — no long build-up.", "textZh": "第一句就交代地点，不要绕。" },
+          { "stage": "example", "text": "Use a specific visit: Saturday morning, buying fruit with a friend.", "textZh": "用一次具体经历：周六早上、和朋友买水果。" },
+          { "stage": "reason", "text": "Explain the noise as layers: speakers, trolleys, traffic.", "textZh": "把噪音拆成层次：喇叭、推车、车流。" },
+          { "stage": "result", "text": "Finish with a reflection, not a summary: noise = competition for attention.", "textZh": "结尾给一句反思，而不是复述。" }
+        ],
+        "keyPhrases": [
+          { "phrase": "packed so tightly that", "zh": "挤得……以至于", "example": "The stalls were packed so tightly that we could hardly move.", "usage": "描述拥挤场景，配合 so…that 结构展示语法。" },
+          { "phrase": "end up doing something", "zh": "结果做了某事", "example": "We ended up staying for two hours.", "usage": "叙述中交代意外结果，很自然。" },
+          { "phrase": "a layering of sounds", "zh": "层层叠加的声音", "example": "It was a layering of sounds rather than one loud noise.", "usage": "把抽象感受具体化，Part 2 高分表达。" },
+          { "phrase": "it struck me that", "zh": "我忽然意识到", "example": "It struck me that the market was actually a social space.", "usage": "引出反思句，替代 I think。" }
+        ]
+      }
+    },
+    {
+      "topicKey": "p2-e0aac9f9",
+      "part": 3,
+      "text": "Do you think it is good for children to make noise?",
+      "learning": {
+        "sampleAnswer": {
+          "paragraphs": [
+            "It depends on the kind of noise. Children shouting while they play is normal and probably healthy — it is how they test boundaries and burn off energy. I would not want to suppress that.",
+            "What I would draw a line at is noise that ignores other people, for example in a library or on a train. The lesson there is not silence for its own sake, but noticing that you share a space."
+          ],
+          "source": { "kind": "ai-draft", "label": "本项目起草（AI 辅助，未人工审核）" },
+          "reviewStatus": "draft",
+          "targetBandHint": null
+        },
+        "ideaNotes": [
+          { "stage": "main-idea", "text": "Split the question: which noise, in which setting.", "textZh": "先拆题：哪种噪音、什么场合。" },
+          { "stage": "reason", "text": "Play noise is developmental, not misbehaviour.", "textZh": "玩闹的声音是发育需要，不是捣乱。" },
+          { "stage": "contrast", "text": "Draw a line at noise that ignores other people.", "textZh": "划出边界：影响他人的噪音。" },
+          { "stage": "result", "text": "Reframe the point: the lesson is awareness, not silence.", "textZh": "收在“公共意识”而不是“安静”上。" }
+        ],
+        "keyPhrases": [
+          { "phrase": "it depends on", "zh": "取决于", "example": "It depends on how the noise is made.", "usage": "Part 3 开头分情况讨论，避免绝对化。" },
+          { "phrase": "draw a line at", "zh": "对……划出底线", "example": "I draw a line at noise in a library.", "usage": "表达可接受与不可接受的界限。" },
+          { "phrase": "for its own sake", "zh": "为其本身", "example": "Silence is not valuable for its own sake.", "usage": "抽象讨论时提升表达层次。" }
+        ]
+      }
+    },
+    {
+      "topicKey": "p2-e0aac9f9",
+      "part": 3,
+      "text": "Which area is exposed to noise more, the city or the countryside?",
+      "learning": {
+        "sampleAnswer": {
+          "paragraphs": [
+            "The city, clearly, at least in terms of continuous background noise. Traffic, construction and air conditioning all run through the night, so people adapt to a baseline they stop noticing.",
+            "The countryside is quieter overall, but it is not silent — farm machinery and animals can be surprisingly loud. The difference is that the noise there is intermittent, which makes it easier to ignore."
+          ],
+          "source": { "kind": "ai-draft", "label": "本项目起草（AI 辅助，未人工审核）" },
+          "reviewStatus": "draft",
+          "targetBandHint": null
+        },
+        "ideaNotes": [
+          { "stage": "main-idea", "text": "Answer directly first: the city.", "textZh": "先给明确结论：城市。" },
+          { "stage": "reason", "text": "Continuous sources: traffic, construction, air conditioning.", "textZh": "持续性噪音源：交通、施工、空调。" },
+          { "stage": "contrast", "text": "Concede the countryside has loud moments too — machinery, animals.", "textZh": "让步：乡村也有很吵的时刻。" },
+          { "stage": "result", "text": "Distinguish continuous vs intermittent, not loud vs quiet.", "textZh": "把差别落在“持续/间歇”而不是“响/轻”。" }
+        ],
+        "keyPhrases": [
+          { "phrase": "in terms of", "zh": "就……而言", "example": "In terms of traffic, the city is far worse.", "usage": "限定比较维度，让回答更严谨。" },
+          { "phrase": "a baseline they stop noticing", "zh": "一个他们已经不再注意的基准", "example": "Residents accept a baseline they stop noticing.", "usage": "描述长期适应，适合噪音/环境类话题。" },
+          { "phrase": "intermittent", "zh": "间歇的", "example": "The noise is intermittent rather than constant.", "usage": "对比 continuous，词汇精确度高。" }
+        ]
+      }
+    }
+  ]
+}

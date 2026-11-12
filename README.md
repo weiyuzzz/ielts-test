@@ -5,7 +5,9 @@ Next.js 16 (App Router) + PostgreSQL (Drizzle ORM) + Tailwind 4。默认运行�
 | 模块 | 状态 |
 |---|---|
 | Speaking | ✅ 完整模考 + Part 1/2/3 专项、当季题库、录音/转写、考官语音、报告 |
-| 题库后台 `/admin` | ✅ 导入季度题库、切换启用季度、查看题库内容 |
+| 题库后台 `/admin` | ✅ 导入季度题库、切换启用季度、查看题库内容与音频覆盖率 |
+| 学习资料 `/speaking/questions` | ✅ 示范答案 / 思路拆解 / 关键词组 / 跟读入口 |
+| 跟读训练 `/speaking/practice` | ✅ Shadowing：听原音 → 录音 → 回放 → 转写对比 |
 | Listening / Reading / Writing | 🚧 Coming Soon 页面 |
 
 ## 快速开始
@@ -18,6 +20,16 @@ npm run build && npx next start -p 3100   # 生产；开发用 npm run dev -p 31
 首次调用考试或打开 `/admin` 时会自动导入内置的**大陆当季题库**并设为启用。录音保存在 `storage/audio/`（可用 `AUDIO_STORAGE_DIR` 修改）。
 
 > 生产环境建议设置 `ADMIN_TOKEN`：设置后 `/api/admin/banks` 的导入与切换操作必须带 `x-admin-token` 请求头，后台页面会提供输入框（保存在浏览器 localStorage）。
+
+## 学习素材与跟读（Phase 3）
+
+题库只负责「考什么」，学习素材负责「怎么练」，两者物理隔离：
+
+- 学习素材存在 `src/data/learning/<season>.json`，按 `season + topicKey + part + 归一化题干` 关联题目；考试链路从不读这个文件，所以模考里不会出现范文。
+- 两类音频严格分开：`questions.questionAudioUrl`（考官朗读题干，音色必须等于本场考试音色，否则回退 TTS）与 `learning.followAudio`（跟读示范，永不进入考试）。
+- `/speaking/questions`：Part 筛选 / 搜索 / 展开示范答案、思路、关键词，逐段播放与复制。
+- `/speaking/practice`：听原音 → 录音 → 回放 → ASR 转写 → 词级差异对比。无 ASR 时仍可录音回放；录音只存在页面内，不写入考试成绩。
+- 内容诚信：AI 起草的素材强制 `reviewStatus = draft`，UI 标注「未审核草稿」；当前 508 题中仅 6 题有素材、0 题有授权录音，报告见 `docs/phase3-question-learning.md`。
 
 ## 季度题库与后台
 
@@ -35,8 +47,8 @@ npm run build && npx next start -p 3100   # 生产；开发用 npm run dev -p 31
 每题带 `season`、`region`、`type`（`evergreen` 万年保留题 / `new` 当季新题 / `retained` 当季保留题）、中文对照、考试人数等元数据。文档中的高分范文、思路解读、语音跟读音频属于素材，未导入考试题库；请勿在模考中展示范文。该题库为第三方整理资料，商用前请确认授权。内置题库与数据库不一致时（例如题库被修正），服务启动会自动重新导入。
 
 ### 后台 `/admin`
-- **题库列表**：季度、考区、各部分题目数、是否启用。
-- **查看内容**：按 Part 筛选 / 搜索，逐主题展示题目与题卡要点。
+- **题库列表**：季度、考区、各部分题目数、是否启用、**预置考官音频覆盖率**。
+- **查看内容**：按 Part 筛选 / 搜索，逐主题展示题目与题卡要点，并逐题标注音频状态（`预置音频 / TTS / 音色不符 / 未标注音色 / URL 无效`）与学习素材状态。
 - **导入**：粘贴 JSON 或选择文件，格式见下；同一 `season` 重复导入是幂等覆盖。
 - **切换启用**：任意时刻只有一个题库为 active，**考试严格从该题库抽题，绝不混用或凭空生成题目**。
 
