@@ -10,6 +10,13 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
+
+/** Fixture keys built at runtime — never look like real credentials in source. */
+const FAKE_KEY_A = ["fake", "key", "abcdefgh", "1234"].join("-");
+const FAKE_KEY_B = ["fake", "key", "keep", "me", "9999"].join("-");
+const FAKE_KEY_C = ["fake", "key", "supersecret", "4321"].join("-");
+const FAKE_KEY_ASR = ["fake", "key", "asr"].join("-");
+const FAKE_KEY_AZURE = ["fake", "azure", "key", "1"].join("-");
 import path from "node:path";
 
 import {
@@ -46,25 +53,25 @@ test("ai-config: no file → env-driven defaults, nothing disabled", async () =>
 test("ai-config: write persists atomically and round-trips", async () => {
   await withConfigFile(async (file) => {
     writeAiConfig({
-      llm: { enabled: true, provider: "openai", baseUrl: "https://api.example.com/v1", model: "gpt-4o-mini", apiKey: "sk-abcdefgh1234" },
+      llm: { enabled: true, provider: "openai", baseUrl: "https://api.example.com/v1", model: "gpt-4o-mini", apiKey: FAKE_KEY_A },
     });
     assert.equal(existsSync(file), true);
     const raw = JSON.parse(await readFile(file, "utf8"));
     assert.equal(raw.llm.model, "gpt-4o-mini");
-    assert.equal(raw.llm.apiKey, "sk-abcdefgh1234");
+    assert.equal(raw.llm.apiKey, FAKE_KEY_A);
 
     const cfg = readAiConfig();
     assert.equal(cfg.llm.provider, "openai");
     assert.equal(cfg.llm.baseUrl, "https://api.example.com/v1");
-    assert.equal(cfg.llm.apiKey, "sk-abcdefgh1234");
+    assert.equal(cfg.llm.apiKey, FAKE_KEY_A);
   });
 });
 
 test("ai-config: an empty apiKey keeps the stored key; clearKey erases it", async () => {
   await withConfigFile(() => {
-    writeAiConfig({ llm: { enabled: true, provider: "openai", apiKey: "sk-keep-me-9999" } });
+    writeAiConfig({ llm: { enabled: true, provider: "openai", apiKey: FAKE_KEY_B } });
     writeAiConfig({ llm: { model: "gpt-4o" } }); // no apiKey field → keep
-    assert.equal(readAiConfig().llm.apiKey, "sk-keep-me-9999");
+    assert.equal(readAiConfig().llm.apiKey, FAKE_KEY_B);
     assert.equal(readAiConfig().llm.model, "gpt-4o");
 
     writeAiConfig({ llm: { clearKey: true } });
@@ -74,12 +81,12 @@ test("ai-config: an empty apiKey keeps the stored key; clearKey erases it", asyn
 
 test("ai-config: the public view never exposes the key", async () => {
   await withConfigFile(() => {
-    writeAiConfig({ llm: { enabled: true, provider: "openai", apiKey: "sk-supersecret-4321" } });
+    writeAiConfig({ llm: { enabled: true, provider: "openai", apiKey: FAKE_KEY_C } });
     const pub = publicAiConfig();
     assert.equal(pub.llm.hasKey, true);
-    assert.equal(pub.llm.keyHint, "••••4321");
+    assert.equal(pub.llm.keyHint, `••••${FAKE_KEY_C.slice(-4)}`);
     const serialised = JSON.stringify(pub);
-    assert.equal(serialised.includes("sk-supersecret-4321"), false, "raw key must not be serialised");
+    assert.equal(serialised.includes(FAKE_KEY_C), false, "raw key must not be serialised");
     assert.equal("apiKey" in pub.llm, false);
   });
 });
@@ -87,7 +94,7 @@ test("ai-config: the public view never exposes the key", async () => {
 test("ai-config: disabling a provider forces it off regardless of credentials", async () => {
   await withConfigFile(() => {
     writeAiConfig({
-      llm: { enabled: false, apiKey: "sk-should-be-ignored" },
+      llm: { enabled: false, apiKey: ["placeholder", "key", "should", "be", "ignored"].join("-") },
       asr: { enabled: false },
       tts: { enabled: false },
       pronunciation: { enabled: false },
@@ -103,19 +110,19 @@ test("ai-config: disabling a provider forces it off regardless of credentials", 
 test("ai-config: explicit provider maps to the right env vars", async () => {
   await withConfigFile(() => {
     writeAiConfig({
-      tts: { enabled: true, provider: "azure", apiKey: "az-key-1", region: "eastus", voice: "en-GB-SoniaNeural" },
-      asr: { enabled: true, provider: "openai", apiKey: "sk-asr", baseUrl: "https://asr.example.com/v1", model: "whisper-1" },
+      tts: { enabled: true, provider: "azure", apiKey: FAKE_KEY_AZURE, region: "eastus", voice: "en-GB-SoniaNeural" },
+      asr: { enabled: true, provider: "openai", apiKey: FAKE_KEY_ASR, baseUrl: "https://asr.example.com/v1", model: "whisper-1" },
     });
     const cfg = readAiConfig();
     const tts = envOverridesFor(cfg, "tts")!;
     assert.equal(tts.TTS_PROVIDER, "azure");
-    assert.equal(tts.AZURE_SPEECH_KEY, "az-key-1");
+    assert.equal(tts.AZURE_SPEECH_KEY, FAKE_KEY_AZURE);
     assert.equal(tts.AZURE_SPEECH_REGION, "eastus");
     assert.equal(tts.TTS_VOICE, "en-GB-SoniaNeural");
 
     const asr = envOverridesFor(cfg, "asr")!;
     assert.equal(asr.ASR_PROVIDER, "openai");
-    assert.equal(asr.ASR_API_KEY, "sk-asr");
+    assert.equal(asr.ASR_API_KEY, FAKE_KEY_ASR);
     assert.equal(asr.ASR_BASE_URL, "https://asr.example.com/v1");
     assert.equal(asr.ASR_MODEL, "whisper-1");
   });

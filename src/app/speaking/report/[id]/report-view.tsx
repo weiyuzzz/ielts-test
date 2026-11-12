@@ -5,6 +5,7 @@ import { Card, Badge, Band, modeLabel, statusTone, fmtDate } from "@/components/
 import { AudioPlayer } from "@/components/audio-player";
 import { DIMENSION_LABELS, type Dimension } from "@/lib/speaking/bands";
 import { CRITERIA, DESCRIPTOR_SOURCE, findDescriptor } from "@/lib/speaking/band-descriptors";
+import type { SessionAudioAnalysis } from "@/lib/speaking/audio-analysis";
 
 interface Dim { dimension: Dimension; band: number | null; status: string; source: string; rationale: string; descriptorRefs?: string[] }
 interface FindingRow { id: string; dimension: string; answerId: string | null; kind: string; category: string; originalText: string; suggestion: string | null; explanation: string; possibleAsrError: boolean; descriptorRefs?: string[] }
@@ -25,7 +26,7 @@ function DescriptorChips({ ids, tone = "zinc" }: { ids?: string[]; tone?: "zinc"
   );
 }
 interface ReportData {
-  assessment: { id: string; status: string; stage: string | null; overallBand: number | null; isComplete: boolean; scorer: string | null; llmProvider: string | null; llmModel: string | null; promptVersion: string | null; asrProvider: string | null; pronunciationProvider: string | null; metrics: Record<string, unknown> | null; notes: string[] | null; error: string | null; startedAt: string; completedAt: string | null };
+  assessment: { id: string; status: string; stage: string | null; overallBand: number | null; isComplete: boolean; scorer: string | null; llmProvider: string | null; llmModel: string | null; promptVersion: string | null; asrProvider: string | null; pronunciationProvider: string | null; metrics: Record<string, unknown> | null; audioAnalysis: SessionAudioAnalysis | null; notes: string[] | null; error: string | null; startedAt: string; completedAt: string | null };
   dimensions: Dim[];
   findings: FindingRow[];
   report: { summary: string; nextSteps: string[] } | null;
@@ -35,7 +36,74 @@ interface SessionData {
   steps: { id: string; part: number; kind: string; promptText: string; topic: string; generator: string; answer: { id: string; status: string; durationMs: number; audioAssetId: string | null; transcript: { status: string; text: string; provider: string } | null } | null }[];
 }
 
-const STAGES: Record<string, string> = { queued: "Queued", transcribing: "Transcribing answers", pronunciation: "Assessing pronunciation", scoring: "Analysing language", done: "Done" };
+const STAGES: Record<string, string> = { queued: "Queued", transcribing: "Transcribing answers", "audio-analysis": "Analysing audio (VAD, pauses, rates)", pronunciation: "Assessing pronunciation", scoring: "Analysing language", done: "Done" };
+
+function CovBadge({ ok, label }: { ok: boolean; label: string }) {
+  return <Badge tone={ok ? "green" : "zinc"}>{ok ? `✓ ${label}` : `– ${label}`}</Badge>;
+}
+
+/** Honest rendering: absent features show "–", never fabricated zeros. */
+function AudioEvidenceCard({ sa }: { sa: SessionAudioAnalysis }) {
+  const f = sa.fluency;
+  const p = sa.pauseStats;
+  const pr = sa.prosody;
+  const s = (v: number | null | undefined, suffix = "", digits = 0) => (typeof v === "number" ? `${v.toFixed(digits)}${suffix}` : "–");
+  return (
+    <Card className="mt-6 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-semibold">声学证据 · Audio evidence</h2>
+        <div className="flex flex-wrap gap-1.5">
+          <CovBadge ok={sa.coverage.transcriptAvailable} label="transcript" />
+          <CovBadge ok={sa.coverage.wordTimingAvailable} label="word timings" />
+          <CovBadge ok={sa.coverage.vadAvailable} label="VAD" />
+          <CovBadge ok={sa.coverage.prosodyAvailable} label="prosody" />
+        </div>
+      </div>
+      <p className="mt-1 text-xs leading-5 text-zinc-400">由完整录音（16 kHz WAV）、ASR 词级时间戳与能量 VAD 自动提取，作为评分模型的证据输入；声学指标不直接决定任何 Band。标记「–」表示该特征本次不可用，而非 0。</p>
+      <dl className="mt-4 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
+        <div><dt className="text-zinc-400">总时长 / 录音</dt><dd className="font-medium tabular-nums">{s(sa.durationMs / 1000, "s", 1)}</dd></div>
+        <div><dt className="text-zinc-400">有效语音</dt><dd className="font-medium tabular-nums">{s(sa.speechDurationMs !== null ? (sa.speechDurationMs as number) / 1000 : null, "s", 1)}</dd></div>
+        <div><dt className="text-zinc-400">静音</dt><dd className="font-medium tabular-nums">{s(sa.silenceDurationMs !== null ? (sa.silenceDurationMs as number) / 1000 : null, "s", 1)}</dd></div>
+        <div><dt className="text-zinc-400">语速（含停顿）</dt><dd className="font-medium tabular-nums">{s(sa.speechRateWpm, " wpm")}</dd></div>
+        <div><dt className="text-zinc-400">发音速率（去停顿）</dt><dd className="font-medium tabular-nums">{s(sa.articulationRateWpm, " wpm")}</dd></div>
+        <div><dt className="text-zinc-400">停顿总数 / 长停顿≥2s</dt><dd className="font-medium tabular-nums">{p.count} / {p.longPauseCount}</dd></div>
+        <div><dt className="text-zinc-400">平均 / 中位停顿</dt><dd className="font-medium tabular-nums">{s(p.meanDurationMs / 1000, "s", 1)} / {s(p.medianDurationMs / 1000, "s", 1)}</dd></div>
+        <div><dt className="text-zinc-400">短 / 中 / 长停顿</dt><dd className="font-medium tabular-nums">{p.byLength.short} / {p.byLength.medium} / {p.byLength.long}</dd></div>
+        <div><dt className="text-zinc-400">平均连续表达（MLR）</dt><dd className="font-medium tabular-nums">{s(f.meanLengthOfRun, " 词", 1)}</dd></div>
+        <div><dt className="text-zinc-400">最长连续表达</dt><dd className="font-medium tabular-nums">{s(f.longestRun, " 词")}</dd></div>
+        <div><dt className="text-zinc-400">填充词</dt><dd className="font-medium tabular-nums">{f.fillerCount}{f.fillers.length ? ` (${f.fillers.join(", ")})` : ""}</dd></div>
+        <div><dt className="text-zinc-400">重复 / 自我修正</dt><dd className="font-medium tabular-nums">{f.repetitionCount} / {f.selfCorrectionCount ?? "–"}</dd></div>
+        {pr && (
+          <>
+            <div><dt className="text-zinc-400">音高变化</dt><dd className="font-medium tabular-nums">{s(pr.pitchVariationHz, " Hz", 0)}</dd></div>
+            <div><dt className="text-zinc-400">能量变化</dt><dd className="font-medium tabular-nums">{s(pr.energyVariationDb, " dB", 1)}</dd></div>
+          </>
+        )}
+      </dl>
+      {sa.perPart.length > 1 && (
+        <table className="mt-4 w-full text-xs">
+          <thead><tr className="text-left text-zinc-400"><th className="py-1">Part</th><th>语速</th><th>MLR</th><th>停顿</th><th>长停顿</th><th>填充词</th><th>自我修正</th></tr></thead>
+          <tbody className="tabular-nums">
+            {sa.perPart.map((r) => (
+              <tr key={r.part} className="border-t border-zinc-100">
+                <td className="py-1 font-medium">Part {r.part}</td>
+                <td>{s(r.speechRateWpm, " wpm")}</td>
+                <td>{s(r.meanLengthOfRun, "", 1)}</td>
+                <td>{r.pauseCount}</td>
+                <td>{r.longPauseCount}</td>
+                <td>{r.fillerCount}</td>
+                <td>{r.selfCorrectionCount}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {sa.warnings.length > 0 && (
+        <ul className="mt-3 list-disc space-y-1 pl-4 text-xs text-amber-800">{sa.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
+      )}
+    </Card>
+  );
+}
 
 export function ReportView({ sessionId }: { sessionId: string }) {
   const [rep, setRep] = useState<ReportData | null>(null);
@@ -175,10 +243,11 @@ export function ReportView({ sessionId }: { sessionId: string }) {
             </div>
           </div>
 
+          {a.audioAnalysis && <AudioEvidenceCard sa={a.audioAnalysis} />}
+
           <div className="mt-6 grid gap-4 lg:grid-cols-3">
             <Card className="p-5 lg:col-span-2">
-              <h2 className="mb-4 font-semibold">Detailed feedback</h2>
-              {(["FC", "LR", "GRA", "P"] as Dimension[]).map((d) => {
+              <h2 className="mb-4 font-semibold">Detailed feedback</h2>              {(["FC", "LR", "GRA", "P"] as Dimension[]).map((d) => {
                 const list = rep.findings.filter((f) => f.dimension === d);
                 if (!list.length) return null;
                 const crit = CRITERIA.find((c) => c.key === d);

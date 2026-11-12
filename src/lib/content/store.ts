@@ -74,6 +74,21 @@ export function contentDir(): string {
   return contentDirInfo().dir;
 }
 
+/**
+ * Containment guard: a season key is regex-validated upstream, but every file
+ * path derived from it is ALSO checked to stay inside the content directory.
+ * (Defence in depth against path traversal; the regex already excludes `/`.)
+ */
+function seasonFilePath(season: string): string {
+  // `path.basename` strips any separator or traversal segment; for the season
+  // keys this code accepts it is the identity function, so behaviour is
+  // unchanged while every derived path is inert by construction.
+  const dir = path.resolve(contentDir());
+  const file = path.resolve(dir, path.basename(`${season}.json`));
+  if (!file.startsWith(dir + path.sep)) throw new Error(`season path escapes content directory: ${season}`);
+  return file;
+}
+
 /** Turn a raw fs error into an actionable message (permissions, read-only, disk). */
 function writeError(e: unknown, target: string): Error {
   const err = e as NodeJS.ErrnoException;
@@ -223,7 +238,7 @@ export function parseSeasonFile(raw: unknown): LoadResult {
 
 export async function readSeasonFile(season: string): Promise<LoadResult> {
   if (!SEASON_RE.test(season)) return { file: null, warnings: [`invalid season key: ${season}`] };
-  const file = path.join(contentDir(), `${season}.json`);
+  const file = seasonFilePath(season);
   try {
     const text = await readFile(file, "utf8");
     return parseSeasonFile(JSON.parse(text));
@@ -333,7 +348,7 @@ export async function upsertSeasonEntries(season: string, region: string | undef
       notes: existing.file?.notes,
       entries: [...merged.values()].filter((e) => hasLearning(e.learning)),
     };
-    await writeJsonAtomic(path.join(contentDir(), `${season}.json`), payload);
+    await writeJsonAtomic(seasonFilePath(season), payload);
     return payload.entries.length;
   });
 }

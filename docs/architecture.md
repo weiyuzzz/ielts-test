@@ -46,7 +46,9 @@ stateDiagram-v2
 | audio_assets | recording（浏览器原生容器）与 pcm_wav（16k，用于发音评测），带 sha256 和字节数 |
 | transcripts | provider / model / status / words(时间戳) / latency |
 | pronunciation_results | 音频评测的逐词结果 |
-| assessments | 每次评分一行（重跑会保留历史，便于质量对比）；scorer、llm_model、prompt_version、asr/pron provider、metrics、notes |
+| audio_analyses | 逐答案声学分析（`audio-analysis-vN` 版本、status、analysis JSONB）；旧数据无行即「未分析」 |
+| assessments | 每次评分一行（重跑会保留历史，便于质量对比）；scorer、llm_model、prompt_version、asr/pron provider、metrics、**audio_analysis（整场汇总）**、notes |
+| assessment_dimensions | FC/LR/GRA/P 各占一行：band、status(scored/not_assessed)、source、rationale、**descriptor_refs（维度级判据引用，旧行默认 `[]`）** |
 | assessment_dimensions | FC/LR/GRA/P 各占一行：band、status(scored/not_assessed)、source、rationale |
 | assessment_findings | 句子级证据：dimension、answer_id、kind、category、原句、改写、解释、possible_asr_error、`descriptor_refs`（JSONB，引用到的 0–9 判据 ID 数组，默认 `[]`） |
 | exam_reports | 总结与下一步建议 |
@@ -55,7 +57,7 @@ stateDiagram-v2
 | 接口 | 实现 | 选择方式 |
 |---|---|---|
 | ASRProvider | OpenAI 兼容 `/audio/transcriptions`（词级时间戳）；Browser Web Speech | `ASR_PROVIDER` |
-| LLMProvider | OpenAI 兼容 Chat Completions；Anthropic Messages | `LLM_PROVIDER` |
+| LLMProvider | OpenAI 兼容 Chat Completions；DeepSeek（`deepseek` id，默认 `https://api.deepseek.com/v1` + `deepseek-chat`，`DEEPSEEK_API_KEY`/`LLM_API_KEY`）；Anthropic Messages。所有 OpenAI 兼容出站请求先经 `src/lib/ai/url-guard.ts` 的 `assertSafeEndpoint()` 校验（http/https、拒绝内网/环回/云元数据、DNS 复核；`ALLOW_LOCAL_AI_ENDPOINTS=1` 放行自建引擎） | `LLM_PROVIDER` |
 | TTSProvider | OpenAI 兼容 `/audio/speech`（含本地 Kokoro）、Azure Neural TTS、浏览器 speechSynthesis；由 `VoiceProfile.provider` 选择，能力通过 `supports` 声明 | `TTS_PROVIDER` / `EXAMINER_PROFILE` / 用户设置 |
 | PronunciationProvider | Azure Pronunciation Assessment（非脚本模式，ReferenceText=转写文本） | `PRONUNCIATION_PROVIDER` |
 
@@ -110,11 +112,12 @@ setup 页  ──► AudioPreloader.prepareScript()  ──► TtsScheduler (4 �
 ## 5. 评分管线（`report-service.ts`）
 1. 转写：补齐缺失的转写（服务端 ASR）。失败的条目写入 notes 并排除在评分之外。
 2. 识别出的总词数 < 10：评分直接判为 **failed**，不编造分数。
-3. 发音：只用音频模型（WAV）。没有配置时 P=not_assessed，总分标注 Provisional。
-4. 语言：LLM（版本化 Prompt + 严格 JSON 校验，引用的原文不在转写中的发现会被丢弃，最多重试 2 次）→ 失败时回退到启发式评分器，并在报告中标注。
-5. 总分按 IELTS 规则取整（.25→.5，.75→进位）。
+3. **音频分析**（`src/lib/speaking/audio-analysis.ts` + `audio-signal.ts`）：逐答案融合三种输入——原始 WAV（能量 VAD 语音/静音段 + 自相关音高 + 能量变化）、ASR 词级时间戳（分层停顿 + 定位 + 句中/句间归属、语速/发音速率、Mean Length of Run）、转写文本（填充词、重复、自我修正）。特征缺失 → `null` + warning + coverage 徽标，绝不伪造；逐答案结果存 `audio_analyses` 表，整场汇总存 `assessments.audio_analysis`。阈值可经 `AUDIO_MIN_PAUSE_MS` / `AUDIO_SHORT_PAUSE_MAX_MS` / `AUDIO_MEDIUM_PAUSE_MAX_MS` / `AUDIO_RUN_BREAK_MS` 等调整。
+4. 发音：只用音频模型（WAV）。没有配置时 P=not_assessed，总分标注 Provisional；韵律数字不得换算成 P 分。
+5. 语言：DeepSeek / OpenAI 兼容 LLM（版本化 Prompt + 严格 JSON 校验，引用的原文不在转写中的发现会被丢弃，最多重试 2 次）。Prompt 注入 `ACOUSTIC EVIDENCE` 块并明确：声学指标是证据不是分数，主要服务 FC，缺失特征不得臆测或惩罚。
+6. 总分按 IELTS 规则取整（.25→.5，.75→进位）。
 
-启发式评分器的依据：每题词数、WPM、填充词率、重复、连接词种类、长停顿（需要时间戳）、less-common 词比例、MATTR、复杂结构标记、句长，以及 12 条高精度语法规则（在高水平样本上 0 误报）。
+启发式评分器的依据：每题词数、WPM、填充词率、重复、连接词种类、长停顿（需要时间戳）、less-common 词比例、MATTR、复杂结构标记、句长，以及 12 条高精度语法规则（在高水平样本上 0 误报）。（注：AI 评分失败时不再回退启发式分数——无有效 AI 结果即 `failed`，不伪造 band。）
 
 ## 6. 前端
 - `AppShell`：桌面端侧栏，移动端顶栏加底部 Tab；考试页全屏。

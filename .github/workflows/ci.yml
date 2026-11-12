@@ -77,6 +77,9 @@ jobs:
       - name: Per-part timing tests
         run: npx tsx --test tests/part-timing.test.ts
 
+      - name: Audio analysis tests (VAD, pauses, rates, prosody)
+        run: npx tsx --test tests/audio-analysis.test.ts
+
       - name: Production build
         env:
           DATABASE_URL: postgresql://build:build@127.0.0.1:5432/build

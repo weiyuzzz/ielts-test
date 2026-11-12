@@ -1,12 +1,15 @@
 import { db } from "@/db";
 import {
-  assessments, assessmentDimensions, assessmentFindings, examReports, examQuestions, answerRecords, transcripts, audioAssets, pronunciationResults,
+  assessments, assessmentDimensions, assessmentFindings, examReports, examQuestions, answerRecords, transcripts, audioAssets, pronunciationResults, audioAnalyses,
 } from "@/db/schema";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { getASR, getLLM, getPronunciation, TIMEOUTS } from "@/lib/ai/registry";
 import { withTimeout } from "@/lib/ai/types";
 import { aggregate, type AnswerInput } from "@/lib/speaking/metrics";
 import { buildScoringMessages, extractJson, validateLanguageScore, SCORING_PROMPT_VERSION, type LanguageScore, type Finding } from "@/lib/speaking/scoring";
+import {
+  aggregateSessionAudio, buildAudioAnalysis, AUDIO_ANALYSIS_VERSION, type AudioAnalysis,
+} from "@/lib/speaking/audio-analysis";
 import { overallBand, score100ToBand, DIMENSION_LABELS } from "@/lib/speaking/bands";
 import { readAudio } from "./storage";
 
@@ -59,6 +62,40 @@ export async function runScoring(assessmentId: string): Promise<void> {
     if (asrProviders.includes("browser-web-speech")) notes.push("Transcripts come from the browser's built-in speech recognition (Web Speech API); accuracy varies by browser and may introduce recognition errors.");
 
     const metrics = aggregate(inputs);
+
+    // ---------------- Audio analysis (acoustic evidence for the scorer)
+    await setStage(a.id, "audio-analysis");
+    const audioPerAnswer: { index: number; part: number; answerId: string; analysis: AudioAnalysis }[] = [];
+    for (const inp of inputs) {
+      if (inp.noResponse && !inp.text) continue;
+      let wav: Uint8Array | null = null;
+      if (inp.wavKey) {
+        try {
+          wav = await readAudio(inp.wavKey);
+        } catch {
+          wav = null;
+        }
+      }
+      const analysis = buildAudioAnalysis({ text: inp.text, durationMs: inp.durationMs, words: inp.words, wav });
+      try {
+        await db.insert(audioAnalyses).values({
+          answerId: inp.answerId,
+          version: AUDIO_ANALYSIS_VERSION,
+          status: "completed",
+          analysis: analysis as unknown as Record<string, unknown>,
+        });
+      } catch {
+        notes.push(`Audio analysis persistence failed for answer #${inp.index}.`);
+      }
+      audioPerAnswer.push({ index: inp.index, part: inp.part, answerId: inp.answerId, analysis });
+    }
+    const sessionAudio = aggregateSessionAudio(audioPerAnswer.map(({ part, analysis }) => ({ part, analysis })));
+    if (audioPerAnswer.length) {
+      const withTimings = audioPerAnswer.filter((x) => x.analysis.coverage.wordTimingAvailable).length;
+      const withVad = audioPerAnswer.filter((x) => x.analysis.coverage.vadAvailable).length;
+      notes.push(`Audio analysis: ${audioPerAnswer.length} answers analysed (word timings ${withTimings}/${audioPerAnswer.length}, VAD ${withVad}/${audioPerAnswer.length}).`);
+    }
+
     const llm = getLLM();
 
     // No AI scoring provider configured: complete the mock exam WITHOUT a score.
@@ -68,7 +105,8 @@ export async function runScoring(assessmentId: string): Promise<void> {
         status: "unscored", stage: "done", scorer: null, overallBand: null, isComplete: false,
         promptVersion: null, llmProvider: null, llmModel: null,
         metrics: metrics as unknown as Record<string, unknown>,
-        notes: [...notes, "未接入 AI 评分（未配置 LLM_PROVIDER / OPENAI_API_KEY / ANTHROPIC_API_KEY）。本次只完成模考流程，不生成任何分数。"],
+        audioAnalysis: (sessionAudio ?? null) as unknown as Record<string, unknown> | null,
+        notes: [...notes, "未接入 AI 评分（未配置 LLM_PROVIDER / DEEPSEEK_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY）。本次只完成模考流程，不生成任何分数。"],
         asrProvider: asrProviders.join(",") || null, completedAt: new Date(),
       }).where(eq(assessments.id, a.id));
       return;
@@ -77,7 +115,9 @@ export async function runScoring(assessmentId: string): Promise<void> {
     if (metrics.totalWords < 10) {
       await db.update(assessments).set({
         status: "failed", stage: "done", error: "Not enough recognised speech to assess (fewer than 10 words). Check your microphone and transcription settings, then retake the test.",
-        metrics: metrics as unknown as Record<string, unknown>, notes, completedAt: new Date(), asrProvider: asrProviders.join(",") || null,
+        metrics: metrics as unknown as Record<string, unknown>,
+        audioAnalysis: (sessionAudio ?? null) as unknown as Record<string, unknown> | null,
+        notes, completedAt: new Date(), asrProvider: asrProviders.join(",") || null,
       }).where(eq(assessments.id, a.id));
       return;
     }
@@ -106,7 +146,11 @@ export async function runScoring(assessmentId: string): Promise<void> {
     let lang: LanguageScore | null = null;
     const scorer = "llm" as const;
     {
-      const { system, user } = buildScoringMessages(scorable);
+      const audioByAnswerId = new Map(audioPerAnswer.map((x) => [x.answerId, x.analysis]));
+      const { system, user } = buildScoringMessages(
+        scorable.map((s) => ({ ...s, audio: audioByAnswerId.get(s.answerId) ?? null })),
+        sessionAudio,
+      );
       for (let attempt = 1; attempt <= 2 && !lang; attempt++) {
         try {
           const raw = await withTimeout(llm.id, TIMEOUTS.llmMs, (signal) => llm.complete([{ role: "system", content: system }, { role: "user", content: user }], { json: true, signal }));
@@ -153,10 +197,10 @@ export async function runScoring(assessmentId: string): Promise<void> {
     }
 
     const dims = [
-      { dimension: "FC", band: lang.dimensions.FC.band, rationale: lang.dimensions.FC.rationale, source: scorer },
-      { dimension: "LR", band: lang.dimensions.LR.band, rationale: lang.dimensions.LR.rationale, source: scorer },
-      { dimension: "GRA", band: lang.dimensions.GRA.band, rationale: lang.dimensions.GRA.rationale, source: scorer },
-      { dimension: "P", band: pBand, rationale: pRationale, source: pBand !== null ? "audio-model" : "none" },
+      { dimension: "FC", band: lang.dimensions.FC.band, rationale: lang.dimensions.FC.rationale, source: scorer, refs: lang.dimensions.FC.descriptorRefs },
+      { dimension: "LR", band: lang.dimensions.LR.band, rationale: lang.dimensions.LR.rationale, source: scorer, refs: lang.dimensions.LR.descriptorRefs },
+      { dimension: "GRA", band: lang.dimensions.GRA.band, rationale: lang.dimensions.GRA.rationale, source: scorer, refs: lang.dimensions.GRA.descriptorRefs },
+      { dimension: "P", band: pBand, rationale: pRationale, source: pBand !== null ? "audio-model" : "none", refs: [] as string[] },
     ];
     const isComplete = dims.every((d) => d.band !== null);
     // Four criteria each count 25%: with any criterion missing there is no valid
@@ -165,7 +209,7 @@ export async function runScoring(assessmentId: string): Promise<void> {
     const findings = [...lang.findings, ...pFindings];
 
     await db.transaction(async (tx) => {
-      await tx.insert(assessmentDimensions).values(dims.map((d) => ({ assessmentId: a.id, dimension: d.dimension, band: d.band, status: d.band === null ? "not_assessed" : "scored", source: d.source, rationale: d.rationale })));
+      await tx.insert(assessmentDimensions).values(dims.map((d) => ({ assessmentId: a.id, dimension: d.dimension, band: d.band, status: d.band === null ? "not_assessed" : "scored", source: d.source, rationale: d.rationale, descriptorRefs: d.refs })));
       if (findings.length)
         await tx.insert(assessmentFindings).values(
           findings.map((f) => ({
@@ -187,7 +231,9 @@ export async function runScoring(assessmentId: string): Promise<void> {
         llmProvider: scorer === "llm" ? llm!.id : null, llmModel: scorer === "llm" ? llm!.model ?? null : null,
         promptVersion: SCORING_PROMPT_VERSION,
         asrProvider: asrProviders.join(",") || null, pronunciationProvider: pronRows.length ? pron!.id : null,
-        metrics: metrics as unknown as Record<string, unknown>, notes, completedAt: new Date(),
+        metrics: metrics as unknown as Record<string, unknown>,
+        audioAnalysis: (sessionAudio ?? null) as unknown as Record<string, unknown> | null,
+        notes, completedAt: new Date(),
       }).where(eq(assessments.id, a.id));
     });
   } catch (e) {

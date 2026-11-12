@@ -99,7 +99,7 @@ test("5. scoring prompt injects all four criteria with citable descriptor ids", 
   assert.ok(system.includes("descriptorRefs"), "prompt must ask for descriptorRefs");
   // Every answer must be visible to the model with its index.
   for (const a of answers) assert.ok(user.includes(`#${a.index}`));
-  assert.match(SCORING_PROMPT_VERSION, /v3\./);
+  assert.match(SCORING_PROMPT_VERSION, /v4\./, "v4 injects acoustic evidence rules");
   assert.notEqual(SCORING_PROMPT_VERSION, "speaking-language-v2.0-criteria", "prompt version must be bumped");
 });
 

@@ -15,6 +15,13 @@
       "when": 1794504763460,
       "tag": "0001_learning_audio_descriptor_refs",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794511609112,
+      "tag": "0002_audio_analysis",
+      "breakpoints": true
     }
   ]
 }

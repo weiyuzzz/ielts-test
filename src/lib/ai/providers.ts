@@ -6,6 +6,7 @@
  */
 import { ProviderError, type ASRProvider, type LLMProvider, type TTSProvider, type PronunciationProvider, type ChatMessage, type TTSSynthesisOptions } from "./types";
 import { prepareExaminerSpeech, toAzureSsmlForAct } from "./tts-text";
+import { assertSafeEndpoint } from "./url-guard";
 import { clampSpeed, resolveVoiceProfile } from "@/lib/speaking/voice-profile";
 
 async function check(res: Response, provider: string) {
@@ -44,7 +45,7 @@ export function openAIASR(): ASRProvider {
       fd.append("timestamp_granularities[]", "word");
       if (opts?.prompt) fd.append("prompt", opts.prompt.slice(0, 400));
       const res = await check(
-        await fetch(`${base}/audio/transcriptions`, { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: fd, signal: opts?.signal }),
+        await fetch(await assertSafeEndpoint(base, "/audio/transcriptions"), { method: "POST", headers: { Authorization: `Bearer ${key}` }, body: fd, signal: opts?.signal }),
         "openai-asr",
       );
       const j = (await res.json()) as { text?: string; words?: { word: string; start: number; end: number }[]; language?: string };
@@ -64,7 +65,7 @@ export function openAILLM(): LLMProvider {
     async complete(messages: ChatMessage[], opts) {
       if (!key) throw new ProviderError("openai-llm", "config", "missing API key");
       const res = await check(
-        await fetch(`${base}/chat/completions`, {
+        await fetch(await assertSafeEndpoint(base, "/chat/completions"), {
           method: "POST",
           headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -81,6 +82,43 @@ export function openAILLM(): LLMProvider {
       const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
       const c = j.choices?.[0]?.message?.content;
       if (typeof c !== "string") throw new ProviderError("openai-llm", "invalid_response", "no content");
+      return c;
+    },
+  };
+}
+
+/**
+ * DeepSeek — the designated scoring LLM for FC/LR/GRA. Same OpenAI-compatible
+ * wire format as openAILLM; DEEPSEEK_API_KEY or LLM_API_KEY both work, and
+ * LLM_BASE_URL / LLM_MODEL still override the defaults.
+ */
+export function deepseekLLM(): LLMProvider {
+  const base = (process.env.LLM_BASE_URL || "https://api.deepseek.com/v1").replace(/\/$/, "");
+  const key = process.env.DEEPSEEK_API_KEY || process.env.LLM_API_KEY || "";
+  const model = process.env.LLM_MODEL || "deepseek-chat";
+  return {
+    id: "deepseek",
+    model,
+    async complete(messages: ChatMessage[], opts) {
+      if (!key) throw new ProviderError("deepseek", "config", "missing API key (DEEPSEEK_API_KEY or LLM_API_KEY)");
+      const res = await check(
+        await fetch(await assertSafeEndpoint(base, "/chat/completions"), {
+          method: "POST",
+          headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model,
+            messages,
+            temperature: opts?.temperature ?? 0.2,
+            max_tokens: opts?.maxTokens ?? 2500,
+            ...(opts?.json ? { response_format: { type: "json_object" } } : {}),
+          }),
+          signal: opts?.signal,
+        }),
+        "deepseek",
+      );
+      const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+      const c = j.choices?.[0]?.message?.content;
+      if (typeof c !== "string") throw new ProviderError("deepseek", "invalid_response", "no content");
       return c;
     },
   };
@@ -172,9 +210,9 @@ export function openAITTS(): TTSProvider {
     });
   };
 
-  const request = (text: string, opts: TTSSynthesisOptions | undefined, stream: boolean) => {
+  const request = async (text: string, opts: TTSSynthesisOptions | undefined, stream: boolean) => {
     if (!key) throw new ProviderError("openai-tts", "config", "missing API key");
-    return fetch(`${base}/audio/speech`, {
+    return fetch(await assertSafeEndpoint(base, "/audio/speech"), {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: payload(text, opts, stream),
@@ -233,7 +271,7 @@ export function azureTTS(): TTSProvider {
       const prepared = prepareExaminerSpeech({ text, speechAct: opts?.speechAct ?? "question", profile });
       const ssml = toAzureSsmlForAct(prepared, voice, lang, profile.style);
       const res = await check(
-        await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
+        await fetch(await assertSafeEndpoint(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`), {
           method: "POST",
           headers: {
             "Ocp-Apim-Subscription-Key": key,
@@ -264,7 +302,7 @@ export function azurePronunciation(): PronunciationProvider {
         JSON.stringify({ ReferenceText: referenceText.slice(0, 3000), GradingSystem: "HundredMark", Granularity: "Word", Dimension: "Comprehensive", EnableProsodyAssessment: "True" }),
       ).toString("base64");
       const res = await check(
-        await fetch(`https://${region}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=en-US&format=detailed`, {
+        await fetch(await assertSafeEndpoint(`https://${region}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=en-US&format=detailed`), {
           method: "POST",
           headers: {
             "Ocp-Apim-Subscription-Key": key,

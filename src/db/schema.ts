@@ -208,6 +208,12 @@ export const assessments = pgTable(
     asrProvider: text("asr_provider"),
     pronunciationProvider: text("pronunciation_provider"),
     metrics: jsonb("metrics").$type<Record<string, unknown>>(),
+    /**
+     * Whole-exam audio analysis (see src/lib/speaking/audio-analysis.ts).
+     * Null for assessments scored before audio analysis existed — the report
+     * treats absence as "not analysed", never as zeros.
+     */
+    audioAnalysis: jsonb("audio_analysis").$type<Record<string, unknown>>(),
     notes: jsonb("notes").$type<string[]>(),
     error: text("error"),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
@@ -228,8 +234,29 @@ export const assessmentDimensions = pgTable(
     status: text("status").notNull(),
     source: text("source").notNull(),
     rationale: text("rationale").notNull(),
+    /**
+     * Rubric descriptor ids the scorer cited for THIS band (validated before
+     * insert). Null for rows written before the column existed.
+     */
+    descriptorRefs: jsonb("descriptor_refs").$type<string[]>().notNull().default([]),
   },
   (t) => [uniqueIndex("assessment_dim_uq").on(t.assessmentId, t.dimension)],
+);
+
+export const audioAnalyses = pgTable(
+  "audio_analyses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    answerId: uuid("answer_id").notNull().references(() => answerRecords.id, { onDelete: "cascade" }),
+    /** audio-analysis-vN — the producing module version. */
+    version: text("version").notNull(),
+    /** completed | failed */
+    status: text("status").notNull(),
+    analysis: jsonb("analysis").$type<Record<string, unknown>>(),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("audio_analyses_answer_idx").on(t.answerId)],
 );
 
 export const assessmentFindings = pgTable("assessment_findings", {

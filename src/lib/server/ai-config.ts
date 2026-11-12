@@ -66,7 +66,7 @@ const DEFAULTS: AiConfig = {
 };
 
 const PROVIDER_IDS: Record<ProviderKey, string[]> = {
-  llm: ["auto", "openai", "anthropic", "none"],
+  llm: ["auto", "openai", "deepseek", "anthropic", "none"],
   asr: ["auto", "openai", "browser", "none"],
   tts: ["auto", "openai", "azure", "browser"],
   pronunciation: ["auto", "azure", "none"],

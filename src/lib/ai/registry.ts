@@ -3,13 +3,13 @@
  * and never references a vendor directly.
  *
  *   ASR_PROVIDER=openai | browser | none        (default: openai if a key exists, else browser)
- *   LLM_PROVIDER=openai | anthropic | none      (default: whichever key exists, else none)
+ *   LLM_PROVIDER=openai | deepseek | anthropic | none  (default: whichever key exists, else none)
  *   TTS_PROVIDER=openai | azure | browser       (default: auto — configured service, else browser)
  *   PRONUNCIATION_PROVIDER=azure | none         (default: azure if key+region exist, else none)
  */
 import type { ASRProvider, LLMProvider, TTSProvider, PronunciationProvider } from "./types";
 import { ProviderError } from "./types";
-import { openAIASR, openAILLM, anthropicLLM, openAITTS, azureTTS, azurePronunciation } from "./providers";
+import { openAIASR, openAILLM, deepseekLLM, anthropicLLM, openAITTS, azureTTS, azurePronunciation } from "./providers";
 import { SPEECH_ACT_LIST } from "@/lib/speaking/speech-act";
 import { readAiConfig, envOverridesFor, withEnvOverrides, type ProviderKey } from "@/lib/server/ai-config";
 import { DEFAULT_PROFILE_ID, VOICE_PRESETS, resolveVoiceProfile, type VoiceProviderId } from "@/lib/speaking/voice-profile";
@@ -53,8 +53,9 @@ export function getASR(): ASRProvider | null {
 
 export function getLLM(): LLMProvider | null {
   return withCfg("llm", () => {
-    const p = process.env.LLM_PROVIDER || (hasOpenAI() ? "openai" : process.env.ANTHROPIC_API_KEY ? "anthropic" : "none");
+    const p = process.env.LLM_PROVIDER || (hasOpenAI() ? "openai" : process.env.ANTHROPIC_API_KEY ? "anthropic" : process.env.DEEPSEEK_API_KEY ? "deepseek" : "none");
     if (p === "openai") return openAILLM();
+    if (p === "deepseek") return deepseekLLM();
     if (p === "anthropic") return anthropicLLM();
     return null;
   });

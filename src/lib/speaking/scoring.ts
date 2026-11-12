@@ -7,12 +7,14 @@
 import { toHalfBand, clampBand } from "./bands";
 import type { AggregateMetrics, AnswerInput } from "./metrics";
 import { splitSentences } from "./metrics";
+import type { AudioAnalysis, SessionAudioAnalysis } from "./audio-analysis";
+import { formatAudioEvidenceBlock } from "./audio-analysis";
 import {
   descriptorBrief, findDescriptor, allowedBandsFor,
   DESCRIPTOR_SOURCE, type CriterionKey,
 } from "./band-descriptors";
 
-export const SCORING_PROMPT_VERSION = "speaking-language-v3.0-rubric";
+export const SCORING_PROMPT_VERSION = "speaking-language-v4.0-audio-evidence";
 export const HEURISTIC_VERSION = "heuristic-v1.1";
 
 export type LangDim = "FC" | "LR" | "GRA";
@@ -163,7 +165,13 @@ export function heuristicScore(answers: AnswerInput[], m: AggregateMetrics): Lan
 }
 
 // ---------------------------------------------------------------- LLM prompt + validation
-export function buildScoringMessages(answers: (AnswerInput & { index: number })[]) {
+export interface ScoringAnswerInput extends AnswerInput {
+  index: number;
+  /** Per-answer acoustic evidence (pauses, rates, runs, fillers…), optional. */
+  audio?: AudioAnalysis | null;
+}
+
+export function buildScoringMessages(answers: ScoringAnswerInput[], sessionAudio?: SessionAudioAnalysis | null) {
   const system = [
     "You are a certified IELTS Speaking examiner producing a diagnostic practice report.",
     `Rubric under test (${DESCRIPTOR_SOURCE.revision}, paraphrased from the IELTS public band descriptors):\n${descriptorBrief()}`,
@@ -177,6 +185,12 @@ export function buildScoringMessages(answers: (AnswerInput & { index: number })[
     "- Do NOT equate the number of connectives with coherence. Overused or misused linkers can lower Fluency & Coherence.",
     "- Part 1 answers are supposed to be short: brevity alone must never lower any criterion, and verbosity must never raise it.",
     "- Do NOT score pronunciation (P). You only see ASR transcripts; P is assessed from audio separately and must never be inferred from spelling or vocabulary.",
+    "Acoustic evidence rules:",
+    "- Each answer may carry AUTO-COMPUTED acoustic evidence (pauses, speech rate, mean length of run, fillers, repetitions, self-corrections, pitch/energy variation). It is EVIDENCE about fluency, never a band: no formula maps wpm, pause counts or any other number to a band, and you must weigh it against what the candidate actually said.",
+    "- Acoustic evidence primarily informs Fluency & Coherence. It must not by itself raise or lower Lexical Resource or Grammar & Accuracy, which are judged from language use.",
+    "- Features listed as unavailable in `availability`/`warnings` were NOT measured. Never assume a value for a missing feature and never penalise the candidate for a measurement gap; mention the limitation only when it materially limits the assessment.",
+    "- Prosody numbers (pitch/energy variation) are descriptive only and must NOT be used to score Pronunciation, which is assessed from audio by a dedicated service.",
+    "- Filler counts are automatic estimates: um/uh-class hesitation sounds are reliable, but discourse markers such as 'you know' can be legitimate — judge their severity in context, not by count alone.",
     "Evidence rules:",
     "- Every finding MUST quote text that appears verbatim in the candidate's transcripts (field `quote`) and reference the answer index.",
     "- Each finding should cite 1–2 rubric ids from its own dimension that the quoted evidence demonstrates.",
@@ -188,9 +202,22 @@ export function buildScoringMessages(answers: (AnswerInput & { index: number })[
 "summary":string,"nextSteps":string[]}`,
     "Include 4–12 findings: typical errors with corrected rewrites, more natural alternatives, and at least two strengths (good expressions) if present.",
   ].join("\n");
-  const user = answers
-    .map((a) => `#${a.index} [Part ${a.part}] Q: ${a.prompt}\nDuration: ${(a.durationMs / 1000).toFixed(0)}s\nA: ${a.noResponse || !a.text.trim() ? "(no response)" : a.text}`)
-    .join("\n\n");
+  const audioBlock = formatAudioEvidenceBlock(
+    answers.filter((a) => a.audio).map((a) => ({ index: a.index, part: a.part, analysis: a.audio! })),
+    sessionAudio ?? null,
+  );
+  const user = [
+    ...answers.map((a) =>
+      `#${a.index} [Part ${a.part}] Q: ${a.prompt}\nDuration: ${(a.durationMs / 1000).toFixed(0)}s\nA: ${a.noResponse || !a.text.trim() ? "(no response)" : a.text}`,
+    ),
+    ...(audioBlock
+      ? [
+          "",
+          "ACOUSTIC EVIDENCE (auto-computed from recordings, word timings and VAD; evidence, NOT band scores):",
+          audioBlock,
+        ]
+      : []),
+  ].join("\n\n");
   return { system, user };
 }
 

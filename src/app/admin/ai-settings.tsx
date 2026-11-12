@@ -31,7 +31,8 @@ const PROVIDERS: Record<ProviderKey, { label: string; hint: string; options: { i
     hint: "关闭后考试仍可完成，但报告会是「未评分」，绝不伪造分数。",
     options: [
       { id: "auto", label: "自动（按环境变量）" },
-      { id: "openai", label: "OpenAI 兼容 / DeepSeek / Qwen / 本地 vLLM" },
+      { id: "deepseek", label: "DeepSeek（默认评分模型）" },
+      { id: "openai", label: "OpenAI 兼容 / Qwen / 本地 vLLM" },
       { id: "anthropic", label: "Anthropic" },
       { id: "none", label: "关闭（不评分）" },
     ],
