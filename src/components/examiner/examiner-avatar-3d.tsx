@@ -214,14 +214,16 @@ export function ExaminerAvatar3D(props: Props) {
       };
 
       const channels = new Float32Array(15);
+      // Human speech is subtle: full blendshape weights read as cartoonish
+      // gaping on camera, so every viseme is applied well below 1.
       const applyVisemes = (jawBoost: number) => {
         for (const [vis, oculus] of Object.entries(visemeMorphs)) {
           if (!visemeAvailable[vis]) continue;
-          setMorph(oculus, channels[visemeIndex(vis as never)] * 0.92);
+          setMorph(oculus, channels[visemeIndex(vis as never)] * 0.45);
         }
         if (can.jaw) {
           const vowelOpen = Math.max(channels[visemeIndex("aa")], channels[visemeIndex("E")], channels[visemeIndex("oh")], channels[visemeIndex("ih")], channels[visemeIndex("ou")]);
-          setMorph("jawOpen", Math.min(1, vowelOpen * 0.65 + jawBoost * 0.35));
+          setMorph("jawOpen", Math.min(0.55, vowelOpen * 0.32 + jawBoost * 0.18));
         }
       };
 
@@ -251,7 +253,7 @@ export function ExaminerAvatar3D(props: Props) {
         const rms = Math.max(0, examinerEnvelope());
         const s = lipSync.sample(rms, now);
         channels.set(s.channels);
-        const jawBoost = st.speaking ? Math.min(0.3, rms * 0.45) : 0;
+        const jawBoost = st.speaking ? Math.min(0.18, rms * 0.25) : 0;
         applyVisemes(jawBoost);
 
         // 2) Blink (randomized; occasional double blink).
@@ -293,21 +295,21 @@ export function ExaminerAvatar3D(props: Props) {
         // 4) Brow emphasis follows the strongest viseme channel (speech), a
         //    gentle raise while preparing, rest otherwise.
         const emphasis = st.speaking ? s.emphasis : 0;
-        if (emphasis > 0.55 && prevEmphasis <= 0.55 && now - lastEmphasisPulse > 350) {
+        if (emphasis > 0.55 && prevEmphasis <= 0.55 && now - lastEmphasisPulse > 500) {
           browPulse = 1;
           lastEmphasisPulse = now;
         }
         prevEmphasis = emphasis;
         browPulse = Math.max(0, browPulse - dt * 3.2);
-        const browBase = st.preparing ? 0.28 : 0.10;
-        const browTarget = browBase + browPulse * 0.45 + (st.listening ? 0.12 : 0);
+        const browBase = st.preparing ? 0.18 : 0.06;
+        const browTarget = browBase + browPulse * 0.25 + (st.listening ? 0.08 : 0);
         if (can.browIn) setMorph("browInnerUp", browTarget);
         if (can.browOutL) setMorph("browOuterUpLeft", browTarget * 0.7);
         if (can.browOutR) setMorph("browOuterUpRight", browTarget * 0.7);
 
         // 5) Friendly professional rest pose.
-        if (can.smileL) setMorph("mouthSmileLeft", st.speaking ? 0.06 : 0.14);
-        if (can.smileR) setMorph("mouthSmileRight", st.speaking ? 0.06 : 0.14);
+        if (can.smileL) setMorph("mouthSmileLeft", st.speaking ? 0.04 : 0.08);
+        if (can.smileR) setMorph("mouthSmileRight", st.speaking ? 0.04 : 0.08);
 
         // 6) Head: irrational-frequency mix (never visibly loops) + a nod
         //    envelope while listening + a slight follow of one's own speech.

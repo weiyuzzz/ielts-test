@@ -196,18 +196,18 @@ class LipSyncController {
       target.fill(0);
     }
 
-    // Smooth channels: fast attack, slower release (a jaw has inertia).
+    // Smooth channels: gentle attack, slower release — real jaws never snap.
     for (let i = 0; i < this.smoothed.length; i++) {
       const t = target[i];
       const s = this.smoothed[i];
-      this.smoothed[i] = s + (t - s) * (t > s ? 0.55 : 0.28);
+      this.smoothed[i] = s + (t - s) * (t > s ? 0.4 : 0.18);
     }
     const visemeJaw = jawFromChannels(this.smoothed);
     const emphasis = emphasisFromChannels(this.smoothed);
     // RMS adds organic micro-variation on top of the content-driven opening.
-    const jawTarget = this.active ? Math.min(1, visemeJaw * 0.85 + Math.min(0.15, rms * 0.3)) : 0;
-    this.smoothedJaw += (jawTarget - this.smoothedJaw) * (jawTarget > this.smoothedJaw ? 0.6 : 0.22);
-    this.smoothedEmphasis += (emphasis - this.smoothedEmphasis) * 0.2;
+    const jawTarget = this.active ? Math.min(1, visemeJaw * 0.72 + Math.min(0.1, rms * 0.18)) : 0;
+    this.smoothedJaw += (jawTarget - this.smoothedJaw) * (jawTarget > this.smoothedJaw ? 0.5 : 0.16);
+    this.smoothedEmphasis += (emphasis - this.smoothedEmphasis) * 0.15;
 
     return {
       channels: this.smoothed,

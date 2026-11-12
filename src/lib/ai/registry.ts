@@ -12,7 +12,7 @@ import { ProviderError } from "./types";
 import { openAIASR, openAILLM, anthropicLLM, openAITTS, azureTTS, azurePronunciation } from "./providers";
 import { SPEECH_ACT_LIST } from "@/lib/speaking/speech-act";
 import { readAiConfig, envOverridesFor, withEnvOverrides, type ProviderKey } from "@/lib/server/ai-config";
-import { DEFAULT_PROFILE_ID, VOICE_PRESETS, resolveVoiceProfile, type VoiceProviderId } from "@/lib/speaking/voice-profile";
+import { VOICE_PRESETS, resolveVoiceProfile, type VoiceProviderId } from "@/lib/speaking/voice-profile";
 
 const hasOpenAI = () => !!(process.env.OPENAI_API_KEY || process.env.LLM_API_KEY || process.env.ASR_API_KEY);
 
@@ -145,7 +145,11 @@ export function capabilities() {
         id: p.id, name: p.name, provider: p.provider, voice: p.voice,
         speed: p.speed, pitch: p.pitch ?? 0, hasStyle: !!p.style,
       })),
-      defaultProfileId: DEFAULT_PROFILE_ID,
+      /** The default the UI should preselect: the deployment's ACTUALLY usable
+       *  profile (env-resolved), never a hardcoded preset whose provider may
+       *  be unconfigured — selecting that would 502 and fall back to the
+       *  robotic browser voice. */
+      defaultProfileId: active.id,
       activeProfile: { id: active.id, name: active.name, provider: active.provider, voice: active.voice, speed: active.speed },
       availability: ttsAvailability(),
       speechActs: SPEECH_ACT_LIST.map((a) => ({ id: a.id, label: a.label })),

@@ -50,6 +50,15 @@ export function LipSyncLab({ serverTts, profiles, defaultProfileId, gender }: Pr
     preloadExaminerModel(examiner);
   }, [examiner]);
 
+  // Warm the current line while the page sits idle: if synthesis is still
+  // running when Play is clicked, the long wait outlives the browser's user
+  // activation and audio.play() gets silently blocked by autoplay policy.
+  useEffect(() => {
+    if (useBrowserVoice || !text.trim()) return;
+    const t = setTimeout(() => { void waitForTTS(text, voice, 90_000, "question", voice); }, 300);
+    return () => clearTimeout(t);
+  }, [text, voice, useBrowserVoice]);
+
   // One readout loop: current viseme, clock, tier + channel bars.
   useEffect(() => {
     let raf = 0;

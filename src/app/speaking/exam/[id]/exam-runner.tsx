@@ -335,7 +335,7 @@ export function ExamRunner({ sessionId, voice, gender, showSubtitlesDefault, ser
    * require the candidate to acknowledge before recording starts — the exam
    * must not silently advance on broken audio.
    */
-  async function say(lines: ScriptLine[] | string, signal: AbortSignal, audioUrl?: string | null): Promise<PlaybackOutcome> {
+  async function say(lines: ScriptLine[] | string, signal: AbortSignal, audioUrl?: string | null, presetText?: string): Promise<PlaybackOutcome> {
     const queue: ScriptLine[] = typeof lines === "string" ? [{ text: lines, act: "question" }] : lines;
     const full = lineText(queue);
     if (signal.aborted || !full.trim()) return outcomeOf("interrupted", "none", { aborted: true });
@@ -347,7 +347,9 @@ export function ExamRunner({ sessionId, voice, gender, showSubtitlesDefault, ser
     try {
       let outcome: PlaybackOutcome | null = null;
       if (audioUrl) {
-        const preset = await speakPreset(audioUrl, signal, full);
+        // The bank clip contains the QUESTION text, not the whole turn: the
+        // lip-sync track must be built from the words the clip actually speaks.
+        const preset = await speakPreset(audioUrl, signal, presetText ?? full);
         if (preset.status === "ended" || preset.status === "interrupted") outcome = preset;
         // failed → fall through to TTS (pre-recorded audio is optional)
       }
@@ -584,12 +586,12 @@ export function ExamRunner({ sessionId, voice, gender, showSubtitlesDefault, ser
           // A bank clip may only be used when it was recorded with THIS voice.
           const preset = presetAudioFor(step, voiceRef.current);
           if (step.kind === "cue_card") {
-            if ((await say(lines, signal, preset)).status === "interrupted") return;
+            if ((await say(lines, signal, preset, step.promptText)).status === "interrupted") return;
             setPhase("prep");
             await countdown(step.prepSeconds, 10, signal);
             if (signal.aborted) return;
             if ((await say([{ text: LINES.part2Start, act: "instruction" }], signal)).status === "interrupted") return;
-          } else if ((await say(lines, signal, preset)).status === "interrupted") return;
+          } else if ((await say(lines, signal, preset, step.promptText)).status === "interrupted") return;
           if (signal.aborted) return;
 
           // Prepare the NEXT question while the candidate answers this one.

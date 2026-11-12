@@ -156,6 +156,12 @@ export function resolveVoiceProfile(pref?: string | null): VoiceProfile {
       return { ...clone(base), id: `azure:${raw}`, voice: raw, name: `Azure · ${raw}` };
     }
 
+    // A bare voice name that belongs to a preset resolves BACK to that preset
+    // (stable id, e.g. TTS_VOICE=af_heart → "kokoro-af-heart", not a synthetic
+    // "kokoro:af_heart") so UI selects and cache identities stay canonical.
+    const byVoice = VOICE_PRESETS.find((p) => p.voice === raw);
+    if (byVoice) return clone(byVoice);
+
     // Legacy Kokoro voice names (af_heart, bf_emma, am_michael …) were the value
     // of `examinerVoice` before profiles existed — keep them working verbatim.
     if (/^[a-z]{2}_[a-z]+$/i.test(raw)) {

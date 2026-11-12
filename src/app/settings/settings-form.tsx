@@ -7,9 +7,27 @@ import { loadVoices, speak, warmupSpeech } from "@/lib/audio/speech";
 interface S { displayName: string; targetBand: number; examDate: string; examinerVoice: string; examinerGender: "male" | "female"; showSubtitles: boolean }
 interface ProfileOption { id: string; name: string; provider: string }
 
-/** Voice presets that belong to each examiner identity (image ↔ voice pairing). */
-const GENDER_VOICE_PRESET: Record<"male" | "female", string> = { female: "azure-sonia", male: "azure-ryan" };
+/**
+ * Voice presets that belong to each examiner identity (image ↔ voice pairing),
+ * per PROVIDER FAMILY: switching examiner keeps the engine the deployment
+ * actually uses, so the pairing never selects a provider without credentials.
+ */
+const GENDER_VOICE_BY_FAMILY: Record<string, Record<"male" | "female", string>> = {
+  kokoro: { female: "kokoro:bf_emma", male: "kokoro:bm_george" },
+  azure: { female: "azure-sonia", male: "azure-ryan" },
+  openai: { female: "openai:marin", male: "openai:onyx" },
+  browser: { female: "auto", male: "auto" },
+};
 const GENDER_NAME: Record<"male" | "female", string> = { female: "Sarah", male: "James" };
+
+/** Infer the provider family of a stored voice preference. */
+function voiceFamily(voice: string): string {
+  if (voice.startsWith("kokoro") || /^[ab][fm]_[a-z0-9_]+$/i.test(voice)) return "kokoro";
+  if (voice.startsWith("azure") || /-[A-Z][a-z]+Neural$/.test(voice)) return "azure";
+  if (voice.startsWith("openai")) return "openai";
+  if (voice.startsWith("browser")) return "browser";
+  return "kokoro"; // "auto" and unknown: the deployment default family
+}
 
 export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profiles }: { initial: S; serverTts: boolean; ttsVoice: string; ttsStreaming: boolean; profiles: ProfileOption[] }) {
   const [s, setS] = useState(initial);
@@ -36,14 +54,18 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
 
   /**
    * Examiner identity: the digital human AND the voice belong to one person.
-   * Switching gender re-pairs the voice automatically — but only when the
-   * current voice is "auto" or one of the two gender presets, so a deliberate
-   * Voice Lab / custom choice is never clobbered silently.
+   * Switching gender re-pairs the voice WITHIN the same provider family, so a
+   * Kokoro deployment never gets pointed at an unconfigured Azure preset.
+   * A deliberate custom voice (Voice Lab) is never clobbered silently.
    */
   function pickGender(gender: "male" | "female") {
-    const paired = GENDER_VOICE_PRESET[gender];
-    const swappable = s.examinerVoice === "auto" || Object.values(GENDER_VOICE_PRESET).includes(s.examinerVoice);
-    setS({ ...s, examinerGender: gender, examinerVoice: swappable ? paired : s.examinerVoice });
+    const family = voiceFamily(s.examinerVoice);
+    // Only re-pair when the current voice is the deployment default or itself a
+    // pairing slot; a deliberate custom voice stays untouched.
+    const knownPairingVoice = s.examinerVoice === "auto" ||
+      Object.values(GENDER_VOICE_BY_FAMILY).some((m) => Object.values(m).includes(s.examinerVoice));
+    const paired = GENDER_VOICE_BY_FAMILY[family]?.[gender];
+    setS({ ...s, examinerGender: gender, examinerVoice: knownPairingVoice && paired ? paired : s.examinerVoice });
   }
 
   const field = "mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400";
@@ -67,7 +89,7 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
                 className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${s.examinerGender === g ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300"}`}
               >
                 <span className="block font-medium">{g === "female" ? "Female examiner" : "Male examiner"}</span>
-                <span className={`mt-0.5 block text-xs ${s.examinerGender === g ? "text-zinc-300" : "text-zinc-400"}`}>{GENDER_NAME[g]} · {GENDER_VOICE_PRESET[g].split("-")[1]}</span>
+                <span className={`mt-0.5 block text-xs ${s.examinerGender === g ? "text-zinc-300" : "text-zinc-400"}`}>{GENDER_NAME[g]} · {GENDER_VOICE_BY_FAMILY[voiceFamily(s.examinerVoice)]?.[g]?.split(":").pop() ?? "voice"}</span>
               </button>
             ))}
           </div>
