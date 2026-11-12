@@ -8,7 +8,7 @@ import { RecorderError, listInputDevices, type Recording } from "@/lib/audio/rec
 import { RecordingSession } from "@/lib/audio/recording-session";
 import {
   BrowserTranscriber, browserAsrSupported, speak, speakPreset, disposeAudio,
-  warmupSpeech, promoteTTS, audioMetrics, type ScriptLine,
+  warmupSpeech, promoteTTS, ttsScheduler, keyOf, audioMetrics, type ScriptLine,
 } from "@/lib/audio/speech";
 import { AudioPreloader, classifyScriptLines, type PreloadEntry } from "@/lib/audio/audio-resources";
 import { outcomeOf, type PlaybackOutcome } from "@/lib/audio/audio-lifecycle";
@@ -186,7 +186,7 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
   /** Seconds left in the part that is running now (null before the first tick). */
   const [partLeft, setPartLeft] = useState<number | null>(null);
   /** Dev-only: shows how many preloaded resources are ready (subscribable state). */
-  const [readiness, setReadiness] = useState<{ ready: number; total: number } | null>(null);
+  const [readiness, setReadiness] = useState<{ ready: number; total: number; tts: { priority: number; status: string }[] } | null>(null);
   /** Session acquired during setup, handed to the mic check before the exam starts. */
   const [micSession, setMicSession] = useState<RecordingSession | null>(null);
   /** True while the opening audio is being warmed after the start click. */
@@ -248,7 +248,7 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
           // One coordinator for TTS + preset bank audio + fixed examiner lines.
           const preloader = new AudioPreloader({ voice: profileId, profile: profileId, serverTts, model: ttsModel, format: ttsFormat });
           preloaderRef.current = preloader;
-          const unsub = preloader.subscribe((s) => setReadiness({ ready: s.readyCount, total: s.totalCount }));
+          const unsub = preloader.subscribe((s) => setReadiness({ ready: s.readyCount, total: s.totalCount, tts: s.tts.map((t) => ({ priority: t.priority, status: t.status })) }));
           unsubscribeRef.current = unsub;
           const plan = buildScriptPlan(v, profileId);
           planRef.current = plan;
@@ -359,6 +359,11 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
     setSubtitle(full);
     setSpeaking(true);
     setPhase("examiner");
+    // If any line still needs synthesis, say so — silence would look like a
+    // hang. speak() itself waits for the real voice (never the OS fallback).
+    if (serverTts && queue.some((l) => l.text.trim() && !ttsScheduler.get(keyOf(l.text, voiceRef.current, l.act, voiceRef.current)))) {
+      setNotice("The examiner is preparing the audio for this part…");
+    }
     const profileId = voiceRef.current;
     for (const l of queue) promoteTTS(l.text, profileId, l.act, profileId);
     try {
@@ -372,11 +377,13 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
       }
       if (!outcome) {
         // Speak each part with its own delivery: the acknowledgement stays short
-        // and warm, the lead-in is an introduction, the question rises naturally.
+        // and warm, the lead-in is an introduction, the question itself rises naturally.
+        // noBrowserFallback: a robotic OS voice mid-exam destroys the illusion —
+        // synthesis failure surfaces as the "audio unavailable" panel instead.
         for (const l of queue) {
           if (signal.aborted) return outcomeOf("interrupted", "none", { aborted: true });
           if (!l.text.trim()) continue;
-          const r = await speak(l.text, { serverTts, voice: profileId, act: l.act, profileId, signal });
+          const r = await speak(l.text, { serverTts, voice: profileId, act: l.act, profileId, noBrowserFallback: true, signal });
           outcome = r.outcome;
           if (!r.ok) break;
         }
@@ -393,6 +400,7 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
       return outcome;
     } finally {
       setSpeaking(false);
+      setNotice(null);
     }
   }
 
@@ -853,16 +861,26 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
             >
               {preparing ? "Preparing examiner voice…" : "Continue to microphone check"}
             </button>
-            {preparing && readiness && readiness.total > 0 && (
-              <div className="mt-3" aria-label="Examiner voice preparation progress">
-                <div className="h-1.5 overflow-hidden rounded-full bg-zinc-200">
-                  <div className="h-1.5 rounded-full bg-zinc-900 transition-all" style={{ width: `${Math.round((readiness.ready / readiness.total) * 100)}%` }} />
+            {preparing && readiness && (() => {
+              // The gate waits ONLY for the opening lines (CURRENT priority);
+              // show their progress so the bar matches when the page advances.
+              const current = readiness.tts.filter((t) => t.priority === 0);
+              const ready = current.filter((t) => t.status === "ready").length;
+              const total = current.length;
+              const pct = total > 0 ? Math.round((ready / total) * 100) : 0;
+              return (
+                <div className="mt-3" aria-label="Examiner voice preparation progress">
+                  <div className="h-1.5 overflow-hidden rounded-full bg-zinc-200">
+                    <div className="h-1.5 rounded-full bg-zinc-900 transition-all" style={{ width: `${Math.max(4, pct)}%` }} />
+                  </div>
+                  <p className="mt-1.5 text-center text-xs text-zinc-400">
+                    {total > 0
+                      ? `Synthesising the opening lines — ${ready}/${total} ready. The microphone check opens when they are done.`
+                      : "Synthesising the opening lines…"}
+                  </p>
                 </div>
-                <p className="mt-1.5 text-center text-xs text-zinc-400">
-                  Synthesising examiner audio — {readiness.ready}/{readiness.total} lines ready. The microphone check opens when the opening lines are done.
-                </p>
-              </div>
-            )}
+              );
+            })()}
           </div>
         )}
 
@@ -1049,7 +1067,7 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
         )}
         </div>
 
-        {view && ["miccheck", "examiner", "prep", "recording", "review", "uploading", "advancing", "finishing"].includes(phase) && (
+        {view && ["loading", "miccheck", "examiner", "prep", "recording", "review", "uploading", "advancing", "finishing"].includes(phase) && (
           <aside
             className={`w-full shrink-0 space-y-4 lg:sticky lg:top-6 lg:w-72 ${phase === "miccheck" ? "hidden" : ""}`}
             aria-label="Examiner and time limits"
