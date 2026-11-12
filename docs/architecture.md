@@ -60,17 +60,18 @@ stateDiagram-v2
 
 所有调用都经过 `withTimeout()`，超时会真正 abort 请求。业务代码只依赖接口。
 
-### 4.1 考官语音链路（`src/lib/ai/tts-text.ts` + `src/lib/audio/speech.ts` + `src/app/api/tts/route.ts`）
+### 4.1 考官语音链路（`src/lib/audio/*` + `src/lib/ai/*` + `src/app/api/tts/route.ts`）
 ```
-考试 setup 页
-  └─ examLines() 汇总全部台词 → prefetchManyTTS()（并发 2）
-       └─ POST /api/tts → 服务端 LRU / in-flight 去重 → 完整缓冲回客户端
-            └─ 客户端 blob URL + preload 预解码 → 播放时命中即出声
-未预取到（LLM 动态追问）→ GET 流式直接播 → 失败回退 POST 完整缓冲 → 浏览器语音 → 字幕
+setup 页 → buildScriptPlan()（每句带 act）→ AudioPreloader.prepareScript(profile)
+   ├─ TtsScheduler（CURRENT > NEXT > BACKGROUND > LOW；同级去重、可抢占）
+   │    └─ POST /api/tts {text, act, profile} → 服务端 LRU + in-flight 共享 → 完整缓冲
+   │         └─ 客户端 blob URL + preload 预解码 → 播放时命中即出声
+   └─ preloadPresetAudio()（题库预置音频，需 questionVoiceProfile 与本次 profile 一致）
+播放：已预取片段 → GET /api/tts 流（live 优先，会取消同句 prefetch）→ POST 完整缓冲 → 浏览器语音 → 字幕
 ```
-- **自然度（Phase 2）**：每句台词带一个 `ExaminerSpeechAct`（greeting / introduction / instruction / question / acknowledgement / time_warning / closing），`prepareExaminerSpeech()` 按 act 决定语速、停顿、是否强调，并产出纯文本与可移植 SSML。`VoiceProfile` 描述「谁在说话」，与 provider 解耦；provider 只发送自己文档支持的字（Azure 用精确 `<break time>` + `prosody`，OpenAI 用 `instructions`，Kokoro 用 `<break strength>`）。配置分三层：内置预设/env → 用户偏好 → **考试开始时的 session 快照**，考试中改设置不影响当前场次。详见 `docs/phase2-examiner-voice.md`。
+- **自然度（Phase 2）**：每句台词带一个 `ExaminerSpeechAct`（greeting / introduction / instruction / question / acknowledgement / time_warning / closing），`prepareExaminerSpeech()` 按 act 决定语速、停顿、是否强调，并产出纯文本与可移植 SSML。`VoiceProfile` 描述「谁在说话」，与 provider 解耦；provider 只发送自己文档支持的字段（Azure 用精确 `<break time>` + `prosody`，OpenAI 用 `instructions`，Kokoro 用 `<break strength>`）。配置分三层：内置预设/env → 用户偏好 → **考试开始时的 session 快照**，考试中改设置不影响当前场次。详见 `docs/phase2-examiner-voice.md`。
 - **音色一致性**：预置音频必须带 `questionVoiceProfile` 且与本次 profile 相同才播放，否则直接用考官音色合成并提示；请求未配置的 provider 返回明确错误，不静默换声音。
-- **延迟**：合成完全移出考试关键路径；`X-TTS-Cache` 响应头区分 `hit` / `miss` / `miss-stream`；流式响应在后台 tee 一份写入缓存，供后续重复请求秒回。缓存 key 含 provider、model、voice、language、speed、pitch、style、instructions、prosody、speechAct、format 与文本。
+- **延迟与正确性**：合成完全移出考试关键路径；一个优先级调度器统一排队，正在播放的句子不会被预取任务阻塞，高优先级可抢占低优先级。播放有显式状态机（`loading→ready→playing→ended|interrupted|failed`），中断/截断不算播完，考试不会在坏音频上推进。`X-TTS-Cache` 区分 `hit` / `miss` / `miss-stream`；流式响应在后台 tee 一份写入缓存。缓存 key 含 provider、model、profileFingerprint（voice/language/speed/pitch/style/instructions/prosody/format）、speechAct 与文本。
 - `/api/config` 只暴露引擎信息，密钥不出服务端。
 
 ## 4.2 音频性能改造（第一阶段，`feat/speaking-audio-perf-phase1`）

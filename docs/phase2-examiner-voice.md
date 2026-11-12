@@ -156,12 +156,38 @@ Phase 2 没有增加任何新的同步合成点：act 只改变合成参数，�
 ```bash
 npm run typecheck
 npm run lint
-npx tsx --test tests/unit.test.ts     # 29 项
+npx tsx --test tests/unit.test.ts     # 30 项
+npx tsx --test tests/audio-perf.test.ts   # 24 项（Phase 1 调度/生命周期）
 npm run build && npx next start -p 3100
-node tests/integration.mjs http://localhost:3100   # 27 项
+node tests/integration.mjs http://localhost:3100   # 30 项
 
 # 手工验证 act 与 profile 隔离
 curl -s -b cookie -X POST localhost:3100/api/tts -H 'Content-Type: application/json' \
   -d '{"text":"Do you enjoy reading books?","act":"greeting","profile":"kokoro-af-heart"}' -D -
 # 响应头：X-TTS-Act: greeting / X-TTS-Cache: miss
 ```
+
+
+---
+
+## 与 Phase 1 的合并记录（`integration/voice-perf`）
+
+Phase 1（`feat/speaking-audio-perf-phase1`）与 Phase 2（`phase2/examiner-voice`）从同一个
+commit 分叉，两边都重写了 `speech.ts` / `tts/route.ts` / `exam-runner.tsx`。合并原则是
+**保留 Phase 1 的底座，把 Phase 2 的语音表现层接上去**，而不是让两套音频管线共存。
+
+| 文件 | 处理方式 |
+|---|---|
+| `tts/route.ts` | 保留 Phase 1 的 live/prefetch 优先级、取消 warm-up、in-flight 共享；缓存 key 换成 `provider + model + profileFingerprint(act, format) + text` |
+| `lib/audio/speech.ts` | 保留调度器与播放状态机；`ttsTaskKey` 增加 `act` / `profile`，POST/GET 都带上；浏览器回退按 act 调整 rate/pitch |
+| `lib/audio/audio-resources.ts` | `PreloadEntry` 带 `act`，预热与首句门禁都使用 session 的 profile；`classifyScriptLines` 仍接受纯字符串（Phase 1 的单测全部保留） |
+| `exam-runner.tsx` | 冲突只在录音启动处（取 `RecordingSession` + 保留音量包络）。语音侧改为「一句台词拆成多段、每段带 act」，逐段播放；首句门禁改为等待真实的分段，而不是一个不会被播放的合成长句 |
+| `exam-service.ts` | 在 Phase 1 的 `completeAnswer` 基础上补回 `configSnapshot.voiceProfile` 快照与 `questionVoiceProfile` |
+
+合并时发现并修掉的一个真实缺陷：Phase 2 原实现把首句门禁预热成 `ack + lead + question`
+拼接后的长句，而实际播放是三段独立音频 —— 等于白合成一次、首句仍然没准备好。合并后门禁
+与播放使用同一组 `ScriptLine`。
+
+验证：`typecheck` / `lint` / 30 单测 / 24 音频测试 / 30 项集成测试通过；实测同一句
+`act=greeting` 与 `act=question` 音频 md5 不同，重复请求 10 ms 命中缓存，未配置 Azure
+时返回 `502` 而不是换声音。

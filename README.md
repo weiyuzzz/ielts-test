@@ -96,10 +96,20 @@ npm run build && npx next start -p 3100   # 生产；开发用 npm run dev -p 31
 
 默认（本机）为 Docker 里的 Kokoro：`TTS_VOICE=af_heart`（Kokoro 唯一 A 级音色；英式 `bf_emma` 评级仅 B-）、`TTS_SPEED=0.95`、`TTS_PROSODY=1`（SSML 句间停顿）、`TTS_STREAM=1`、`TTS_FORMAT=mp3`。密钥只存在于服务端。
 
-### 延迟优化
-实测本地 Kokoro 短句 2–4s、长句 9–13s。优化点：setup 阶段预取整场台词（并发 2，POST 完整缓冲）+ blob 预解码、服务端 LRU 缓存与 in-flight 去重、`GET /api/tts` 逐句流式 pipe、四级播放兜底（缓存 → 流式 → 完整缓冲 → 浏览器语音）。重复台词从 7.6s 降到 0.03s；动态追问首字节约 3s 即可出声。详见 `.env.example` 与 `docs/architecture.md`。
+### 延迟与可靠性（Phase 1 音频底座）
+实测本地 Kokoro 短句 2–4s、长句 9–13s，所以合成必须离开考试关键路径：
+
+- **一个调度器**（`src/lib/audio/tts-scheduler.ts`）管所有合成：`CURRENT`（正在播）> `NEXT`（下一题）> `BACKGROUND`（后续台词）> `LOW`（重复问法、无应答兜底）。同一 (引擎, 音色, 格式, act, profile, 文本) 只合成一次，高优先级请求可抢占低优先级任务。
+- **显式播放状态机**（`audio-lifecycle.ts`）：`loading → ready → playing → ended | interrupted | failed`。被中断或被截断的流**不算播完**，考试不会在坏音频上继续推进；失败时保留字幕并要求考生确认。
+- **单个录音会话**（`recording-session.ts`）：整场复用同一 MediaStream 与 AudioContext，换题只换 buffer，首题之后几乎无启动延迟。
+- **首句门禁**：`ensureOpeningAndFirst()` 只等开场那一句和第一题的预置音频，不等整场脚本，也不等兜底话术。
+- **三级播放兜底**：已预取片段（blob 预解码）→ 渐进式 `GET /api/tts` 流 → 完整缓冲；全失败才回退浏览器语音，并如实提示。
+
+重复台词从 7.6s 降到 10ms 级；未预取的动态追问首字节约 3s 即可出声。详见 `.env.example` 与 `docs/architecture.md`。
 
 ## 考官语音系统（Phase 2）
+
+> **Phase 1 与 Phase 2 已合并为一套实现**：Phase 1 负责调度、播放生命周期与录音，Phase 2 负责「怎么说得像人」。VoiceProfile 与 SpeechAct 直接进入调度 key 和服务端缓存 key，不存在两套并行的音频管线。
 
 ### VoiceProfile：一套配置描述任何引擎
 `src/lib/speaking/voice-profile.ts` 把「谁在说话」抽象成与供应商无关的结构：`provider`（azure / openai / kokoro / browser）+ `voice` + `speed` + `pitch` + `style?` + `instructions?` + `prosody`（句间/问句/分句停顿、是否强调）。Provider 与音色解耦，换引擎不需要改考试流程。
@@ -141,7 +151,7 @@ npm run build && npx next start -p 3100   # 生产；开发用 npm run dev -p 31
 **能力探测而非假设**：只给引擎发送它文档里支持的字段；Azure 的 `mstts:express-as` 仅在明确选择了 style 时发送，避免 400。请求了未配置的 provider 会返回明确错误（`502 … AZURE_SPEECH_KEY not configured`），**不会静默换成另一个声音**。
 
 ### 缓存身份
-缓存 key = `provider` + `model` + `voice` + `language` + `speed` + `pitch` + `style` + `instructions` + `prosody` + `speechAct` + `format` + `text`。换音色 / 改语速 / 换 act 都会得到新 key，不可能读到上一次配置的音频。响应头带 `X-TTS-Provider / X-TTS-Voice / X-TTS-Act / X-TTS-Cache`，便于排查。
+缓存 key = `provider` + `model` + `profileFingerprint`（含 `voice` / `language` / `speed` / `pitch` / `style` / `instructions` / `prosody` / `format`）+ `speechAct` + `text`。客户端调度 key 也包含 `act` 与 `profile`，所以预取和播放一定命中同一份；换音色 / 改语速 / 换 act 都会得到新 key，不可能读到上一次配置的音频。响应头带 `X-TTS-Provider / X-TTS-Voice / X-TTS-Act / X-TTS-Cache / X-TTS-Synthesis-Ms`，便于排查。
 
 ### Voice Lab（设置页底部）
 同一句话、同一个 act，A/B 两个 profile 并排听：可切 Provider / 音色 / 语速 / 音高 / SpeechAct / 自定义文本，内置 7 句固定语料；每次合成显示**延迟、MIME、采样率、体积**，失败显示 Provider 原文错误。未配置的 provider 在下拉里标 `not configured` 且不可选。听到满意的，"Use for exams" 写入你的考试音色（只影响之后的新考试）。
@@ -158,13 +168,16 @@ npm run build && npx next start -p 3100   # 生产；开发用 npm run dev -p 31
 
 ## 测试
 ```bash
-npx tsx --test tests/unit.test.ts                 # 单元测试（29 项）
+npm run typecheck && npm run lint
+npx tsx --test tests/unit.test.ts                 # 单元测试（30 项）
+npx tsx --test tests/audio-perf.test.ts           # 音频调度/生命周期（24 项）
 npm run build && npx next start -p 3100 &
-node tests/integration.mjs http://localhost:3100  # 端到端（含题库后台、组卷规则、未评分行为）
+node tests/integration.mjs http://localhost:3100  # 端到端 30 项（含题库后台、组卷规则、未评分行为、TTS 缓存）
 ```
 
 ## 文档
 - `docs/architecture.md`：架构、数据模型、状态机、题库与语音链路
+- `docs/phase2-examiner-voice.md`：考官语音系统（VoiceProfile / SpeechAct / Provider 能力 / 集成说明）
 - `docs/api.md`：API（含 `/api/admin/banks`）
 - `docs/reverse-engineering/`：REA 逆向报告（8 篇 + 证据 manifest）
 - `docs/test-report.md`、`docs/roadmap.md`
