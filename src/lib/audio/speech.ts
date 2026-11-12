@@ -509,6 +509,10 @@ export interface SpeakOptions {
   /** VoiceProfile id. When set the server uses it (and its provider) instead of
    *  the raw voice name, which is how a session's voice stays fixed. */
   profileId?: string;
+  /** Forbid the robotic browser-voice fallback: when synthesis fails, report
+   *  failure instead of speaking with the OS voice. Used by the Lip Sync Lab
+   *  where the whole point is to audition the REAL voice. */
+  noBrowserFallback?: boolean;
   signal?: AbortSignal;
 }
 export interface SpeakResult {
@@ -587,6 +591,10 @@ async function doSpeak(text: string, opts: SpeakOptions, key: string): Promise<S
   }
 
   // 4) Browser voice fallback (kept from the original implementation).
+  if (opts.noBrowserFallback) {
+    // Callers that audition the real voice refuse the robotic OS fallback.
+    return finish({ ok: false, via: "none", outcome: outcomeOf("failed", "none") });
+  }
   if (typeof window === "undefined" || !("speechSynthesis" in window)) {
     return finish({ ok: false, via: "none", outcome: outcomeOf("failed", "none") });
   }

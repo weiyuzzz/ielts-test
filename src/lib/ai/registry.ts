@@ -117,7 +117,9 @@ export const TIMEOUTS = {
   llmMs: Number(process.env.LLM_TIMEOUT_MS || 60000),
   llmFollowUpMs: Number(process.env.LLM_FOLLOWUP_TIMEOUT_MS || 8000),
   // Long Part 2 instructions take >10 s on local/CPU engines.
-  ttsMs: Number(process.env.TTS_TIMEOUT_MS || 30000),
+  // 120s default: local CPU engines (Kokoro in docker) need 10-60s per line,
+  // and a 30s cap turned long lines into 502s → robotic browser fallback.
+  ttsMs: Number(process.env.TTS_TIMEOUT_MS || 120000),
   pronMs: Number(process.env.PRONUNCIATION_TIMEOUT_MS || 30000),
 };
 

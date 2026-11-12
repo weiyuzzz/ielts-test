@@ -46,11 +46,17 @@ export function LipSyncLab({ serverTts, profiles, defaultProfileId, gender, mode
   const [prevVoice, setPrevVoice] = useState(preselectedVoice);
   const [voice, setVoice] = useState(preselectedVoice);
   const [playing, setPlaying] = useState(false);
+  /** True while synthesis is still running (local CPU engines can take ~30s+/line). */
+  const [waiting, setWaiting] = useState(false);
+  const [waitSec, setWaitSec] = useState(0);
+  const [error, setError] = useState<string | null>(null);
   const [useBrowserVoice, setUseBrowserVoice] = useState(!serverTts);
   const barRefs = useRef<(HTMLSpanElement | null)[]>([]);
   const visemeRef = useRef<HTMLSpanElement | null>(null);
   const timeRef = useRef<HTMLSpanElement | null>(null);
   const tierRef = useRef<HTMLSpanElement | null>(null);
+  /** Cancels the in-flight synthesis wait (Stop button during preparing). */
+  const cancelWaitRef = useRef<(() => void) | null>(null);
 
   // Follow the examiner chosen in the form above: when its greeting line
   // changes, reset the text; when the form's voice changes, follow it
@@ -103,22 +109,56 @@ export function LipSyncLab({ serverTts, profiles, defaultProfileId, gender, mode
   }, []);
 
   async function play() {
-    if (playing) return;
+    if (playing || waiting) return;
+    setError(null);
+    if (!useBrowserVoice) {
+      // Wait for the REAL synthesis — the lab exists to audition voices, so a
+      // robotic browser fallback is worse than waiting. Long cap (5 min): a
+      // cold local CPU engine needs ~30s per line, more on first run.
+      setWaiting(true);
+      setWaitSec(0);
+      let cancelled = false;
+      cancelWaitRef.current = () => { cancelled = true; };
+      const ticker = setInterval(() => setWaitSec((s) => s + 1), 1000);
+      try {
+        const clip = await waitForTTS(text, voice, 300_000, "question", voice);
+        clearInterval(ticker);
+        setWaiting(false);
+        cancelWaitRef.current = null;
+        if (cancelled) return;
+        if (!clip) {
+          setError("Audio could not be synthesised. Check that the TTS engine is running, then try again.");
+          return;
+        }
+        setPlaying(true);
+        try {
+          // Clip is in the scheduler cache → speak() plays it directly. The
+          // browser fallback is explicitly forbidden for this audition.
+          await speak(text, { serverTts: true, voice, act: "question", profileId: voice, noBrowserFallback: true });
+        } finally {
+          setPlaying(false);
+        }
+        return;
+      } catch {
+        clearInterval(ticker);
+        setWaiting(false);
+        cancelWaitRef.current = null;
+        return;
+      }
+    }
     setPlaying(true);
     try {
-      if (!useBrowserVoice) {
-        // Warm the clip first (buffered POST): this is also how the exam plays
-        // prepared lines, and it is what carries the engine word timestamps.
-        await waitForTTS(text, voice, 90_000, "question", voice);
-      }
-      await speak(text, { serverTts: !useBrowserVoice, voice, act: "question", profileId: voice });
+      await speak(text, { serverTts: false, voice, act: "question", profileId: voice });
     } finally {
       setPlaying(false);
     }
   }
 
   function stop() {
+    cancelWaitRef.current?.();
+    cancelWaitRef.current = null;
     stopSpeaking();
+    setWaiting(false);
     setPlaying(false);
   }
 
@@ -158,10 +198,21 @@ export function LipSyncLab({ serverTts, profiles, defaultProfileId, gender, mode
           </div>
           <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} className="mt-3 w-full resize-none rounded-lg border border-zinc-200 p-3 text-sm outline-none focus:border-zinc-400" />
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button onClick={play} disabled={playing || !text.trim()} className={`${btn} bg-zinc-900 text-white hover:bg-zinc-700`}>Play</button>
-            <button onClick={stop} className={`${btn} border border-zinc-200`}>Stop</button>
+            <button onClick={play} disabled={playing || waiting || !text.trim()} className={`${btn} bg-zinc-900 text-white hover:bg-zinc-700`}>{waiting ? "Synthesising…" : "Play"}</button>
+            <button onClick={stop} className={`${btn} border border-zinc-200`}>{waiting ? "Cancel" : "Stop"}</button>
             <button onClick={() => setText(sampleLine)} className="rounded border border-zinc-200 px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50">Reset text</button>
           </div>
+          {waiting && (
+            <div className="mt-3" aria-live="polite">
+              <div className="h-1.5 overflow-hidden rounded-full bg-zinc-200">
+                <div className="h-1.5 w-1/3 animate-pulse rounded-full bg-indigo-500" />
+              </div>
+              <p className="mt-1.5 text-xs text-zinc-400">
+                Synthesising the line with the selected voice… {waitSec}s elapsed. A cold local engine can take up to a minute — the real voice never gets swapped for a robotic fallback here.
+              </p>
+            </div>
+          )}
+          {error && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">{error}</p>}
         </div>
       </div>
 
