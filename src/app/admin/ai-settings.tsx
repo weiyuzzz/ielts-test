@@ -27,45 +27,45 @@ type Drafts = Record<ProviderKey, Draft>;
 
 const PROVIDERS: Record<ProviderKey, { label: string; hint: string; options: { id: string; label: string }[]; fields: ("baseUrl" | "model" | "voice" | "region")[] }> = {
   llm: {
-    label: "语言评分 LLM（FC / LR / GRA）",
-    hint: "关闭后考试仍可完成，但报告会是「未评分」，绝不伪造分数。",
+    label: "Language scoring LLM (FC / LR / GRA)",
+    hint: "The exam can still be completed with this off, but the report will be unscored — scores are never fabricated.",
     options: [
-      { id: "auto", label: "自动（按环境变量）" },
-      { id: "openai", label: "OpenAI 兼容 / DeepSeek / Qwen / 本地 vLLM" },
+      { id: "auto", label: "Auto (from environment variables)" },
+      { id: "openai", label: "OpenAI-compatible / DeepSeek / Qwen / local vLLM" },
       { id: "anthropic", label: "Anthropic" },
-      { id: "none", label: "关闭（不评分）" },
+      { id: "none", label: "Off (no scoring)" },
     ],
     fields: ["baseUrl", "model"],
   },
   tts: {
-    label: "考官语音 TTS",
-    hint: "关闭后回退浏览器语音合成（机械音，但可用）。Azure 需要区域。",
+    label: "Examiner voice (TTS)",
+    hint: "When off, falls back to browser speech synthesis (robotic, but usable). Azure requires a region.",
     options: [
-      { id: "auto", label: "自动（按环境变量）" },
-      { id: "openai", label: "OpenAI 兼容 / Kokoro" },
+      { id: "auto", label: "Auto (from environment variables)" },
+      { id: "openai", label: "OpenAI-compatible / Kokoro" },
       { id: "azure", label: "Azure Neural" },
-      { id: "browser", label: "浏览器语音合成" },
+      { id: "browser", label: "Browser speech synthesis" },
     ],
     fields: ["baseUrl", "model", "voice", "region"],
   },
   asr: {
-    label: "语音转写 ASR",
-    hint: "关闭后使用浏览器 Web Speech；没有 ASR 时录音与回放仍可用，但不会自动评分。",
+    label: "Speech transcription (ASR)",
+    hint: "When off, browser Web Speech is used; without ASR, recording and playback still work but no automatic scoring happens.",
     options: [
-      { id: "auto", label: "自动（按环境变量）" },
-      { id: "openai", label: "OpenAI 兼容 Whisper" },
-      { id: "browser", label: "浏览器 Web Speech" },
-      { id: "none", label: "关闭" },
+      { id: "auto", label: "Auto (from environment variables)" },
+      { id: "openai", label: "OpenAI-compatible Whisper" },
+      { id: "browser", label: "Browser Web Speech" },
+      { id: "none", label: "Off" },
     ],
     fields: ["baseUrl", "model"],
   },
   pronunciation: {
-    label: "发音评测（P 维度）",
-    hint: "未配置时 P 维度标为 not_assessed，总分不显示——不会用转写猜发音。",
+    label: "Pronunciation assessment (P criterion)",
+    hint: "When not configured, P is marked not_assessed and the overall band is hidden — pronunciation is never guessed from the transcript.",
     options: [
-      { id: "auto", label: "自动（按环境变量）" },
+      { id: "auto", label: "Auto (from environment variables)" },
       { id: "azure", label: "Azure Pronunciation Assessment" },
-      { id: "none", label: "关闭" },
+      { id: "none", label: "Off" },
     ],
     fields: ["region"],
   },
@@ -98,7 +98,7 @@ export function AiSettings() {
     try {
       const r = await fetch("/api/admin/ai", { cache: "no-store" });
       const j = await r.json();
-      if (!r.ok) throw new Error(j.error || "加载失败");
+      if (!r.ok) throw new Error(j.error || "Failed to load");
       setCfg(j.config as Cfg);
       setDraft(toDrafts(j.config as Cfg));
       setErr(null);
@@ -134,34 +134,34 @@ export function AiSettings() {
       }
       const r = await fetch("/api/admin/ai", { method: "PUT", headers: headers(), body: JSON.stringify(patch) });
       const j = await r.json();
-      if (!r.ok) throw new Error(j.error || "保存失败");
+      if (!r.ok) throw new Error(j.error || "Failed to save");
       setCfg(j.config as Cfg);
       setDraft(toDrafts(j.config as Cfg));
-      setMsg("已保存，下一次请求立即生效（无需重启）。");
+      setMsg("Saved. Takes effect on the next request (no restart needed).");
     } catch (e) {
-      setMsg(`保存失败：${(e as Error).message}`);
+      setMsg(`Save failed: ${(e as Error).message}`);
     } finally {
       setBusy(false);
     }
   }
 
-  if (err) return <Card className="p-5 text-sm text-red-600">AI 配置加载失败：{err}</Card>;
-  if (!cfg || !draft) return <Card className="p-5 text-sm text-zinc-400">加载 AI 配置…</Card>;
+  if (err) return <Card className="p-5 text-sm text-red-600">Failed to load AI configuration: {err}</Card>;
+  if (!cfg || !draft) return <Card className="p-5 text-sm text-zinc-400">Loading AI configuration…</Card>;
 
   return (
     <Card className="p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="font-semibold">AI 服务（评分 / 语音 / 转写）</h2>
+          <h2 className="font-semibold">AI services (scoring / speech / transcription)</h2>
           <p className="mt-1 text-xs leading-5 text-zinc-500">
-            保存后立即生效。密钥只存在服务器（{cfg.path}），接口只回传掩码，永远不会发到浏览器。
-            「自动」表示沿用环境变量；显式选择后以这里为准。
+            Changes take effect immediately after saving. Keys are stored on the server only ({cfg.path}); the API returns masked values only and keys are never sent to the browser.
+            &quot;Auto&quot; means the environment variables apply; an explicit choice here takes precedence.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {cfg.fileExists ? <Badge tone="green">已配置</Badge> : <Badge tone="amber">未配置（走环境变量）</Badge>}
+          {cfg.fileExists ? <Badge tone="green">Configured</Badge> : <Badge tone="amber">Not configured (using environment variables)</Badge>}
           <button onClick={save} disabled={busy} className="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">
-            {busy ? "保存中…" : "保存"}
+            {busy ? "Saving…" : "Save"}
           </button>
         </div>
       </div>
@@ -179,7 +179,7 @@ export function AiSettings() {
                 <div className="text-sm font-medium">{meta.label}</div>
                 <label className="flex shrink-0 items-center gap-1.5 text-xs text-zinc-600">
                   <input type="checkbox" checked={d.enabled} onChange={(e) => set(k, { enabled: e.target.checked })} />
-                  启用
+                  Enabled
                 </label>
               </div>
               <p className="mt-1 text-[11px] leading-4 text-zinc-400">{meta.hint}</p>
@@ -209,14 +209,14 @@ export function AiSettings() {
                   type="password"
                   value={d.apiKey}
                   onChange={(e) => set(k, { apiKey: e.target.value })}
-                  placeholder={d.hasKey ? `已保存 ${d.keyHint}（留空不修改）` : "未设置"}
+                  placeholder={d.hasKey ? `Saved ${d.keyHint} (leave blank to keep)` : "Not set"}
                   className="mt-1 w-full rounded-lg border border-zinc-200 px-2 py-1.5 text-sm"
                 />
               </label>
               {d.hasKey && (
                 <label className="mt-1 flex items-center gap-1.5 text-[11px] text-zinc-500">
                   <input type="checkbox" checked={d.clearKey} onChange={(e) => set(k, { clearKey: e.target.checked })} />
-                  清除已保存的 key
+                  Clear the saved key
                 </label>
               )}
             </div>

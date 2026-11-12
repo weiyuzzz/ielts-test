@@ -43,14 +43,18 @@ interface Detail {
   };
 }
 
-const TYPE_LABEL: Record<string, string> = { evergreen: "万年保留题", new: "当季新题", retained: "当季保留题" };
+const TYPE_LABEL: Record<string, string> = { evergreen: "Evergreen", new: "New this season", retained: "Retained" };
+
+/** Bank region values come from the import pipeline (source docs are Chinese); display them in English. */
+const REGION_LABEL: Record<string, string> = { "大陆地区": "Mainland China", "非大陆地区": "Outside mainland China" };
+const regionLabel = (r: string) => REGION_LABEL[r] ?? r;
 
 const AUDIO_LABEL: Record<AudioDecision["status"], { text: string; tone: "green" | "amber" | "red" | "zinc" }> = {
-  ready: { text: "预置音频", tone: "green" },
+  ready: { text: "Preset audio", tone: "green" },
   missing: { text: "TTS", tone: "zinc" },
-  "voice-mismatch": { text: "音色不符", tone: "amber" },
-  unlabelled: { text: "未标注音色", tone: "red" },
-  "invalid-url": { text: "URL 无效", tone: "red" },
+  "voice-mismatch": { text: "Voice mismatch", tone: "amber" },
+  unlabelled: { text: "Unlabelled voice", tone: "red" },
+  "invalid-url": { text: "Invalid URL", tone: "red" },
 };
 
 function pct(n: number, d: number) {
@@ -64,20 +68,20 @@ function QuestionRow({ q }: { q: DetailQuestion }) {
       <div className="flex flex-wrap items-baseline gap-2">
         <span className="flex-1 text-sm text-zinc-700">{q.text}</span>
         <Badge tone={label.tone}>{label.text}</Badge>
-        {q.learning.hasSampleAnswer && <Badge tone="indigo">示范答案</Badge>}
-        {q.learning.hasFollowAudio && <Badge tone={q.followAudio.playable ? "green" : "red"}>跟读音频</Badge>}
+        {q.learning.hasSampleAnswer && <Badge tone="indigo">Sample answer</Badge>}
+        {q.learning.hasFollowAudio && <Badge tone={q.followAudio.playable ? "green" : "red"}>Shadowing audio</Badge>}
       </div>
       {q.audio.status !== "ready" && q.audio.status !== "missing" && q.audio.reason && (
-        <p className="mt-0.5 text-xs text-zinc-400">不能播放预置音频：{q.audio.reason}</p>
+        <p className="mt-0.5 text-xs text-zinc-400">Preset audio cannot play: {q.audio.reason}</p>
       )}
       {(q.audioUrl || q.voiceProfile) && (
         <p className="mt-0.5 break-all text-[11px] text-zinc-400">
-          {q.audioUrl || "（无 URL）"} · 音色 {q.voiceProfile || "未标注"}
+          {q.audioUrl || "(no URL)"} · Voice {q.voiceProfile || "unlabelled"}
         </p>
       )}
       {q.learning.hasSampleAnswer && (
         <p className="mt-0.5 text-[11px] text-zinc-400">
-          素材来源：{q.learning.sourceLabel || "未标注"} · 审核：{q.learning.reviewStatus === "reviewed" ? "已审核" : "未审核"} · 思路 {q.learning.ideaNotes} 条 · 词组 {q.learning.keyPhrases} 组
+          Source: {q.learning.sourceLabel || "Unlabelled"} · Review: {q.learning.reviewStatus === "reviewed" ? "Reviewed" : "Unreviewed"} · {q.learning.ideaNotes} idea notes · {q.learning.keyPhrases} phrase groups
         </p>
       )}
     </li>
@@ -133,8 +137,8 @@ export function AdminView() {
       const r = await fetch("/api/admin/banks", { method: "POST", headers: headers(), body: JSON.stringify({ bank: parsed, activate: activateAfter }) });
       const j = await r.json();
       if (r.ok) {
-        const warn = Array.isArray(j.warnings) && j.warnings.length ? ` · ${j.warnings.length} 条提示（见下）` : "";
-        setMessage(`Imported ${j.season}: ${j.counts.part1} Part 1 / ${j.counts.part2} Part 2 / ${j.counts.part3} Part 3 questions · 学习素材 ${j.learning?.entries ?? 0} 条${warn}`);
+        const warn = Array.isArray(j.warnings) && j.warnings.length ? ` · ${j.warnings.length} warnings (see below)` : "";
+        setMessage(`Imported ${j.season}: ${j.counts.part1} Part 1 / ${j.counts.part2} Part 2 / ${j.counts.part3} Part 3 questions · ${j.learning?.entries ?? 0} learning entries${warn}`);
         setImportText("");
         await load();
         if (j.warnings?.length) setWarnings(j.warnings as string[]);
@@ -161,14 +165,14 @@ export function AdminView() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">题库后台</h1>
-        <p className="mt-1 text-sm text-zinc-500">导入季度题库、切换启用季度、查看题库内容与音频覆盖率。考试严格从当前启用的题库抽取；学习素材只用于练习页，不进入考试。</p>
+        <h1 className="text-2xl font-semibold tracking-tight">Question bank admin</h1>
+        <p className="mt-1 text-sm text-zinc-500">Import seasonal banks, switch the active season, and inspect bank content and audio coverage. Exams draw strictly from the currently active bank; learning material is used on the practice pages only and never enters the exam.</p>
       </div>
 
       {protectedMode && (
         <Card className="p-4">
-          <label className="block text-sm">管理令牌（ADMIN_TOKEN）
-            <input type="password" value={token} onChange={(e) => { setToken(e.target.value); localStorage.setItem("admin-token", e.target.value); }} className="mt-1 w-full max-w-sm rounded-lg border border-zinc-200 px-3 py-2 text-sm" placeholder="输入服务端配置的 ADMIN_TOKEN" />
+          <label className="block text-sm">Admin token (ADMIN_TOKEN)
+            <input type="password" value={token} onChange={(e) => { setToken(e.target.value); localStorage.setItem("admin-token", e.target.value); }} className="mt-1 w-full max-w-sm rounded-lg border border-zinc-200 px-3 py-2 text-sm" placeholder="Enter the ADMIN_TOKEN configured on the server" />
           </label>
         </Card>
       )}
@@ -176,51 +180,51 @@ export function AdminView() {
       <AiSettings />
 
       <Card className="p-5">
-        <h2 className="mb-3 font-semibold">季度题库</h2>
+        <h2 className="mb-3 font-semibold">Seasonal banks</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="text-xs uppercase tracking-wide text-zinc-400">
               <tr>
-                <th className="py-2">季度</th><th>考区</th><th>题目数 (P1/P2/P3)</th>
-                <th>预置考官音频</th><th>状态</th><th className="text-right">操作</th>
+                <th className="py-2">Season</th><th>Region</th><th>Questions (P1/P2/P3)</th>
+                <th>Preset examiner audio</th><th>Status</th><th className="text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {banks.map((b) => (
                 <tr key={b.id} className="border-t border-zinc-100">
                   <td className="py-3 font-medium">{b.season}<div className="text-xs font-normal text-zinc-400">{b.label || b.name}</div></td>
-                  <td>{b.region}</td>
+                  <td>{regionLabel(b.region)}</td>
                   <td className="tabular-nums">{b.counts.part1} / {b.counts.part2} / {b.counts.part3}</td>
                   <td className="tabular-nums">
                     {b.audio.withAudio} / {b.audio.total}
                     <span className="ml-2 text-xs text-zinc-400">{pct(b.audio.withAudio, b.audio.total)}</span>
                   </td>
-                  <td>{b.isActive ? <Badge tone="green">启用中</Badge> : <Badge>未启用</Badge>}</td>
+                  <td>{b.isActive ? <Badge tone="green">Active</Badge> : <Badge>Inactive</Badge>}</td>
                   <td className="text-right">
-                    <button onClick={() => void view(b.id)} className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs">查看内容</button>
-                    {!b.isActive && <button disabled={busy} onClick={() => void activate(b.id)} className="ml-2 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs text-white disabled:opacity-50">设为启用</button>}
+                    <button onClick={() => void view(b.id)} className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs">View content</button>
+                    {!b.isActive && <button disabled={busy} onClick={() => void activate(b.id)} className="ml-2 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs text-white disabled:opacity-50">Activate</button>}
                   </td>
                 </tr>
               ))}
-              {!banks.length && <tr><td colSpan={6} className="py-6 text-center text-zinc-400">暂无题库，先导入一个季度题库。</td></tr>}
+              {!banks.length && <tr><td colSpan={6} className="py-6 text-center text-zinc-400">No banks yet — import a seasonal bank first.</td></tr>}
             </tbody>
           </table>
         </div>
-        {banks[0]?.source && <p className="mt-3 text-xs text-zinc-400">来源：{banks[0].source}</p>}
+        {banks[0]?.source && <p className="mt-3 text-xs text-zinc-400">Source: {banks[0].source}</p>}
       </Card>
 
       <Card className="p-5">
-        <h2 className="mb-3 font-semibold">导入季度题库</h2>
+        <h2 className="mb-3 font-semibold">Import a seasonal bank</h2>
         <p className="mb-3 text-xs leading-5 text-zinc-500">
-          粘贴或选择符合格式的 JSON（season / region / topics）。同一 season 重复导入会覆盖旧数据；导入后可立即设为启用。
-          题目可带 <code className="rounded bg-zinc-100 px-1">questionAudioUrl</code> + <code className="rounded bg-zinc-100 px-1">questionVoiceProfile</code>（外部音频必须 HTTPS，且必须标注已知音色），
-          以及 <code className="rounded bg-zinc-100 px-1">learning</code> 学习素材。
+          Paste or pick a JSON file in the expected shape (season / region / topics). Re-importing the same season overwrites the old data; the bank can be activated right after import.
+          Questions may carry <code className="rounded bg-zinc-100 px-1">questionAudioUrl</code> + <code className="rounded bg-zinc-100 px-1">questionVoiceProfile</code> (external audio must be HTTPS and must declare a known voice),
+          plus <code className="rounded bg-zinc-100 px-1">learning</code> study material.
         </p>
         <input type="file" accept="application/json,.json" onChange={(e) => void onFile(e.target.files?.[0] ?? null)} className="mb-3 block text-xs" />
-        <textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder='{"season":"2027-01-04","region":"大陆地区","topics":[...]}' className="h-32 w-full rounded-lg border border-zinc-200 p-3 font-mono text-xs" />
+        <textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder='{"season":"2027-01-04","region":"Mainland China","topics":[...]}' className="h-32 w-full rounded-lg border border-zinc-200 p-3 font-mono text-xs" />
         <div className="mt-3 flex gap-2">
-          <button disabled={busy} onClick={() => void doImport(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm disabled:opacity-50">仅导入</button>
-          <button disabled={busy} onClick={() => void doImport(true)} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-50">导入并设为启用</button>
+          <button disabled={busy} onClick={() => void doImport(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm disabled:opacity-50">Import only</button>
+          <button disabled={busy} onClick={() => void doImport(true)} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-50">Import and activate</button>
         </div>
         {message && <p className="mt-3 rounded-lg bg-zinc-50 p-3 text-sm text-zinc-700">{message}</p>}
         {!!warnings.length && (
@@ -234,24 +238,24 @@ export function AdminView() {
         <Card className="p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="font-semibold">题库内容 · {detail.set.season}</h2>
-              <p className="text-xs text-zinc-500">{detail.set.region} · {detail.topics.length} 个主题 · 参照音色 {detail.examinerProfile.name}</p>
+              <h2 className="font-semibold">Bank content · {detail.set.season}</h2>
+              <p className="text-xs text-zinc-500">{regionLabel(detail.set.region)} · {detail.topics.length} topics · reference voice {detail.examinerProfile.name}</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <select value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)} className="rounded-lg border border-zinc-200 px-2 py-1.5 text-xs">
-                <option value="all">全部 Part</option><option value="1">Part 1</option><option value="2">Part 2</option><option value="3">Part 3</option>
+                <option value="all">All Parts</option><option value="1">Part 1</option><option value="2">Part 2</option><option value="3">Part 3</option>
               </select>
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索题目" className="rounded-lg border border-zinc-200 px-2 py-1.5 text-xs" />
-              <button onClick={() => setDetail(null)} className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs">收起</button>
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search questions" className="rounded-lg border border-zinc-200 px-2 py-1.5 text-xs" />
+              <button onClick={() => setDetail(null)} className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs">Collapse</button>
             </div>
           </div>
 
           <div className="mb-4 grid gap-2 sm:grid-cols-4">
             {[
-              { label: "总题数", value: detail.audio.total, hint: "当前题库全部题目" },
-              { label: "可用预置音频", value: detail.audio.ready, hint: `覆盖率 ${detail.audio.coveragePercent}%` },
-              { label: "音色不匹配", value: detail.audio.voiceMismatch, hint: detail.audio.relabelable ? `${detail.audio.relabelable} 条仅需改标签` : "录音与考试音色不同" },
-              { label: "无音频 / 无效", value: detail.audio.missing + detail.audio.invalidUrl + detail.audio.unlabelled, hint: "自动使用 TTS 合成" },
+              { label: "Total questions", value: detail.audio.total, hint: "All questions in this bank" },
+              { label: "Usable preset audio", value: detail.audio.ready, hint: `Coverage ${detail.audio.coveragePercent}%` },
+              { label: "Voice mismatch", value: detail.audio.voiceMismatch, hint: detail.audio.relabelable ? `${detail.audio.relabelable} fixable by relabelling` : "Recorded with a different voice than the exam" },
+              { label: "No audio / invalid", value: detail.audio.missing + detail.audio.invalidUrl + detail.audio.unlabelled, hint: "Falls back to TTS synthesis" },
             ].map((s) => (
               <div key={s.label} className="rounded-xl border border-zinc-100 p-3">
                 <div className="text-xs text-zinc-400">{s.label}</div>
@@ -263,10 +267,10 @@ export function AdminView() {
 
           <div className="mb-4 rounded-xl border border-zinc-100 p-3">
             <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-              <span className="font-medium text-zinc-700">学习素材覆盖率</span>
-              <span>示范答案 {detail.learning.sampleAnswerCoverage.withSampleAnswer} / {detail.learning.sampleAnswerCoverage.total}（{detail.learning.sampleAnswerCoverage.sampleAnswerPercent}%）</span>
-              <span>跟读音频 {detail.learning.sampleAnswerCoverage.withFollowAudio}</span>
-              <span>已人工审核 {detail.learning.sampleAnswerCoverage.reviewed}</span>
+              <span className="font-medium text-zinc-700">Learning material coverage</span>
+              <span>Sample answers {detail.learning.sampleAnswerCoverage.withSampleAnswer} / {detail.learning.sampleAnswerCoverage.total} ({detail.learning.sampleAnswerCoverage.sampleAnswerPercent}%)</span>
+              <span>Shadowing audio {detail.learning.sampleAnswerCoverage.withFollowAudio}</span>
+              <span>Human-reviewed {detail.learning.sampleAnswerCoverage.reviewed}</span>
             </div>
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
               <div className="h-full rounded-full bg-zinc-900" style={{ width: `${detail.learning.sampleAnswerCoverage.sampleAnswerPercent}%` }} />
@@ -286,12 +290,12 @@ export function AdminView() {
                   {t.nameZh && <span className="text-xs text-zinc-400">{t.nameZh}</span>}
                   <Badge tone={t.type === "evergreen" ? "amber" : t.type === "new" ? "indigo" : "zinc"}>{TYPE_LABEL[t.type] || t.type}</Badge>
                 </div>
-                {!!t.part1.length && <div className="mb-2"><div className="text-xs font-medium text-zinc-400">Part 1 · {t.part1.length} 题</div><ul className="mt-1 divide-y divide-zinc-50">{t.part1.map((q) => <QuestionRow key={q.id} q={q} />)}</ul></div>}
-                {!!t.part2.length && <div className="mb-2"><div className="text-xs font-medium text-zinc-400">Part 2 · 题卡</div><ul className="mt-1 divide-y divide-zinc-50">{t.part2.map((q) => <QuestionRow key={q.id} q={q} />)}</ul></div>}
-                {!!t.part3.length && <div><div className="text-xs font-medium text-zinc-400">Part 3 · {t.part3.length} 题</div><ul className="mt-1 divide-y divide-zinc-50">{t.part3.map((q) => <QuestionRow key={q.id} q={q} />)}</ul></div>}
+                {!!t.part1.length && <div className="mb-2"><div className="text-xs font-medium text-zinc-400">Part 1 · {t.part1.length} questions</div><ul className="mt-1 divide-y divide-zinc-50">{t.part1.map((q) => <QuestionRow key={q.id} q={q} />)}</ul></div>}
+                {!!t.part2.length && <div className="mb-2"><div className="text-xs font-medium text-zinc-400">Part 2 · cue card</div><ul className="mt-1 divide-y divide-zinc-50">{t.part2.map((q) => <QuestionRow key={q.id} q={q} />)}</ul></div>}
+                {!!t.part3.length && <div><div className="text-xs font-medium text-zinc-400">Part 3 · {t.part3.length} questions</div><ul className="mt-1 divide-y divide-zinc-50">{t.part3.map((q) => <QuestionRow key={q.id} q={q} />)}</ul></div>}
               </div>
             ))}
-            {!topics.length && <p className="text-sm text-zinc-400">没有匹配的题目。</p>}
+            {!topics.length && <p className="text-sm text-zinc-400">No matching questions.</p>}
           </div>
         </Card>
       )}

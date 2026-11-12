@@ -14,12 +14,12 @@ export interface LibraryItem extends LearningQuestion {
   follow: { playable: boolean; url?: string; reason?: string };
 }
 
-/** 考试人数 — shown only when the source document prints a figure. */
+/** Exam count — shown only when the source document prints a figure. */
 function Examinees({ value }: { value: number | null | undefined }) {
   if (typeof value !== "number") return null;
   return (
-    <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] tabular-nums text-zinc-500" title="腾讯文档统计的考试人数（考频参考，不是评分依据）">
-      {value.toLocaleString("zh-CN")} 人考过
+    <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[11px] tabular-nums text-zinc-500" title="Exam count from the Tencent source doc (frequency reference only, not used for scoring)">
+      Taken by {value.toLocaleString("zh-CN")} candidates
     </span>
   );
 }
@@ -66,7 +66,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
       }}
       className="shrink-0 rounded-md border border-zinc-200 px-1.5 py-0.5 text-[11px] text-zinc-500 hover:bg-zinc-50"
     >
-      {done ? "已复制" : label}
+      {done ? "Copied" : label}
     </button>
   );
 }
@@ -76,11 +76,11 @@ function KeyPhraseCard({ k }: { k: KeyPhrase }) {
     <div className="rounded-xl border border-zinc-100 bg-zinc-50/60 p-3">
       <div className="flex items-start justify-between gap-2">
         <span className="text-sm font-medium text-zinc-900">{k.phrase}</span>
-        <CopyButton text={k.phrase} label="复制" />
+        <CopyButton text={k.phrase} label="Copy" />
       </div>
       {k.zh && <div className="mt-1 text-xs text-zinc-500">{k.zh}</div>}
       {k.example && <div className="mt-2 text-xs italic text-zinc-600">“{k.example}”</div>}
-      {k.usage && <div className="mt-1.5 text-[11px] leading-5 text-zinc-400">用法：{k.usage}</div>}
+      {k.usage && <div className="mt-1.5 text-[11px] leading-5 text-zinc-400">Usage: {k.usage}</div>}
     </div>
   );
 }
@@ -120,7 +120,7 @@ export function LearningBrowser({
     setLoading((m) => ({ ...m, [key]: true }));
     try {
       const res = await fetch(`/api/learning/questions?topicKey=${encodeURIComponent(it.topicKey)}&part=${it.part}`);
-      if (!res.ok) throw new Error("无法加载学习素材");
+      if (!res.ok) throw new Error("Could not load study material");
       const j = (await res.json()) as { questions: Array<{ id: number; learning: QuestionLearningContent }> };
       setLoaded((m) => {
         const next = { ...m };
@@ -182,33 +182,33 @@ export function LearningBrowser({
               onClick={() => { setPart(p); setLimit(40); }}
               className={`rounded-lg px-3 py-1.5 text-xs font-medium ${part === p ? "bg-zinc-900 text-white" : "border border-zinc-200 text-zinc-600 hover:bg-zinc-50"}`}
             >
-              {p === "all" ? "全部" : PART_LABEL[p]}
+              {p === "all" ? "All" : PART_LABEL[p]}
             </button>
           ))}
           <input
             value={query}
             onChange={(e) => { setQuery(e.target.value); setLimit(40); }}
-            placeholder="搜索主题或题目关键词"
+            placeholder="Search topics or questions"
             className="ml-auto w-full max-w-xs rounded-lg border border-zinc-200 px-3 py-1.5 text-xs"
           />
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-zinc-400">
-          <span>{season ? `${season} · ${region ?? ""}` : "尚未导入题库"}</span>
-          <span>{visible.length} / {items.length} 题</span>
-          <span>示范答案覆盖 {coverage.withSampleAnswer} 题（{coverage.sampleAnswerPercent}%）</span>
-          <span>已人工审核 {coverage.reviewed} 题</span>
+          <span>{season ? `${season} · ${region === "大陆地区" ? "Mainland China" : region === "非大陆地区" ? "Outside mainland China" : region ?? ""}` : "No question bank imported"}</span>
+          <span>{visible.length} / {items.length} questions</span>
+          <span>Sample answers: {coverage.withSampleAnswer} questions ({coverage.sampleAnswerPercent}%)</span>
+          <span>{coverage.reviewed} reviewed</span>
           <button
             type="button"
             onClick={() => setShowZh((v) => !v)}
             className={`rounded-md border px-2 py-0.5 ${showZh ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 text-zinc-500"}`}
           >
-            {showZh ? "中文对照：开" : "中文对照：关"}
+            {showZh ? "Chinese translation: On" : "Chinese translation: Off"}
           </button>
-          {!serverTts && <span className="text-amber-600">当前无服务端语音引擎，试听将使用浏览器语音</span>}
-          {engine === "browser" && <span className="text-amber-600">本次试听使用浏览器语音</span>}
+          {!serverTts && <span className="text-amber-600">No server TTS engine — playback will use the browser voice</span>}
+          {engine === "browser" && <span className="text-amber-600">This playback used the browser voice</span>}
         </div>
         <p className="mt-2 text-[11px] leading-5 text-zinc-400">
-          示范答案与学习素材仅供练习，不是考试内容，也不是官方 Band 8/9 范文；考试只朗读题目本身。
+          Sample answers and study material are for practice only — not exam content and not official Band 8/9 model essays; the exam reads the question itself only.
         </p>
       </Card>
 
@@ -219,7 +219,7 @@ export function LearningBrowser({
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold">{t.name}</span>
             {t.nameZh && <span className="text-xs text-zinc-400">{t.nameZh}</span>}
-            <Badge>{t.items.length} 题</Badge>
+            <Badge>{t.items.length} questions</Badge>
           </div>
           <ul className="divide-y divide-zinc-50">
             {t.items.map((it) => {
@@ -248,8 +248,8 @@ export function LearningBrowser({
                     </span>
                     <Examinees value={it.examinees} />
                     <span className="shrink-0 text-xs text-zinc-400">
-                      {it.summary.hasAnswer ? (sa?.reviewStatus === "reviewed" ? "已审核" : "草稿") : "仅题目"}
-                      <span className="ml-2">{open ? "收起" : "展开"}</span>
+                      {it.summary.hasAnswer ? (sa?.reviewStatus === "reviewed" ? "Reviewed" : "Draft") : "Question only"}
+                      <span className="ml-2">{open ? "Collapse" : "Expand"}</span>
                     </span>
                   </button>
 
@@ -265,16 +265,16 @@ export function LearningBrowser({
                       )}
 
                       {pending && !sa ? (
-                        <p className="text-xs text-zinc-400">正在加载学习素材…</p>
+                        <p className="text-xs text-zinc-400">Loading study material…</p>
                       ) : sa ? (
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="text-xs font-medium text-zinc-500">Sample answer</span>
                             <Badge tone={sa.reviewStatus === "reviewed" ? "green" : "amber"}>
-                              {sa.reviewStatus === "reviewed" ? "已人工审核" : "未审核草稿"}
+                              {sa.reviewStatus === "reviewed" ? "Reviewed" : "Unreviewed draft"}
                             </Badge>
                             <span className="text-[11px] text-zinc-400">{sa.source.label}</span>
-                            {sa.source.url && <a href={sa.source.url} target="_blank" rel="noreferrer" className="text-[11px] text-indigo-600 underline">来源</a>}
+                            {sa.source.url && <a href={sa.source.url} target="_blank" rel="noreferrer" className="text-[11px] text-indigo-600 underline">Source</a>}
                           </div>
                           {sa.variantLabel && (
                             <div className="mt-1 text-[11px] text-zinc-400">{sa.variantLabel}</div>
@@ -287,7 +287,7 @@ export function LearningBrowser({
                                   <button
                                     onClick={() => void play(key, () => speakStudyText(p, profile, serverTts))}
                                     className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full border border-zinc-200 text-[11px] text-zinc-600 hover:bg-zinc-50"
-                                    aria-label="播放这一段"
+                                    aria-label="Play this paragraph"
                                   >
                                     {playingKey === key ? "■" : "▶"}
                                   </button>
@@ -297,25 +297,25 @@ export function LearningBrowser({
                                       <span className="mt-1 block text-xs leading-5 text-zinc-400">{sa.paragraphsZh[i]}</span>
                                     )}
                                   </p>
-                                  <CopyButton text={p} label="复制" />
+                                  <CopyButton text={p} label="Copy" />
                                 </div>
                               );
                             })}
                           </div>
                           {showZh && !alignedZh && !!sa.paragraphsZh?.length && (
                             <div className="mt-2 rounded-lg bg-white p-3 text-xs leading-6 text-zinc-500">
-                              <div className="mb-1 text-[11px] text-zinc-400">中文翻译</div>
+                              <div className="mb-1 text-[11px] text-zinc-400">Chinese translation</div>
                               {sa.paragraphsZh.join(" ")}
                             </div>
                           )}
                         </div>
                       ) : (
-                        <p className="text-xs text-zinc-400">这道题还没有示范答案。</p>
+                        <p className="text-xs text-zinc-400">No sample answer for this question yet.</p>
                       )}
 
                       {!!ideas.length && (
                         <div>
-                          <div className="text-xs font-medium text-zinc-500">思路速记</div>
+                          <div className="text-xs font-medium text-zinc-500">Idea breakdown</div>
                           <ol className="mt-2 space-y-2">
                             {ideas.map((n, i) => (
                               <li key={i} className="rounded-lg bg-white p-2.5">
@@ -342,7 +342,7 @@ export function LearningBrowser({
 
                       {!!phrases.length && (
                         <div>
-                          <div className="text-xs font-medium text-zinc-500">关键词组</div>
+                          <div className="text-xs font-medium text-zinc-500">Key phrases</div>
                           <div className="mt-2 grid gap-2 sm:grid-cols-2">
                             {phrases.map((k, i) => <KeyPhraseCard key={i} k={k} />)}
                           </div>
@@ -351,7 +351,7 @@ export function LearningBrowser({
 
                       {!!vocabGroups.length && (
                         <div>
-                          <div className="text-xs font-medium text-zinc-500">语料扩展</div>
+                          <div className="text-xs font-medium text-zinc-500">Vocabulary</div>
                           <div className="mt-2 space-y-2">
                             {vocabGroups.map((g, i) => <VocabGroupCard key={i} g={g} />)}
                           </div>
@@ -360,8 +360,8 @@ export function LearningBrowser({
 
                       <div className="rounded-xl border border-zinc-100 bg-white p-3">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-xs font-medium text-zinc-500">跟读音频（学习素材，非考官音频）</span>
-                          {it.follow.playable ? <Badge tone="green">已有录音</Badge> : <Badge tone="zinc">暂无录音</Badge>}
+                          <span className="text-xs font-medium text-zinc-500">Shadowing audio (study material, not examiner audio)</span>
+                          {it.follow.playable ? <Badge tone="green">Recording available</Badge> : <Badge tone="zinc">No recording yet</Badge>}
                         </div>
                         {it.follow.playable && it.follow.url ? (
                           <div className="mt-2 flex items-center gap-2">
@@ -369,21 +369,21 @@ export function LearningBrowser({
                               onClick={() => void play(`${it.id}:follow`, () => playStoredAudio(it.follow.url!))}
                               className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs hover:bg-zinc-50"
                             >
-                              {playingKey === `${it.id}:follow` ? "停止" : "播放示范录音"}
+                              {playingKey === `${it.id}:follow` ? "Stop" : "Play sample recording"}
                             </button>
                             <span className="break-all text-[11px] text-zinc-400">{it.follow.url}</span>
                           </div>
                         ) : (
                           <div className="mt-2 flex flex-wrap items-center gap-2">
                             <span className="text-[11px] text-zinc-400">
-                              {it.follow.reason ?? "这份题库没有授权录音"}，可用语音合成试听。
+                              {it.follow.reason ?? "No licensed recording in this bank"} — preview with speech synthesis instead.
                             </span>
                             {sa && (
                               <button
                                 onClick={() => void play(`${it.id}:tts`, () => speakStudyText(sa.paragraphs[0], profile, serverTts))}
                                 className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs hover:bg-zinc-50"
                               >
-                                {playingKey === `${it.id}:tts` ? "停止" : "TTS 试听首段"}
+                                {playingKey === `${it.id}:tts` ? "Stop" : "Preview first paragraph (TTS)"}
                               </button>
                             )}
                           </div>
@@ -395,9 +395,9 @@ export function LearningBrowser({
                           href={`/speaking/practice?topicKey=${encodeURIComponent(it.topicKey)}&part=${it.part}&q=${it.id}`}
                           className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700"
                         >
-                          进入 Shadowing 跟读
+                          Open shadowing practice
                         </Link>
-                        <span className="text-[11px] text-zinc-400">录音只保存在当前页面，不会进入考试成绩。</span>
+                        <span className="text-[11px] text-zinc-400">Recordings stay on this page only and never enter your exam score.</span>
                       </div>
                     </div>
                   )}
@@ -408,11 +408,11 @@ export function LearningBrowser({
         </Card>
       ))}
 
-      {!topics.length && <p className="rounded-xl bg-white p-6 text-center text-sm text-zinc-400">没有匹配的题目。</p>}
+      {!topics.length && <p className="rounded-xl bg-white p-6 text-center text-sm text-zinc-400">No matching questions.</p>}
 
       {visible.length > shown.length && (
         <button onClick={() => setLimit((n) => n + 40)} className="w-full rounded-xl border border-zinc-200 bg-white py-2.5 text-sm text-zinc-600 hover:bg-zinc-50">
-          显示更多（还有 {visible.length - shown.length} 题）
+          Show more ({visible.length - shown.length} more)
         </button>
       )}
     </div>

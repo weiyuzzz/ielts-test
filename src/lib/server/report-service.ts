@@ -68,7 +68,7 @@ export async function runScoring(assessmentId: string): Promise<void> {
         status: "unscored", stage: "done", scorer: null, overallBand: null, isComplete: false,
         promptVersion: null, llmProvider: null, llmModel: null,
         metrics: metrics as unknown as Record<string, unknown>,
-        notes: [...notes, "未接入 AI 评分（未配置 LLM_PROVIDER / OPENAI_API_KEY / ANTHROPIC_API_KEY）。本次只完成模考流程，不生成任何分数。"],
+        notes: [...notes, "AI scoring is not configured (no LLM_PROVIDER / OPENAI_API_KEY / ANTHROPIC_API_KEY). The mock flow completed without any scores being generated."],
         asrProvider: asrProviders.join(",") || null, completedAt: new Date(),
       }).where(eq(assessments.id, a.id));
       return;

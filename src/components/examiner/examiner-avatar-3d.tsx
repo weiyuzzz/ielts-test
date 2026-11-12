@@ -387,7 +387,7 @@ export function ExaminerAvatar3D(props: Props) {
       disposed = true;
       cleanup?.();
     };
-  }, [props.gender]);
+  }, [props.gender, props.modelId]);
 
   if (failed) {
     return <ExaminerAvatar speaking={props.speaking} listening={props.listening} preparing={props.preparing} name={props.name} />;

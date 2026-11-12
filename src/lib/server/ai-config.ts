@@ -194,7 +194,7 @@ export function publicAiConfig(): PublicAiConfig {
   const file = configPath();
   const warnings: string[] = [];
   if (!existsSync(file)) {
-    warnings.push("尚未保存过配置：当前完全由环境变量决定（LLM_PROVIDER / TTS_PROVIDER / ASR_PROVIDER ...）。");
+    warnings.push("No configuration saved yet — everything is currently driven by environment variables (LLM_PROVIDER / TTS_PROVIDER / ASR_PROVIDER ...).");
   }
   const view = (p: ProviderConfig): PublicProviderConfig => ({
     enabled: p.enabled,

@@ -839,8 +839,8 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
               setPhase("loading");
               run();
             }}
-            title="麦克风检查（考试前）"
-            hint="正式考试就用这条录音通道。对着麦克风说一句话，确认音量条跳动、并试录回放能听到自己的声音，再开始考试。"
+            title="Microphone check (before the exam)"
+            hint="This is the exact recording path used in the exam. Say a sentence, watch the meter move, and play the recording back before you start."
           />
         )}
 

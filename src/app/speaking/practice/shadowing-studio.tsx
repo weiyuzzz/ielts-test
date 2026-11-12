@@ -170,7 +170,7 @@ export function ShadowingStudio({
     try {
       const rec = await session.stopAnswer();
       const blob = rec.blob ?? rec.wav;
-      if (!blob) { setError("没有捕获到音频，请检查麦克风后重试。"); return; }
+      if (!blob) { setError("No audio was captured. Check your microphone and try again."); return; }
       if (takeUrlRef.current) URL.revokeObjectURL(takeUrlRef.current);
       takeUrlRef.current = URL.createObjectURL(blob);
       wavRef.current = rec.wav ?? null;
@@ -191,7 +191,7 @@ export function ShadowingStudio({
 
   const transcribe = useCallback(async () => {
     const wav = wavRef.current;
-    if (!wav) { setError("这段录音没有可用的 WAV 数据，无法转写（浏览器不支持时只能回放）。"); return; }
+    if (!wav) { setError("This recording has no WAV data available, so it cannot be transcribed (only playback works when the browser does not support it)."); return; }
     setError(null);
     setState((s) => reduceShadowing(s, { type: "transcribe" }));
     const form = new FormData();
@@ -206,7 +206,7 @@ export function ShadowingStudio({
       }
       if (json.status === "ok") setState((s) => reduceShadowing(s, { type: "transcribed", text: json.text, provider: json.provider }));
       else if (json.status === "unavailable") setState((s) => reduceShadowing(s, { type: "asr-unavailable", reason: json.reason }));
-      else setState((s) => reduceShadowing(s, { type: "asr-failed", error: json.error || "转写失败" }));
+      else setState((s) => reduceShadowing(s, { type: "asr-failed", error: json.error || "Transcription failed" }));
     } catch (e) {
       setState((s) => reduceShadowing(s, { type: "asr-failed", error: (e as Error).message }));
     }
@@ -226,7 +226,7 @@ export function ShadowingStudio({
       <Card className="p-4">
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-xs text-zinc-500">
-            主题
+            Topic
             <select
               value={topicKey}
               onChange={(e) => { setTopicKey(e.target.value); setPart(0); }}
@@ -234,7 +234,7 @@ export function ShadowingStudio({
             >
               {topics.map((t) => (
                 <option key={t.topicKey} value={t.topicKey}>
-                  {t.topic}{t.topicZh ? ` · ${t.topicZh}` : ""}（{t.counts.part1 + t.counts.part2 + t.counts.part3}）
+                  {t.topic}{t.topicZh ? ` · ${t.topicZh}` : ""} ({t.counts.part1 + t.counts.part2 + t.counts.part3})
                 </option>
               ))}
             </select>
@@ -246,15 +246,15 @@ export function ShadowingStudio({
                 onClick={() => setPart(p)}
                 className={`rounded-lg px-2.5 py-1.5 text-xs ${part === p ? "bg-zinc-900 text-white" : "border border-zinc-200 text-zinc-600"}`}
               >
-                {p === 0 ? "全部" : PART_LABEL[p]}
+                {p === 0 ? "All" : PART_LABEL[p]}
               </button>
             ))}
           </div>
           <div className="ml-auto flex flex-wrap items-center gap-2 text-[11px] text-zinc-400">
-            <span>{season ?? "无题库"}</span>
-            {activeTopic && <span>示范答案 {activeTopic.withSampleAnswer} 题</span>}
-            {asrAvailable === false && <span className="text-amber-600">无服务端 ASR：可录音回放，不能转写</span>}
-            {asrAvailable && <span className="text-emerald-600">ASR 可用</span>}
+            <span>{season ?? "No question bank"}</span>
+            {activeTopic && <span>{activeTopic.withSampleAnswer} sample answers</span>}
+            {asrAvailable === false && <span className="text-amber-600">No server ASR: recording and playback work, transcription does not</span>}
+            {asrAvailable && <span className="text-emerald-600">ASR available</span>}
           </div>
         </div>
       </Card>
@@ -263,8 +263,8 @@ export function ShadowingStudio({
 
       <div className="grid gap-4 lg:grid-cols-[300px,1fr]">
         <Card className="p-3">
-          <div className="mb-2 text-xs font-medium text-zinc-500">选一道题（{questions.length}）</div>
-          {loading && <p className="p-2 text-xs text-zinc-400">加载中…</p>}
+          <div className="mb-2 text-xs font-medium text-zinc-500">Pick a question ({questions.length})</div>
+          {loading && <p className="p-2 text-xs text-zinc-400">Loading…</p>}
           <ul className="max-h-[520px] space-y-1 overflow-y-auto">
             {questions.map((q) => (
               <li key={q.id}>
@@ -274,17 +274,17 @@ export function ShadowingStudio({
                 >
                   <span className="mr-1 opacity-60">{PART_LABEL[q.part]}</span>
                   {q.text}
-                  {q.learning.sampleAnswer && <span className="ml-1 opacity-60">· 示范</span>}
+                  {q.learning.sampleAnswer && <span className="ml-1 opacity-60">· sample</span>}
                 </button>
               </li>
             ))}
-            {!questions.length && !loading && <li className="p-2 text-xs text-zinc-400">这个主题下没有题目。</li>}
+            {!questions.length && !loading && <li className="p-2 text-xs text-zinc-400">No questions under this topic.</li>}
           </ul>
         </Card>
 
         <div className="space-y-4">
           {!current ? (
-            <Card className="p-6 text-sm text-zinc-400">选择左侧任意一道题开始练习。</Card>
+            <Card className="p-6 text-sm text-zinc-400">Select any question on the left to start practising.</Card>
           ) : (
             <>
               <Card className="p-5">
@@ -293,7 +293,7 @@ export function ShadowingStudio({
                     <div className="flex items-center gap-2">
                       <Badge tone={current.part === 2 ? "indigo" : "zinc"}>{PART_LABEL[current.part]}</Badge>
                       <span className="text-xs text-zinc-400">{current.topic}</span>
-                      {done && <Badge tone="green">已标记完成</Badge>}
+                      {done && <Badge tone="green">Marked as done</Badge>}
                     </div>
                     <h2 className="mt-2 text-lg font-semibold leading-7">{current.text}</h2>
                     {!!current.cuePoints.length && (
@@ -302,15 +302,15 @@ export function ShadowingStudio({
                       </ul>
                     )}
                   </div>
-                  <Link href={`/speaking/questions`} className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs">返回题库</Link>
+                  <Link href={`/speaking/questions`} className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs">Back to question bank</Link>
                 </div>
 
                 {sample ? (
                   <div className="mt-4">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-medium text-zinc-500">示范答案</span>
+                      <span className="text-xs font-medium text-zinc-500">Sample answer</span>
                       <Badge tone={sample.reviewStatus === "reviewed" ? "green" : "amber"}>
-                        {sample.reviewStatus === "reviewed" ? "已人工审核" : "未审核草稿"}
+                        {sample.reviewStatus === "reviewed" ? "Reviewed" : "Unreviewed draft"}
                       </Badge>
                       <span className="text-[11px] text-zinc-400">{sample.source.label}</span>
                     </div>
@@ -326,13 +326,13 @@ export function ShadowingStudio({
                       ))}
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-zinc-400">
-                      <span>{sentence >= 0 ? `逐句模式：第 ${sentence + 1} 句` : "整段模式"}</span>
-                      {sentence >= 0 && <button onClick={() => setSentence(-1)} className="underline">切回整段</button>}
+                      <span>{sentence >= 0 ? `Sentence mode: sentence ${sentence + 1}` : "Full passage mode"}</span>
+                      {sentence >= 0 && <button onClick={() => setSentence(-1)} className="underline">Back to full passage</button>}
                     </div>
                   </div>
                 ) : (
                   <p className="mt-4 rounded-xl bg-zinc-50 p-3 text-xs text-zinc-500">
-                    这道题没有示范答案，可以先自己说一遍，再用转写结果复盘表达与流畅度；没有参考文本时不做差异对比。
+                    No sample answer for this question — speak it yourself first, then review your wording and fluency from the transcript; without a reference text no diff is shown.
                   </p>
                 )}
 
@@ -343,22 +343,22 @@ export function ShadowingStudio({
                       : speakStudyText(reference || current.text, profile, serverTts)))}
                     className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs hover:bg-zinc-50"
                   >
-                    {playingKey === "follow" ? "停止原音" : "播放原音"}
+                    {playingKey === "follow" ? "Stop original audio" : "Play original audio"}
                   </button>
                   <button
                     disabled={!state.take}
                     onClick={() => void play("take", () => playStoredAudio(state.take!.objectUrl))}
                     className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-40"
                   >
-                    {playingKey === "take" ? "停止回放" : "播放我的录音"}
+                    {playingKey === "take" ? "Stop playback" : "Play my recording"}
                   </button>
                   {!recording ? (
                     <button onClick={() => void startRecording()} className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700">
-                      {state.take ? "重新录制" : "开始录音"}
+                      {state.take ? "Record again" : "Start recording"}
                     </button>
                   ) : (
                     <button onClick={() => void stopRecording()} className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-500">
-                      停止录音 {fmt(elapsed)}
+                      Stop recording {fmt(elapsed)}
                     </button>
                   )}
                   <button
@@ -366,18 +366,18 @@ export function ShadowingStudio({
                     onClick={() => void transcribe()}
                     className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-40"
                   >
-                    {state.transcript.status === "pending" ? "转写中…" : "转写对比"}
+                    {state.transcript.status === "pending" ? "Transcribing…" : "Transcribe & compare"}
                   </button>
                   <button
                     disabled={!state.take || done}
                     onClick={markDone}
                     className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-40"
                   >
-                    {done ? "已完成" : "标记完成"}
+                    {done ? "Done" : "Mark as done"}
                   </button>
-                  {engine === "browser" && <span className="text-[11px] text-amber-600">原音使用浏览器语音</span>}
+                  {engine === "browser" && <span className="text-[11px] text-amber-600">Original audio uses the browser voice</span>}
                   <span className="text-[11px] text-zinc-400">
-                    {current.followAudio.playable ? "原音=题库录音" : "原音=语音合成（无授权录音）"}
+                    {current.followAudio.playable ? "Original audio = bank recording" : "Original audio = speech synthesis (no licensed recording)"}
                   </span>
                 </div>
 
@@ -389,18 +389,18 @@ export function ShadowingStudio({
                   />
                 </div>
                 <p className="mt-1 text-[11px] text-zinc-400">
-                  录音只存在当前页面，不上传、不写入考试成绩；离开页面即释放麦克风。
+                  Recordings stay on this page only — nothing is uploaded and nothing enters your exam score; the microphone is released when you leave.
                 </p>
               </Card>
 
               {(state.transcript.status !== "idle" || state.take) && (
                 <Card className="p-5">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-sm font-semibold">转写与对比</h3>
+                    <h3 className="text-sm font-semibold">Transcript & comparison</h3>
                     {state.take && <Badge>{fmt(state.take.durationMs)}</Badge>}
                     {state.transcript.status === "ok" && <Badge tone="green">{state.transcript.provider ?? "ASR"}</Badge>}
-                    {state.transcript.status === "unavailable" && <Badge tone="amber">无法转写</Badge>}
-                    {state.transcript.status === "failed" && <Badge tone="red">转写失败</Badge>}
+                    {state.transcript.status === "unavailable" && <Badge tone="amber">Transcription unavailable</Badge>}
+                    {state.transcript.status === "failed" && <Badge tone="red">Transcription failed</Badge>}
                   </div>
 
                   {state.transcript.status === "unavailable" && (
@@ -409,21 +409,21 @@ export function ShadowingStudio({
                   {state.transcript.status === "failed" && (
                     <p className="mt-2 rounded-lg bg-red-50 p-3 text-xs leading-5 text-red-700">{state.transcript.reason}</p>
                   )}
-                  {state.transcript.status === "pending" && <p className="mt-2 text-xs text-zinc-400">正在识别录音…</p>}
+                  {state.transcript.status === "pending" && <p className="mt-2 text-xs text-zinc-400">Transcribing your recording…</p>}
 
                   {state.transcript.status === "ok" && diff && stats && (
                     <>
                       <div className="mt-3 grid gap-2 sm:grid-cols-3">
                         <div className="rounded-xl border border-zinc-100 p-3">
-                          <div className="text-[11px] text-zinc-400">时长</div>
+                          <div className="text-[11px] text-zinc-400">Duration</div>
                           <div className="text-lg font-semibold tabular-nums">{fmt(stats.durationMs)}</div>
                         </div>
                         <div className="rounded-xl border border-zinc-100 p-3">
-                          <div className="text-[11px] text-zinc-400">语速</div>
+                          <div className="text-[11px] text-zinc-400">Speech rate</div>
                           <div className="text-lg font-semibold tabular-nums">{stats.wpm} <span className="text-xs font-normal text-zinc-400">wpm</span></div>
                         </div>
                         <div className="rounded-xl border border-zinc-100 p-3">
-                          <div className="text-[11px] text-zinc-400">参考词覆盖</div>
+                          <div className="text-[11px] text-zinc-400">Reference coverage</div>
                           <div className="text-lg font-semibold tabular-nums">{Math.round(diff.matchRate * 100)}%</div>
                         </div>
                       </div>
@@ -436,15 +436,15 @@ export function ShadowingStudio({
                           return (
                             <span key={i} className="rounded bg-indigo-100 px-1 text-indigo-800">
                               {t.got}
-                              <span className="ml-1 text-[10px] text-indigo-500">(原：{t.ref})</span>{" "}
+                              <span className="ml-1 text-[10px] text-indigo-500">(ref: {t.ref})</span>{" "}
                             </span>
                           );
                         })}
                       </div>
 
                       <p className="mt-2 text-[11px] leading-5 text-zinc-400">
-                        高亮为<b>参考信息</b>：橙色是转写中没有出现的参考词，红色是转写里多出来的词，紫色是表达不同。
-                        识别引擎自身可能听错，因此这些差异不能作为发音错误结论，也不作为 IELTS 评分。
+                        Highlights are <b>reference only</b>: amber marks reference words missing from the transcript, red marks extra words, purple marks different wording.
+                        The recogniser itself can mishear, so these differences are not a pronunciation diagnosis and are not part of the IELTS score.
                       </p>
 
                       <ul className="mt-2 space-y-1 text-xs text-zinc-600">
@@ -452,7 +452,7 @@ export function ShadowingStudio({
                       </ul>
 
                       <details className="mt-3">
-                        <summary className="cursor-pointer text-xs text-zinc-500">查看转写全文</summary>
+                        <summary className="cursor-pointer text-xs text-zinc-500">Show full transcript</summary>
                         <p className="mt-1 rounded-lg bg-white p-2 text-xs leading-6 text-zinc-600">{state.transcript.text}</p>
                       </details>
                     </>

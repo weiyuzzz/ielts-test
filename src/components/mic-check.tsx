@@ -30,7 +30,7 @@ interface Props {
  * exercise the exact same capture path (RecordingSession → AudioWorklet /
  * ScriptProcessor) that records the real answers.
  */
-export function MicCheck({ deviceId, onDeviceChange, onConfirm, confirmLabel = "一切正常，开始考试", title = "麦克风检查", hint }: Props) {
+export function MicCheck({ deviceId, onDeviceChange, onConfirm, confirmLabel = "All good, start the exam", title = "Microphone check", hint }: Props) {
   const rsRef = useRef<RecordingSession | null>(null);
   const handedOver = useRef(false);
   /** Set when 关闭 is pressed while an acquire is still pending. */
@@ -135,7 +135,7 @@ export function MicCheck({ deviceId, onDeviceChange, onConfirm, confirmLabel = "
       await new Promise((r) => setTimeout(r, TEST_MS));
       const rec = await rs.stopAnswer();
       const blob = rec.blob ?? rec.wav;
-      if (!blob || blob.size === 0) throw new Error("没有录到音频，请检查麦克风权限或换一个设备。");
+      if (!blob || blob.size === 0) throw new Error("No audio was recorded. Check the microphone permission or try another device.");
       setClip((old) => { if (old) URL.revokeObjectURL(old); return URL.createObjectURL(blob); });
       setTested(true);
     } catch (e) {
@@ -176,11 +176,11 @@ export function MicCheck({ deviceId, onDeviceChange, onConfirm, confirmLabel = "
         <div>
           <h2 className="font-semibold">{title}</h2>
           <p className="mt-1 text-xs leading-5 text-zinc-500">
-            {hint ?? "对着麦克风随便说一句话，确认下方音量条会跳动。这里用的就是正式考试时的录音通道。"}
+            {hint ?? "Say anything into the microphone and confirm the level meter below moves. This is the exact same recording path the real exam uses."}
           </p>
         </div>
         <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${status === "ready" ? "bg-emerald-50 text-emerald-700" : status === "error" ? "bg-red-50 text-red-700" : "bg-zinc-100 text-zinc-500"}`}>
-          {status === "ready" ? "已连接" : status === "error" ? "不可用" : status === "init" ? "连接中…" : "未开启"}
+          {status === "ready" ? "Connected" : status === "error" ? "Unavailable" : status === "init" ? "Connecting…" : "Off"}
         </span>
       </div>
 
@@ -192,15 +192,15 @@ export function MicCheck({ deviceId, onDeviceChange, onConfirm, confirmLabel = "
             disabled={acquiring}
             className="rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
           >
-            {acquiring ? "正在请求麦克风…" : "开启麦克风测试"}
+            {acquiring ? "Requesting microphone…" : "Enable microphone test"}
           </button>
-          <p className="text-xs text-zinc-400">点击后浏览器会请求麦克风权限；关闭后麦克风会完全释放。</p>
+          <p className="text-xs text-zinc-400">The browser asks for microphone permission after you click; turning it off fully releases the microphone.</p>
           {msg && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">{msg}</p>}
         </div>
       ) : (
         <>
           <div className="mt-5 flex flex-col items-center">
-            <div className="flex h-16 items-end gap-1.5" aria-label="麦克风音量">
+            <div className="flex h-16 items-end gap-1.5" aria-label="Microphone level">
               {Array.from({ length: bars }).map((_, i) => (
                 <span
                   key={i}
@@ -210,7 +210,7 @@ export function MicCheck({ deviceId, onDeviceChange, onConfirm, confirmLabel = "
               ))}
             </div>
             <p className={`mt-3 text-xs ${heard ? "text-emerald-700" : "text-zinc-500"}`}>
-              {status !== "ready" ? "等待麦克风…" : heard ? "已检测到声音 ✓" : "还没有检测到声音，请说话或换一个麦克风"}
+              {status !== "ready" ? "Waiting for microphone…" : heard ? "Sound detected ✓" : "No sound detected yet — speak, or try another microphone"}
             </p>
           </div>
 
@@ -220,14 +220,14 @@ export function MicCheck({ deviceId, onDeviceChange, onConfirm, confirmLabel = "
               value={deviceId ?? ""}
               onChange={(e) => onDeviceChange?.(e.target.value)}
             >
-              <option value="">系统默认麦克风</option>
-              {devices.map((d, i) => <option key={d.deviceId || i} value={d.deviceId}>{d.label || `麦克风 ${i + 1}`}</option>)}
+              <option value="">System default microphone</option>
+              {devices.map((d, i) => <option key={d.deviceId || i} value={d.deviceId}>{d.label || `Microphone ${i + 1}`}</option>)}
             </select>
-            <button onClick={reopen} className="shrink-0 rounded-lg border border-zinc-200 px-3 py-2 text-sm">换设备 / 重新检测</button>
+            <button onClick={reopen} className="shrink-0 rounded-lg border border-zinc-200 px-3 py-2 text-sm">Change device / re-check</button>
             <button onClick={runTest} disabled={status !== "ready" || testing} className="shrink-0 rounded-lg border border-zinc-200 px-3 py-2 text-sm disabled:opacity-50">
-              {testing ? "录音中…" : `试录 ${TEST_MS / 1000} 秒`}
+              {testing ? "Recording…" : `Test record ${TEST_MS / 1000} s`}
             </button>
-            <button onClick={disable} className="shrink-0 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50">关闭麦克风</button>
+            <button onClick={disable} className="shrink-0 rounded-lg border border-zinc-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50">Turn off microphone</button>
           </div>
         </>
       )}
@@ -235,7 +235,7 @@ export function MicCheck({ deviceId, onDeviceChange, onConfirm, confirmLabel = "
       {msg && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">{msg}</p>}
       {clip && (
         <div className="mt-3">
-          <p className="mb-1 text-xs text-zinc-500">回放（听到自己的声音就说明通道正常）：</p>
+          <p className="mb-1 text-xs text-zinc-500">Playback (if you hear yourself, the path works):</p>
           <AudioPlayer src={clip} className="w-full" />
         </div>
       )}
@@ -246,7 +246,7 @@ export function MicCheck({ deviceId, onDeviceChange, onConfirm, confirmLabel = "
             {confirmLabel}
           </button>
           <span className="text-xs text-zinc-400">
-            {heard || tested ? "确认后开始计时。" : "建议先试录一次，确认能听到自己的声音。"}
+            {heard || tested ? "Timing starts after you confirm." : "Record a test first to confirm you can hear yourself."}
           </span>
         </div>
       )}

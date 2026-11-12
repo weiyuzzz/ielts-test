@@ -38,8 +38,8 @@ export const questionSets = pgTable("question_sets", {
   name: text("name").notNull(),
   /** Season key, e.g. "2026-09-12". Uniqueness is enforced by the import service. */
   season: text("season").notNull(),
-  /** "大陆地区" | "非大陆地区" | "global" — only banks of the chosen region are used. */
-  region: text("region").notNull().default("大陆地区"),
+  /** Bank region ("Mainland China" | "非大陆地区" legacy | "global") — only banks of the chosen region are used. */
+  region: text("region").notNull().default("Mainland China"),
   label: text("label"),
   source: text("source"),
   description: text("description"),

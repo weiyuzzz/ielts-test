@@ -54,9 +54,9 @@ export async function importBank(raw: unknown, activate = false) {
     const old = await tx.select({ id: questionSets.id }).from(questionSets).where(eq(questionSets.season, bank.season));
     for (const o of old) await tx.delete(questionSets).where(eq(questionSets.id, o.id));
     const [set] = await tx.insert(questionSets).values({
-      module: "speaking", name: bank.label || bank.season, season: bank.season, region: bank.region || "大陆地区",
+      module: "speaking", name: bank.label || bank.season, season: bank.season, region: bank.region || "Mainland China",
       label: bank.label ?? null, source: bank.source ?? null,
-      description: `${bank.topics.length} topics · ${bank.region || "大陆地区"}`,
+      description: `${bank.topics.length} topics · ${bank.region || "Mainland China"}`,
       isActive: false,
     }).returning();
 

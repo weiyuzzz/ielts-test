@@ -112,7 +112,7 @@ export function LipSyncLab({ serverTts, profiles, defaultProfileId, gender, embe
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-lg font-semibold">Lip Sync Lab</h1>
-            <p className="text-xs text-zinc-400">数字考官口型验收页 — 观察当前 Viseme、播放时钟与轨道级别。</p>
+            <p className="text-xs text-zinc-400">Digital examiner lip-sync check page — watch the current viseme, the playback clock and the track tier.</p>
           </div>
           <Link href="/speaking" className="text-xs text-zinc-500 underline">Back</Link>
         </div>
@@ -120,7 +120,7 @@ export function LipSyncLab({ serverTts, profiles, defaultProfileId, gender, embe
       {embedded && (
         <div>
           <h2 className="font-semibold">Lip Sync Lab</h2>
-          <p className="mt-0.5 text-xs text-zinc-400">数字考官口型验收 — 试听音色、观察口型与轨道级别。</p>
+          <p className="mt-0.5 text-xs text-zinc-400">Digital examiner lip-sync check — preview voices, watch visemes, clock and track tier.</p>
         </div>
       )}
 
@@ -169,7 +169,7 @@ export function LipSyncLab({ serverTts, profiles, defaultProfileId, gender, embe
           ))}
         </div>
         <p className="mt-3 text-xs leading-5 text-zinc-400">
-          Tier 释义：<span className="font-mono">anchored</span> = 引擎词级时间锚定（Kokoro）；<span className="font-mono">normalized</span> = 音素时长归一化（近似）；<span className="font-mono">rms</span> = 无内容数据，仅能量开合。
+          Tier meanings: <span className="font-mono">anchored</span> = engine word-level timestamps (Kokoro); <span className="font-mono">normalized</span> = phoneme duration normalization (approximate); <span className="font-mono">rms</span> = no content data, energy-only fallback.
         </p>
       </div>
     </div>

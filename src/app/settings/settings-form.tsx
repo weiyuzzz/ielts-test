@@ -156,8 +156,8 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
       <MicCheck
         deviceId={mic}
         onDeviceChange={(id) => { setMic(id); localStorage.setItem("mic-device", id); }}
-        title="麦克风调试"
-        hint="点「试录 3 秒」再回放：能听到自己的声音就说明这条录音通道正常。这里和正式考试用的是同一个采集方式。"
+        title="Microphone test"
+        hint="Record for 3 seconds and play it back — if you can hear yourself, this capture path works. It is the exact same path the exam uses."
       />
     </Card>
   );
