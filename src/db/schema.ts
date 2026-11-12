@@ -214,6 +214,10 @@ export const assessments = pgTable(
      * treats absence as "not analysed", never as zeros.
      */
     audioAnalysis: jsonb("audio_analysis").$type<Record<string, unknown>>(),
+    /** Which rubric revision produced this assessment (see band-descriptors.ts). */
+    rubricVersion: text("rubric_version"),
+    /** Model-stated limitations (evidence gaps, audio quality, ASR errors…). */
+    limitations: jsonb("limitations").$type<string[]>(),
     notes: jsonb("notes").$type<string[]>(),
     error: text("error"),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
@@ -239,6 +243,16 @@ export const assessmentDimensions = pgTable(
      * insert). Null for rows written before the column existed.
      */
     descriptorRefs: jsonb("descriptor_refs").$type<string[]>().notNull().default([]),
+    /**
+     * Model's evidence-sufficiency judgement for this band (0–1), NOT an IELTS
+     * band and not an accuracy claim. Null for rows scored before the field
+     * existed or when the model did not supply one.
+     */
+    confidence: real("confidence"),
+    /** What the candidate did well per the rubric (validated strings, capped). */
+    strengths: jsonb("strengths").$type<string[]>().notNull().default([]),
+    /** What held the band down per the rubric (validated strings, capped). */
+    weaknesses: jsonb("weaknesses").$type<string[]>().notNull().default([]),
   },
   (t) => [uniqueIndex("assessment_dim_uq").on(t.assessmentId, t.dimension)],
 );
@@ -276,6 +290,14 @@ export const assessmentFindings = pgTable("assessment_findings", {
    * Ids are validated against the rubric before insert; older rows default to [].
    */
   descriptorRefs: jsonb("descriptor_refs").$type<string[]>().notNull().default([]),
+  /**
+   * Where this evidence lives: transcript (quote), audio (a located segment)
+   * or metric (aggregate statistics). Older rows default to "transcript".
+   */
+  evidenceType: text("evidence_type").notNull().default("transcript"),
+  /** Inclusive audio-clip bounds in ms (answer-relative); null = not locatable. */
+  startMs: integer("start_ms"),
+  endMs: integer("end_ms"),
 });
 
 export const examReports = pgTable("exam_reports", {

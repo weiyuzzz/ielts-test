@@ -57,7 +57,7 @@ stateDiagram-v2
 | 接口 | 实现 | 选择方式 |
 |---|---|---|
 | ASRProvider | OpenAI 兼容 `/audio/transcriptions`（词级时间戳）；Browser Web Speech | `ASR_PROVIDER` |
-| LLMProvider | OpenAI 兼容 Chat Completions；DeepSeek（`deepseek` id，默认 `https://api.deepseek.com/v1` + `deepseek-chat`，`DEEPSEEK_API_KEY`/`LLM_API_KEY`）；Anthropic Messages。所有 OpenAI 兼容出站请求先经 `src/lib/ai/url-guard.ts` 的 `assertSafeEndpoint()` 校验（http/https、拒绝内网/环回/云元数据、DNS 复核；`ALLOW_LOCAL_AI_ENDPOINTS=1` 放行自建引擎） | `LLM_PROVIDER` |
+| LLMProvider | OpenAI 兼容 Chat Completions；DeepSeek（`deepseek`，默认 `https://api.deepseek.com/v1` + `deepseek-chat`，`DEEPSEEK_API_KEY`/`LLM_API_KEY`）；Qwen（`qwen`，DashScope 兼容模式，`DASHSCOPE_API_KEY`/`QWEN_API_KEY`）；Gemini（`gemini`，OpenAI 兼容端点，`GEMINI_API_KEY`）；Anthropic Messages。所有 OpenAI 兼容出站请求先经 `src/lib/ai/url-guard.ts` 的 `assertSafeEndpoint()` 校验（http/https、拒绝内网/环回/云元数据、DNS 复核；`ALLOW_LOCAL_AI_ENDPOINTS=1` 放行自建引擎）。采样参数：每次调用 opts → `LLM_TEMPERATURE`/`LLM_MAX_TOKENS` → 默认 0.2/2500。备用评分模型：`LLM_FALLBACK_PROVIDER`（+ `LLM_FALLBACK_MODEL/API_KEY/BASE_URL`），仅主 Provider 失败时使用、同一套 rubric 与校验，切换必记录 | `LLM_PROVIDER` / `LLM_FALLBACK_*` |
 | TTSProvider | OpenAI 兼容 `/audio/speech`（含本地 Kokoro）、Azure Neural TTS、浏览器 speechSynthesis；由 `VoiceProfile.provider` 选择，能力通过 `supports` 声明 | `TTS_PROVIDER` / `EXAMINER_PROFILE` / 用户设置 |
 | PronunciationProvider | Azure Pronunciation Assessment（非脚本模式，ReferenceText=转写文本） | `PRONUNCIATION_PROVIDER` |
 
@@ -113,11 +113,12 @@ setup 页  ──► AudioPreloader.prepareScript()  ──► TtsScheduler (4 �
 1. 转写：补齐缺失的转写（服务端 ASR）。失败的条目写入 notes 并排除在评分之外。
 2. 识别出的总词数 < 10：评分直接判为 **failed**，不编造分数。
 3. **音频分析**（`src/lib/speaking/audio-analysis.ts` + `audio-signal.ts`）：逐答案融合三种输入——原始 WAV（能量 VAD 语音/静音段 + 自相关音高 + 能量变化）、ASR 词级时间戳（分层停顿 + 定位 + 句中/句间归属、语速/发音速率、Mean Length of Run）、转写文本（填充词、重复、自我修正）。特征缺失 → `null` + warning + coverage 徽标，绝不伪造；逐答案结果存 `audio_analyses` 表，整场汇总存 `assessments.audio_analysis`。阈值可经 `AUDIO_MIN_PAUSE_MS` / `AUDIO_SHORT_PAUSE_MAX_MS` / `AUDIO_MEDIUM_PAUSE_MAX_MS` / `AUDIO_RUN_BREAK_MS` 等调整。
-4. 发音：只用音频模型（WAV）。没有配置时 P=not_assessed，总分标注 Provisional；韵律数字不得换算成 P 分。
-5. 语言：DeepSeek / OpenAI 兼容 LLM（版本化 Prompt + 严格 JSON 校验，引用的原文不在转写中的发现会被丢弃，最多重试 2 次）。Prompt 注入 `ACOUSTIC EVIDENCE` 块并明确：声学指标是证据不是分数，主要服务 FC，缺失特征不得臆测或惩罚。
-6. 总分按 IELTS 规则取整（.25→.5，.75→进位）。
+4. 发音：Azure Pronunciation Assessment（或未来其他 Provider）产出**原始证据**（accuracy/fluency/prosody/completeness/逐词分数）。**Provider 数值不是 IELTS Band，也不做 0–100→band 映射**：它们作为 `PRONUNCIATION EVIDENCE` 注入评分 prompt，由 LLM 对照 [P] rubric 判分。无 Provider 证据时 P=not_assessed，不得用转写推断，不得用其余三项平均补齐。
+5. 语言：LLM（prompt `speaking-language-v5.0-multimodal-evidence`）。单次调用同时产出 FC/LR/GRA（+P，当且仅当有发音证据），每维携带 `band/confidence/rationale/descriptorRefs/strengths/weaknesses/evidence[]`。校验器反伪造：quote 必须逐字命中转写、证据引用不存在的回答即丢弃、音频时间戳只有在答案真有词级时间戳且落在录音范围内才被接受、rubric 引用全无效则整个维度判无效。Part 1/2/3 各有任务规则（短答案不扣分、Part 2 看展开与叙述、Part 3 看抽象讨论）。主 Provider 失败可降级到 `LLM_FALLBACK_PROVIDER`（同一 rubric 版本），切换记录在 notes。
+6. 持久化：`assessment_dimensions` 增 `confidence/strengths/weaknesses`；`assessment_findings` 增 `evidence_type/start_ms/end_ms`（音频证据可回放 `#t=` 片段）；`assessments` 增 `rubric_version/limitations`。
+7. 总分按 IELTS 规则取整（.25→.5，.75→进位）；四项缺任一项 `overallBand=null`、`isComplete=false`。
 
-启发式评分器的依据：每题词数、WPM、填充词率、重复、连接词种类、长停顿（需要时间戳）、less-common 词比例、MATTR、复杂结构标记、句长，以及 12 条高精度语法规则（在高水平样本上 0 误报）。（注：AI 评分失败时不再回退启发式分数——无有效 AI 结果即 `failed`，不伪造 band。）
+无 LLM 时的确定性输出统一标注为**学习诊断（Diagnostic Metrics，`buildDiagnosticReport()`）**：WPM、填充词、重复、停顿、词汇重复、12 条高精度语法规则、句型/词汇统计——绝不产出任何形式的 band。
 
 ## 6. 前端
 - `AppShell`：桌面端侧栏，移动端顶栏加底部 Tab；考试页全屏。

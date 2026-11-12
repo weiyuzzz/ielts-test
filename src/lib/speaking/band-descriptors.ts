@@ -43,10 +43,15 @@ export const DESCRIPTOR_SOURCE = {
   url: "https://takeielts.britishcouncil.org/take-ielts/ielts-results-scores",
   retrieved: "2026-11-13",
   /** Internal rubric revision, bumped whenever any descriptor text changes. */
-  revision: "rubric-1.0",
+  revision: "rubric-2.0-calibrated",
+  /** What changed in this revision — audit trail. */
+  changeLog:
+    "rubric-2.0-calibrated: appended explicit transitional-band clarifiers (FC/LR/GRA bands 3/5/7) " +
+    "and calibrated wording against the Chinese band tables in docs/scoring-criteria.md; existing ids unchanged.",
   note:
     "Structured paraphrase for diagnostic practice feedback. Not the official wording, " +
-    "not an official IELTS score, and not affiliated with or endorsed by the IELTS Partners.",
+    "not an official IELTS score, and not affiliated with or endorsed by the IELTS Partners. " +
+    "The Chinese tables in docs/scoring-criteria.md are a reference translation, not official text.",
 } as const;
 
 export const BAND_LEVELS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
@@ -116,6 +121,7 @@ const SEEDS: Record<CriterionKey, Seed[]> = {
       { text: "Can speak at length without noticeable effort and without losing overall coherence.", focus: "fluency" },
       { text: "Occasional language-related hesitation, repetition or self-correction may appear but does not derail the answer.", focus: "fluency" },
       { text: "Uses a range of connectives and discourse markers with some flexibility, not just a fixed list.", focus: "cohesion" },
+      { text: "Transitional level: clearly above band 6 (hesitation is only occasional and coherence survives), but not yet the consistently effortless control of band 8.", focus: "transition" },
     ] },
     { band: 6, items: [
       { text: "Is willing to speak at length, though coherence may occasionally break down because of repetition, self-correction or hesitation.", focus: "fluency" },
@@ -125,6 +131,7 @@ const SEEDS: Record<CriterionKey, Seed[]> = {
       { text: "Usually keeps going, but relies on repetition, self-correction or slower speech to maintain flow.", focus: "fluency" },
       { text: "May overuse a small set of connectives and discourse markers instead of selecting them for meaning.", focus: "cohesion" },
       { text: "Simple speech is fairly fluent, but complex communication causes noticeable fluency problems.", focus: "fluency" },
+      { text: "Transitional level: keeps going more reliably than band 4, but still leans on repetition, self-correction or slower speech — band 6's flexibility is not yet there.", focus: "transition" },
     ] },
     { band: 4, items: [
       { text: "Cannot respond without noticeable pauses and may speak slowly, with frequent repetition and self-correction.", focus: "fluency" },
@@ -133,6 +140,7 @@ const SEEDS: Record<CriterionKey, Seed[]> = {
     { band: 3, items: [
       { text: "Can talk about familiar topics, but on unfamiliar topics can convey only basic meaning.", focus: "fluency" },
       { text: "Rarely attempts to link ideas within or across sentences; struggles to continue without noticeable pauses or restarts.", focus: "cohesion" },
+      { text: "Transitional level: basic information on familiar topics sits between band 2's isolated output and band 4's simple linked sentences; unfamiliar topics collapse into long gaps and restarts.", focus: "transition" },
     ] },
     { band: 2, items: [
       { text: "Pauses at length before most words; very little communication is possible.", focus: "fluency" },
@@ -158,6 +166,7 @@ const SEEDS: Record<CriterionKey, Seed[]> = {
       { text: "Vocabulary is flexible enough to discuss a variety of topics at length.", focus: "range" },
       { text: "Uses some less common and idiomatic items and shows awareness of style and collocation, with some inappropriate choices.", focus: "appropriacy" },
       { text: "Paraphrases successfully when needed.", focus: "paraphrase" },
+      { text: "Transitional level: some less-common and idiomatic use plus successful paraphrase, but not yet the skilful, near-accurate flexibility of band 8.", focus: "transition" },
     ] },
     { band: 6, items: [
       { text: "Has a wide enough vocabulary to discuss topics at length and make meaning clear despite inappropriacies.", focus: "range" },
@@ -166,6 +175,7 @@ const SEEDS: Record<CriterionKey, Seed[]> = {
     { band: 5, items: [
       { text: "Can talk about familiar and unfamiliar topics, but vocabulary use is limited in flexibility.", focus: "range" },
       { text: "Attempts paraphrase with mixed success.", focus: "paraphrase" },
+      { text: "Transitional level: reaches beyond band 4's basic meaning and attempts paraphrase, but success is unstable and flexibility stays limited.", focus: "transition" },
     ] },
     { band: 4, items: [
       { text: "Manages familiar topics but conveys only basic meaning on unfamiliar ones.", focus: "range" },
@@ -173,6 +183,7 @@ const SEEDS: Record<CriterionKey, Seed[]> = {
     ] },
     { band: 3, items: [
       { text: "Uses simple vocabulary to convey personal information; vocabulary is insufficient for less familiar topics.", focus: "range" },
+      { text: "Transitional level: simple words for simple personal information — between band 2's isolated words and band 4's familiar-topic management; unfamiliar topics remain out of reach.", focus: "transition" },
     ] },
     { band: 2, items: [
       { text: "Produces only isolated words or memorised utterances.", focus: "range" },
@@ -196,6 +207,7 @@ const SEEDS: Record<CriterionKey, Seed[]> = {
     { band: 7, items: [
       { text: "Uses a range of complex structures with some flexibility.", focus: "range" },
       { text: "Frequently produces error-free sentences, though some grammatical mistakes persist.", focus: "accuracy" },
+      { text: "Transitional level: complex structures are used with some flexibility and many error-free sentences, but errors persist and band 8's wide, largely accurate range is not yet there.", focus: "transition" },
     ] },
     { band: 6, items: [
       { text: "Mixes simple and complex structures, but with limited flexibility.", focus: "range" },
@@ -204,6 +216,7 @@ const SEEDS: Record<CriterionKey, Seed[]> = {
     { band: 5, items: [
       { text: "Produces basic sentence forms with reasonable accuracy.", focus: "accuracy" },
       { text: "Uses a limited range of complex structures; these usually contain errors and may cause some comprehension difficulty.", focus: "range" },
+      { text: "Transitional level: basic forms are more reliable than band 4, but complex structures stay limited and error-prone — band 6's mixed control is not yet there.", focus: "transition" },
     ] },
     { band: 4, items: [
       { text: "Produces basic sentence forms and some correct simple sentences; subordinate structures are rare.", focus: "range" },
@@ -212,6 +225,7 @@ const SEEDS: Record<CriterionKey, Seed[]> = {
     { band: 3, items: [
       { text: "Attempts basic sentence forms with limited success, or relies on apparently memorised utterances.", focus: "range" },
       { text: "Makes numerous errors except in memorised expressions.", focus: "accuracy" },
+      { text: "Transitional level: some basic sentences emerge (clearly above band 2's inability to produce forms), but success is sporadic and memorised chunks carry much of the output.", focus: "transition" },
     ] },
     { band: 2, items: [
       { text: "Cannot produce basic sentence forms.", focus: "accuracy" },

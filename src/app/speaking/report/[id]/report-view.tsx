@@ -7,8 +7,8 @@ import { DIMENSION_LABELS, type Dimension } from "@/lib/speaking/bands";
 import { CRITERIA, DESCRIPTOR_SOURCE, findDescriptor } from "@/lib/speaking/band-descriptors";
 import type { SessionAudioAnalysis } from "@/lib/speaking/audio-analysis";
 
-interface Dim { dimension: Dimension; band: number | null; status: string; source: string; rationale: string; descriptorRefs?: string[] }
-interface FindingRow { id: string; dimension: string; answerId: string | null; kind: string; category: string; originalText: string; suggestion: string | null; explanation: string; possibleAsrError: boolean; descriptorRefs?: string[] }
+interface Dim { dimension: Dimension; band: number | null; status: string; source: string; rationale: string; descriptorRefs?: string[]; confidence?: number | null; strengths?: string[] | null; weaknesses?: string[] | null }
+interface FindingRow { id: string; dimension: string; answerId: string | null; kind: string; category: string; originalText: string; suggestion: string | null; explanation: string; possibleAsrError: boolean; descriptorRefs?: string[]; evidenceType?: string; startMs?: number | null; endMs?: number | null }
 
 /** Small, reusable rubric citation. Unknown ids are simply not rendered. */
 function DescriptorChips({ ids, tone = "zinc" }: { ids?: string[]; tone?: "zinc" | "indigo" }) {
@@ -26,7 +26,7 @@ function DescriptorChips({ ids, tone = "zinc" }: { ids?: string[]; tone?: "zinc"
   );
 }
 interface ReportData {
-  assessment: { id: string; status: string; stage: string | null; overallBand: number | null; isComplete: boolean; scorer: string | null; llmProvider: string | null; llmModel: string | null; promptVersion: string | null; asrProvider: string | null; pronunciationProvider: string | null; metrics: Record<string, unknown> | null; audioAnalysis: SessionAudioAnalysis | null; notes: string[] | null; error: string | null; startedAt: string; completedAt: string | null };
+  assessment: { id: string; status: string; stage: string | null; overallBand: number | null; isComplete: boolean; scorer: string | null; llmProvider: string | null; llmModel: string | null; promptVersion: string | null; rubricVersion: string | null; asrProvider: string | null; pronunciationProvider: string | null; metrics: Record<string, unknown> | null; audioAnalysis: SessionAudioAnalysis | null; limitations: string[] | null; notes: string[] | null; error: string | null; startedAt: string; completedAt: string | null };
   dimensions: Dim[];
   findings: FindingRow[];
   report: { summary: string; nextSteps: string[] } | null;
@@ -160,7 +160,13 @@ export function ReportView({ sessionId }: { sessionId: string }) {
   const a = rep?.assessment;
   const running = !a || a.status === "pending" || a.status === "running";
   const answerIndex = new Map<string, number>();
-  ses.steps.forEach((s, i) => s.answer && answerIndex.set(s.answer.id, i + 1));
+  const audioByAnswerId = new Map<string, string>();
+  ses.steps.forEach((s, i) => {
+    if (s.answer) {
+      answerIndex.set(s.answer.id, i + 1);
+      if (s.answer.audioAssetId) audioByAnswerId.set(s.answer.id, s.answer.audioAssetId);
+    }
+  });
   const m = (a?.metrics ?? {}) as { totalWords?: number; wpm?: number | null; speakingSeconds?: number; fillerRate?: number; mattr?: number; connectiveVariety?: number };
 
   return (
@@ -221,6 +227,7 @@ export function ReportView({ sessionId }: { sessionId: string }) {
                 <div><dt className="text-zinc-400">Lexical diversity</dt><dd className="font-medium tabular-nums">{m.mattr?.toFixed(2) ?? "–"}</dd></div>
                 <div><dt className="text-zinc-400">Fillers / 100 words</dt><dd className="font-medium tabular-nums">{m.fillerRate?.toFixed(1) ?? "–"}</dd></div>
               </dl>
+              <p className="mt-3 text-[11px] leading-4 text-zinc-400">以上为学习诊断指标（Diagnostic Metrics），用于定位练习方向，不等同于 IELTS Band。</p>
             </Card>
             <div className="grid gap-4 sm:grid-cols-2 lg:col-span-2">
               {(["FC", "LR", "GRA", "P"] as Dimension[]).map((d) => {
@@ -231,9 +238,26 @@ export function ReportView({ sessionId }: { sessionId: string }) {
                       <div className="text-sm font-medium">{DIMENSION_LABELS[d]}</div>
                       <Band value={dim?.band ?? null} />
                     </div>
-                    <div className="mt-1"><Badge tone={dim?.status === "scored" ? (dim.source === "llm" || dim.source === "audio-model" ? "green" : "indigo") : "zinc"}>{dim?.status === "scored" ? dim.source : "not assessed"}</Badge></div>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <Badge tone={dim?.status === "scored" ? (dim.source === "llm" || dim.source === "audio-llm" || dim.source === "audio-model" ? "green" : "indigo") : "zinc"}>{dim?.status === "scored" ? dim.source : "not assessed"}</Badge>
+                      {typeof dim?.confidence === "number" && (
+                        <Badge tone={dim.confidence >= 0.7 ? "green" : dim.confidence >= 0.4 ? "amber" : "zinc"}>证据充分度 {(dim.confidence * 100).toFixed(0)}%</Badge>
+                      )}
+                    </div>
                     <p className="mt-3 text-xs leading-5 text-zinc-600">{dim?.rationale}</p>
                     <DescriptorChips ids={dim?.descriptorRefs} />
+                    {!!dim?.strengths?.length && (
+                      <div className="mt-2">
+                        <div className="text-[11px] font-medium text-emerald-700">做得好的</div>
+                        <ul className="list-disc space-y-0.5 pl-4 text-[11px] leading-4 text-zinc-600">{dim.strengths.map((s, i) => <li key={i}>{s}</li>)}</ul>
+                      </div>
+                    )}
+                    {!!dim?.weaknesses?.length && (
+                      <div className="mt-2">
+                        <div className="text-[11px] font-medium text-amber-700">压低分数的</div>
+                        <ul className="list-disc space-y-0.5 pl-4 text-[11px] leading-4 text-zinc-600">{dim.weaknesses.map((s, i) => <li key={i}>{s}</li>)}</ul>
+                      </div>
+                    )}
                     {dim?.status === "scored" && !(dim.descriptorRefs?.length) && dim.source === "heuristic" && (
                       <p className="mt-2 text-[11px] leading-4 text-zinc-400">Heuristic scoring cannot cite rubric descriptors.</p>
                     )}
@@ -267,6 +291,14 @@ export function ReportView({ sessionId }: { sessionId: string }) {
                           {f.suggestion && <div className="mt-1 text-emerald-700">→ {f.suggestion}</div>}
                           <div className="mt-1 text-xs leading-5 text-zinc-500">{f.explanation}</div>
                           <DescriptorChips ids={f.descriptorRefs} tone="indigo" />
+                          {f.startMs != null && f.endMs != null && f.answerId && audioByAnswerId.has(f.answerId) && (
+                            <div className="mt-2">
+                              <audio controls preload="none" src={`/api/audio/${audioByAnswerId.get(f.answerId)}#t=${(f.startMs / 1000).toFixed(2)},${(f.endMs / 1000).toFixed(2)}`} className="h-8 w-full max-w-xs" />
+                              <div className="mt-0.5 text-[11px] text-zinc-400">
+                                音频证据片段（{f.evidenceType === "audio" ? "由词级时间戳定位" : "指标定位"}）· {(f.startMs / 1000).toFixed(1)}s – {(f.endMs / 1000).toFixed(1)}s
+                              </div>
+                            </div>
+                          )}
                         </li>
                       ))}
                     </ul>
@@ -283,12 +315,18 @@ export function ReportView({ sessionId }: { sessionId: string }) {
               <Card className="p-5 text-xs leading-5 text-zinc-500">
                 <h2 className="mb-2 text-sm font-semibold text-zinc-900">How this was scored</h2>
                 <ul className="space-y-1">
-                  <li>Language scorer: <b>{a.scorer === "llm" ? `${a.llmProvider} · ${a.llmModel}` : "heuristic"}</b></li>
-                  <li>Prompt/rules version: <b>{a.promptVersion}</b></li>
-                  <li>Rubric revision: <b>{DESCRIPTOR_SOURCE.revision}</b></li>
+                  <li>Language scorer: <b>{a.scorer === "llm" ? `${a.llmProvider} · ${a.llmModel}` : "diagnostic only (no LLM)"}</b></li>
+                  <li>Prompt version: <b>{a.promptVersion ?? "–"}</b></li>
+                  <li>Rubric revision: <b>{a.rubricVersion ?? DESCRIPTOR_SOURCE.revision}</b></li>
                   <li>ASR: <b>{a.asrProvider ?? "–"}</b></li>
                   <li>Pronunciation: <b>{a.pronunciationProvider ?? "not assessed"}</b></li>
                 </ul>
+                {!!a.limitations?.length && (
+                  <div className="mt-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">评分局限（证据缺口）</div>
+                    <ul className="list-disc space-y-1 pl-4 text-amber-800">{a.limitations.map((n, i) => <li key={i}>{n}</li>)}</ul>
+                  </div>
+                )}
                 {a.notes && a.notes.length > 0 && <ul className="mt-3 list-disc space-y-1 pl-4 text-amber-800">{a.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
                 <p className="mt-3">
                   Band descriptors are a structured <b>paraphrase</b> of the IELTS Speaking public version

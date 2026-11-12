@@ -3,14 +3,18 @@ import {
   assessments, assessmentDimensions, assessmentFindings, examReports, examQuestions, answerRecords, transcripts, audioAssets, pronunciationResults, audioAnalyses,
 } from "@/db/schema";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
-import { getASR, getLLM, getPronunciation, TIMEOUTS } from "@/lib/ai/registry";
+import { getASR, getLLM, getLLMFallback, getPronunciation, TIMEOUTS } from "@/lib/ai/registry";
 import { withTimeout } from "@/lib/ai/types";
 import { aggregate, type AnswerInput } from "@/lib/speaking/metrics";
-import { buildScoringMessages, extractJson, validateLanguageScore, SCORING_PROMPT_VERSION, type LanguageScore, type Finding } from "@/lib/speaking/scoring";
+import {
+  buildScoringMessages, extractJson, validateLanguageScore, SCORING_PROMPT_VERSION, DIAGNOSTIC_VERSION,
+  buildDiagnosticReport, type LanguageScore, type Finding, type PronunciationEvidence, type DimensionScore,
+} from "@/lib/speaking/scoring";
 import {
   aggregateSessionAudio, buildAudioAnalysis, AUDIO_ANALYSIS_VERSION, type AudioAnalysis,
 } from "@/lib/speaking/audio-analysis";
-import { overallBand, score100ToBand, DIMENSION_LABELS } from "@/lib/speaking/bands";
+import { overallBand, DIMENSION_LABELS } from "@/lib/speaking/bands";
+import { DESCRIPTOR_SOURCE } from "@/lib/speaking/band-descriptors";
 import { readAudio } from "./storage";
 
 async function setStage(id: string, stage: string, status = "running") {
@@ -96,17 +100,19 @@ export async function runScoring(assessmentId: string): Promise<void> {
       notes.push(`Audio analysis: ${audioPerAnswer.length} answers analysed (word timings ${withTimings}/${audioPerAnswer.length}, VAD ${withVad}/${audioPerAnswer.length}).`);
     }
 
-    const llm = getLLM();
+    const llm = getLLM() ?? getLLMFallback();
 
     // No AI scoring provider configured: complete the mock exam WITHOUT a score.
     // Recordings and transcripts are still kept; we never fabricate a band.
+    // The deterministic statistics below are LEARNING DIAGNOSTICS, not bands.
     if (!llm) {
+      const diagnostics = buildDiagnosticReport(inputs, metrics);
       await db.update(assessments).set({
         status: "unscored", stage: "done", scorer: null, overallBand: null, isComplete: false,
         promptVersion: null, llmProvider: null, llmModel: null,
         metrics: metrics as unknown as Record<string, unknown>,
         audioAnalysis: (sessionAudio ?? null) as unknown as Record<string, unknown> | null,
-        notes: [...notes, "未接入 AI 评分（未配置 LLM_PROVIDER / DEEPSEEK_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY）。本次只完成模考流程，不生成任何分数。"],
+        notes: [...notes, `未接入 AI 评分（未配置 LLM_PROVIDER / DEEPSEEK_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY / DASHSCOPE_API_KEY / GEMINI_API_KEY）。本次只完成模考流程，不生成任何分数。${diagnostics.note}（${DIAGNOSTIC_VERSION}）`],
         asrProvider: asrProviders.join(",") || null, completedAt: new Date(),
       }).where(eq(assessments.id, a.id));
       return;
@@ -122,45 +128,79 @@ export async function runScoring(assessmentId: string): Promise<void> {
       return;
     }
 
-    // ---------------- Pronunciation (audio-based only)
+    // ---------------- Pronunciation (audio-based only; raw numbers → evidence)
     await setStage(a.id, "pronunciation");
     const pron = getPronunciation();
-    const pronRows: { answerId: string; overall: number; accuracy: number; fluency: number; prosody?: number; durationMs: number; words: { word: string; accuracy: number; errorType?: string }[] }[] = [];
+    const pronRows: { answerIndex: number; answerId: string; overall: number; accuracy: number; fluency: number; prosody?: number; completeness?: number; durationMs: number; words: { word: string; accuracy: number; errorType?: string }[] }[] = [];
     if (pron) {
       for (const inp of inputs) {
         if (inp.noResponse || !inp.text || !inp.wavKey) continue;
         try {
           const r = await withTimeout(pron.id, TIMEOUTS.pronMs, async (signal) => pron.assess(await readAudio(inp.wavKey!), inp.text, { signal }));
           await db.insert(pronunciationResults).values({ answerId: inp.answerId, provider: pron.id, status: "completed", accuracy: r.accuracy, fluency: r.fluency, prosody: r.prosody ?? null, completeness: r.completeness ?? null, overall: r.overall, words: r.words });
-          pronRows.push({ answerId: inp.answerId, overall: r.overall, accuracy: r.accuracy, fluency: r.fluency, prosody: r.prosody, durationMs: inp.durationMs, words: r.words });
+          pronRows.push({ answerIndex: inp.index, answerId: inp.answerId, overall: r.overall, accuracy: r.accuracy, fluency: r.fluency, prosody: r.prosody, completeness: r.completeness, durationMs: inp.durationMs, words: r.words });
         } catch (e) {
           await db.insert(pronunciationResults).values({ answerId: inp.answerId, provider: pron.id, status: "failed", error: (e as Error).message.slice(0, 500) });
           notes.push(`Pronunciation assessment failed for answer #${inp.index}.`);
         }
       }
     }
+    // Provider numbers are EVIDENCE for the scorer, never bands: the LLM maps
+    // them onto the [P] rubric; without evidence P stays not_assessed.
+    const pronEvidence: PronunciationEvidence | null = pronRows.length
+      ? {
+          providerId: pron!.id,
+          perAnswer: pronRows.map((r) => ({
+            answer: r.answerIndex,
+            accuracy: r.accuracy,
+            fluency: r.fluency,
+            prosody: r.prosody ?? null,
+            completeness: r.completeness ?? null,
+            overall: r.overall,
+            worstWords: [...r.words].filter((w) => w.word.length > 2).sort((x, y) => x.accuracy - y.accuracy).slice(0, 5),
+          })),
+        }
+      : null;
 
-    // ---------------- Language (FC / LR / GRA)
+    // ---------------- Language (FC / LR / GRA) + P from audio evidence
     await setStage(a.id, "scoring");
     const scorable = inputs.filter((i) => i.text || i.noResponse);
     let lang: LanguageScore | null = null;
+    let usedLLM = llm!;
+    let degradedToFallback = false;
     const scorer = "llm" as const;
     {
       const audioByAnswerId = new Map(audioPerAnswer.map((x) => [x.answerId, x.analysis]));
       const { system, user } = buildScoringMessages(
         scorable.map((s) => ({ ...s, audio: audioByAnswerId.get(s.answerId) ?? null })),
         sessionAudio,
+        pronEvidence,
       );
-      for (let attempt = 1; attempt <= 2 && !lang; attempt++) {
-        try {
-          const raw = await withTimeout(llm.id, TIMEOUTS.llmMs, (signal) => llm.complete([{ role: "system", content: system }, { role: "user", content: user }], { json: true, signal }));
-          const v = validateLanguageScore(extractJson(raw), scorable);
-          lang = v.score;
-          if (v.dropped) notes.push(`${v.dropped} model findings were discarded because they did not quote the candidate's actual words.`);
-          if (v.rejectedRefs) notes.push(`${v.rejectedRefs} rubric citation(s) were discarded because they did not match the rubric or the assigned band.`);
-        } catch (e) {
-          notes.push(`AI scoring attempt ${attempt} failed: ${(e as Error).message.slice(0, 160)}`);
+      // Primary first, then the configured fallback (same rubric, same
+      // validator); every switch is recorded — never silent.
+      const attempts: { llm: NonNullable<typeof llm>; kind: "primary" | "fallback" }[] = [{ llm: llm!, kind: "primary" }];
+      const fb = getLLMFallback();
+      if (fb && fb.id !== llm!.id) attempts.push({ llm: fb, kind: "fallback" });
+      for (const attempt of attempts) {
+        for (let tryNo = 1; tryNo <= 2 && !lang; tryNo++) {
+          try {
+            const raw = await withTimeout(attempt.llm.id, TIMEOUTS.llmMs, (signal) =>
+              attempt.llm.complete([{ role: "system", content: system }, { role: "user", content: user }], { json: true, signal }));
+            const v = validateLanguageScore(extractJson(raw), scorable, { allowPronunciation: pronEvidence !== null });
+            lang = v.score;
+            usedLLM = attempt.llm;
+            degradedToFallback = attempt.kind === "fallback";
+            if (v.dropped) notes.push(`${v.dropped} model findings were discarded because they did not quote the candidate's actual words.`);
+            if (v.rejectedRefs) notes.push(`${v.rejectedRefs} rubric citation(s) were discarded because they did not match the rubric or the assigned band.`);
+            if (v.droppedEvidence) notes.push(`${v.droppedEvidence} evidence item(s) were discarded: unknown answer indices, quotes that never appeared, or audio timestamps without word timings.`);
+          } catch (e) {
+            notes.push(`AI scoring attempt ${tryNo} on ${attempt.llm.id} (${attempt.kind}) failed: ${(e as Error).message.slice(0, 160)}`);
+          }
         }
+        if (lang) break;
+      }
+      if (degradedToFallback && lang) {
+        notes.push(`Primary provider failed; the fallback provider ${usedLLM.id}${usedLLM.model ? ` (${usedLLM.model})` : ""} scored this exam against the SAME rubric version ${DESCRIPTOR_SOURCE.revision}.`);
       }
     }
     // AI scoring is the only source of bands. If it fails, the exam stays unscored —
@@ -173,21 +213,25 @@ export async function runScoring(assessmentId: string): Promise<void> {
       return;
     }
 
-    // ---------------- Pronunciation dimension
-    let pBand: number | null = null;
+    // ---------------- Pronunciation dimension (LLM-judged from provider evidence)
+    const pDim: DimensionScore | null = lang.pronunciation ?? null;
+    let pBand: number | null = pDim?.band ?? null;
     let pRationale: string;
     const pFindings: Finding[] = [];
     if (pronRows.length) {
-      const w = pronRows.reduce((s, r) => s + Math.max(1, r.durationMs), 0);
-      const avg = (k: "overall" | "accuracy" | "fluency") => pronRows.reduce((s, r) => s + r[k] * Math.max(1, r.durationMs), 0) / w;
-      pBand = score100ToBand(avg("overall"));
-      pRationale = `Audio-based assessment by ${pron!.id} on ${pronRows.length} answers: pronunciation score ${avg("overall").toFixed(0)}/100 (accuracy ${avg("accuracy").toFixed(0)}, fluency ${avg("fluency").toFixed(0)}). Band derived with a documented 0–100→band approximation.`;
+      if (pDim) {
+        pRationale = `Audio evidence from ${pron!.id} on ${pronRows.length} answers (accuracy/fluency/prosody/completeness + weakest words), judged against the [P] rubric — provider numbers were used as evidence, never mapped arithmetically to a band. ${pDim.rationale}`;
+      } else {
+        pRationale = `Pronunciation provider returned evidence for ${pronRows.length} answers, but no valid P judgement came back; P is not assessed this run.`;
+        pBand = null;
+        notes.push("Pronunciation evidence existed but the model returned no valid P judgement — P marked not_assessed.");
+      }
       const weak = pronRows.flatMap((r) => r.words.filter((x) => x.accuracy < 60 && x.word.length > 2).map((x) => ({ ...x, answerId: r.answerId })));
       const seen = new Set<string>();
       for (const x of weak.sort((p, q) => p.accuracy - q.accuracy)) {
         if (seen.has(x.word.toLowerCase()) || seen.size >= 8) continue;
         seen.add(x.word.toLowerCase());
-        pFindings.push({ dimension: "P", answerId: x.answerId, kind: "error", category: x.errorType && x.errorType !== "None" ? x.errorType.toLowerCase() : "phoneme accuracy", originalText: x.word, suggestion: null, explanation: `Word accuracy ${x.accuracy.toFixed(0)}/100 — practise this word's sounds and stress.` });
+        pFindings.push({ dimension: "P", answerId: x.answerId, kind: "error", category: x.errorType && x.errorType !== "None" ? x.errorType.toLowerCase() : "phoneme accuracy", originalText: x.word, suggestion: null, explanation: `Word accuracy ${x.accuracy.toFixed(0)}/100 — practise this word's sounds and stress.`, evidenceType: "metric" });
       }
     } else {
       pRationale = pron
@@ -197,19 +241,37 @@ export async function runScoring(assessmentId: string): Promise<void> {
     }
 
     const dims = [
-      { dimension: "FC", band: lang.dimensions.FC.band, rationale: lang.dimensions.FC.rationale, source: scorer, refs: lang.dimensions.FC.descriptorRefs },
-      { dimension: "LR", band: lang.dimensions.LR.band, rationale: lang.dimensions.LR.rationale, source: scorer, refs: lang.dimensions.LR.descriptorRefs },
-      { dimension: "GRA", band: lang.dimensions.GRA.band, rationale: lang.dimensions.GRA.rationale, source: scorer, refs: lang.dimensions.GRA.descriptorRefs },
-      { dimension: "P", band: pBand, rationale: pRationale, source: pBand !== null ? "audio-model" : "none", refs: [] as string[] },
+      { dimension: "FC", dim: lang.dimensions.FC, source: scorer },
+      { dimension: "LR", dim: lang.dimensions.LR, source: scorer },
+      { dimension: "GRA", dim: lang.dimensions.GRA, source: scorer },
+      { dimension: "P", dim: pDim, source: pDim ? "audio-llm" : "none" },
     ];
-    const isComplete = dims.every((d) => d.band !== null);
+    const isComplete = dims.every((d) => d.dim && d.dim.band !== null);
     // Four criteria each count 25%: with any criterion missing there is no valid
     // overall band, so we store null rather than averaging three of four.
-    const overall = isComplete ? overallBand(dims.map((d) => d.band)) : null;
+    const overall = isComplete ? overallBand(dims.map((d) => d.dim!.band)) : null;
     const findings = [...lang.findings, ...pFindings];
+    const limitations = [...lang.limitations];
+    if (sessionAudio && !sessionAudio.coverage.wordTimingAvailable) {
+      limitations.push("Word timings were unavailable for some answers — audio evidence is limited to VAD aggregates, so located pauses carry no text context.");
+    }
+    if (!sessionAudio?.coverage.prosodyAvailable) {
+      limitations.push("Prosody (pitch/energy variation) was not measured — no decodable 16 kHz WAV was available for at least one answer.");
+    }
 
     await db.transaction(async (tx) => {
-      await tx.insert(assessmentDimensions).values(dims.map((d) => ({ assessmentId: a.id, dimension: d.dimension, band: d.band, status: d.band === null ? "not_assessed" : "scored", source: d.source, rationale: d.rationale, descriptorRefs: d.refs })));
+      await tx.insert(assessmentDimensions).values(dims.map((d) => ({
+        assessmentId: a.id,
+        dimension: d.dimension,
+        band: d.dim?.band ?? null,
+        status: d.dim && d.dim.band !== null ? "scored" : "not_assessed",
+        source: d.source,
+        rationale: d.dim?.rationale ?? (d.dimension === "P" ? pRationale : `${d.dimension} could not be assessed in this run.`),
+        descriptorRefs: d.dim?.descriptorRefs ?? [],
+        confidence: d.dim?.confidence ?? null,
+        strengths: d.dim?.strengths ?? [],
+        weaknesses: d.dim?.weaknesses ?? [],
+      })));
       if (findings.length)
         await tx.insert(assessmentFindings).values(
           findings.map((f) => ({
@@ -219,17 +281,23 @@ export async function runScoring(assessmentId: string): Promise<void> {
             // Only ids validated against the rubric reach this point
             // (validateLanguageScore drops unknown / cross-dimension / far-band ids).
             descriptorRefs: f.descriptorRefs ?? [],
+            evidenceType: f.evidenceType ?? "transcript",
+            startMs: f.startMs ?? null,
+            endMs: f.endMs ?? null,
           })),
         );
-      const weakest = dims.filter((d) => d.band !== null).sort((x, y) => (x.band as number) - (y.band as number))[0];
+      const scored = dims.filter((d) => d.dim && d.dim.band !== null);
+      const weakest = [...scored].sort((x, y) => (x.dim!.band as number) - (y.dim!.band as number))[0];
       const summary = lang.summary || (overall !== null ? `Estimated band ${overall}. Weakest area: ${DIMENSION_LABELS[weakest.dimension as "FC"]}.` : `Language criteria assessed. Weakest area: ${DIMENSION_LABELS[weakest.dimension as "FC"]}. Pronunciation was not assessed, so no overall band is shown.`);
       await tx.delete(examReports).where(eq(examReports.sessionId, a.sessionId));
       await tx.insert(examReports).values({ sessionId: a.sessionId, assessmentId: a.id, summary, nextSteps: lang!.nextSteps.length ? lang!.nextSteps : ["Keep practising full mock tests and compare reports over time."] });
       await tx.update(assessments).set({
         status: isComplete && scorer === "llm" ? "completed" : "partial",
         stage: "done", overallBand: overall, isComplete, scorer,
-        llmProvider: scorer === "llm" ? llm!.id : null, llmModel: scorer === "llm" ? llm!.model ?? null : null,
+        llmProvider: usedLLM.id, llmModel: usedLLM.model ?? null,
         promptVersion: SCORING_PROMPT_VERSION,
+        rubricVersion: DESCRIPTOR_SOURCE.revision,
+        limitations: limitations.length ? limitations : null,
         asrProvider: asrProviders.join(",") || null, pronunciationProvider: pronRows.length ? pron!.id : null,
         metrics: metrics as unknown as Record<string, unknown>,
         audioAnalysis: (sessionAudio ?? null) as unknown as Record<string, unknown> | null,
