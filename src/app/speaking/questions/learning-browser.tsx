@@ -321,7 +321,7 @@ export function LearningBrowser({
                               <li key={i} className="rounded-lg bg-white p-2.5">
                                 <div className="flex flex-wrap items-center gap-2">
                                   <span className="text-[11px] font-medium text-zinc-400">{i + 1}</span>
-                                  <span className="text-xs font-medium text-zinc-700">{n.label || STAGE_LABEL[n.stage] || n.stage}</span>
+                                  {n.label && <span className="text-xs font-medium text-zinc-700">{n.label}</span>}
                                 </div>
                                 {!!n.phrases?.length ? (
                                   <div className="mt-1.5 flex flex-wrap gap-1">
