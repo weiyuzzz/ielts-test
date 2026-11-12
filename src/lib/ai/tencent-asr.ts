@@ -1,116 +1,130 @@
 /**
- * Tencent Cloud Flash Recognition (录音文件识别极速版) as an ASRProvider.
+ * Tencent Cloud ASR (录音文件识别) as an ASRProvider, via the official SDK
+ * (tencentcloud-sdk-nodejs-asr) — standard TC3-signed Cloud API:
+ * CreateRecTask + DescribeTaskStatus polling.
  *
- * Chosen over the other Tencent ASR APIs because it is SYNCHRONOUS (30 min of
- * audio ≈ 10 s), takes raw audio in the POST body (≤100 MB / ≤2 h — our
- * 2-minute 16 kHz WAV fits), and returns word-level timestamps — exactly what
- * the fluency-evidence pipeline needs. It is NOT a Cloud API 3.0 endpoint:
- * params go in the query string, the body is raw audio, and auth is the
- * legacy HMAC-SHA1 signature over the sorted query string.
+ * Chosen over the region-blocked Groq endpoint and over the legacy "flash"
+ * endpoint (whose hand-rolled signature produced an opaque server-side
+ * "Credential scope size not valid" error): the official client removes the
+ * signature guesswork entirely, accepts up to 5 hours of audio inline (base64
+ * ≤ ~5 MB — a 2-minute 16 kHz WAV is 3.84 MB raw), and with ResTextFormat=2
+ * returns word-level timestamps (ResultDetail[].Words: {Word, OffsetStartMs,
+ * OffsetEndMs} in ms) — exactly what the fluency-evidence pipeline and the
+ * SOE audio-slicing need.
  *
- * Docs: cloud.tencent.com/document/product/1093/52097 (flash v1).
- * Credentials: TENCENT_SECRET_ID / TENCENT_SECRET_KEY / TENCENT_APP_ID
- * (the AppID is account-level, shared by sub-accounts).
+ * Docs: cloud.tencent.com/document/product/1093/37823 (CreateRecTask),
+ * 1093/37822 (DescribeTaskStatus), Version 2019-06-14.
  */
-import crypto from "node:crypto";
 import { ProviderError, type ASRProvider, type ASRResult } from "./types";
 import type { WordTiming } from "@/db/schema";
 
-const FLASH_HOST = "asr.cloud.tencent.com";
-const FLASH_PATH_PREFIX = "/asr/flash/v1/";
-
-export interface FlashWord {
-  word: string;
-  start_time: number; // ms from audio start
-  end_time: number;
-}
-
-/** Build the sorted query string exactly the way the signature expects it. */
-export function flashQuery(params: Record<string, string>): string {
-  return Object.keys(params)
-    .sort()
-    .map((k) => `${k}=${encodeURIComponent(params[k])}`)
-    .join("&");
-}
-
-/** Legacy HMAC-SHA1 signature: base64(HmacSHA1(SecretKey, "POST" + host + path + "?" + sortedQuery)). */
-export function flashSignature(opts: { secretKey: string; host: string; path: string; query: string }): string {
-  const original = `POST${opts.host}${opts.path}?${opts.query}`;
-  return crypto.createHmac("sha1", opts.secretKey).update(original, "utf8").digest("base64");
-}
-
-export interface FlashResponse {
-  code: number;
-  message?: string;
-  request_id?: string;
-  audio_duration?: number;
-  flash_result?: {
-    channel_id: number;
-    text: string;
-    word_list?: FlashWord[];
-  }[];
-}
+const POLL_INTERVAL_MS = 1200;
+const POLL_DEADLINE_MS = 40_000;
 
 export interface TencentAsrOptions {
   secretId?: string;
   secretKey?: string;
-  /** Account-level AppID (console.cloud.tencent.com/developer → 账号信息). */
-  appId?: string;
+  region?: string;
   /** Engine model, e.g. 16k_en (English) / 16k_zh. */
   engine?: string;
+  /** Test hook: supplies a pre-built SDK-shaped client instead of the real one. */
+  clientFactory?: () => AsrSdkClient;
 }
 
-export function tencentFlashAsr(opts: TencentAsrOptions = {}): ASRProvider {
+export interface AsrSdkClient {
+  CreateRecTask(req: Record<string, unknown>): Promise<{ Data?: { TaskId?: number } }>;
+  DescribeTaskStatus(req: Record<string, unknown>): Promise<{ Data?: TaskDetail }>;
+}
+
+interface WordDetail {
+  Word?: string;
+  OffsetStartMs?: number;
+  OffsetEndMs?: number;
+}
+
+export interface TaskDetail {
+  TaskId?: number;
+  Status?: number;
+  StatusStr?: string;
+  Text?: string;
+  ErrorMsg?: string;
+  ResultDetail?: { FinalSentence?: string; Words?: WordDetail[] }[];
+  Words?: WordDetail[];
+}
+
+interface CreateRecTaskResult {
+  Data?: { TaskId?: number };
+}
+
+async function defaultClient(creds: { secretId: string; secretKey: string; region: string }): Promise<AsrSdkClient> {
+  // Lazy require so the SDK stays a runtime dependency only of this provider.
+  const sdk = await import("tencentcloud-sdk-nodejs-asr");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const AsrClient = (sdk as any).asr.v20190614.Client;
+  return new AsrClient({
+    credential: { secretId: creds.secretId, secretKey: creds.secretKey },
+    region: creds.region,
+    profile: { httpProfile: { endpoint: "asr.tencentcloudapi.com" } },
+  }) as AsrSdkClient;
+}
+
+export function tencentAsr(opts: TencentAsrOptions = {}): ASRProvider {
   const secretId = opts.secretId || process.env.TENCENT_SECRET_ID || "";
   const secretKey = opts.secretKey || process.env.TENCENT_SECRET_KEY || "";
-  const appId = opts.appId || process.env.TENCENT_APP_ID || "";
+  const region = opts.region || process.env.TENCENT_ASR_REGION || "ap-guangzhou";
   const engine = opts.engine || process.env.TENCENT_ASR_ENGINE || "16k_en";
   return {
-    id: "tencent-flash-asr",
+    id: "tencent-asr",
     model: engine,
     location: "server",
     async transcribe(audio, mimeType, transcribeOpts): Promise<ASRResult> {
-      if (!secretId || !secretKey || !appId) {
-        throw new ProviderError("tencent-flash-asr", "config", "missing TENCENT_SECRET_ID / TENCENT_SECRET_KEY / TENCENT_APP_ID");
+      if (!secretId || !secretKey) {
+        throw new ProviderError("tencent-asr", "config", "missing TENCENT_SECRET_ID / TENCENT_SECRET_KEY");
       }
-      const format = /wav/i.test(mimeType) ? "wav" : /mp3/i.test(mimeType) ? "mp3" : /m4a|mp4|aac/i.test(mimeType) ? "m4a" : /ogg/i.test(mimeType) ? "ogg-opus" : "wav";
-      const params: Record<string, string> = {
-        appid: appId,
-        engine_type: engine,
-        secretid: secretId,
-        timestamp: String(Math.floor(Date.now() / 1000)),
-        voice_format: format,
-        word_info: "2", // word-level timestamps incl. punctuation
-        first_channel_only: "1",
-        nonce: String(Math.floor(Math.random() * 1_000_000_000)),
-      };
-      const query = flashQuery(params);
-      const path = `${FLASH_PATH_PREFIX}${appId}`;
-      const signature = flashSignature({ secretKey, host: FLASH_HOST, path, query });
-      const res = await fetch(`https://${FLASH_HOST}${path}?${query}`, {
-        method: "POST",
-        headers: { Authorization: signature, "Content-Type": "audio/wav" },
-        body: new Uint8Array(audio),
-        signal: transcribeOpts?.signal,
-      });
-      const bodyText = await res.text();
-      if (!res.ok) throw new ProviderError("tencent-flash-asr", "http", `${res.status} ${bodyText.slice(0, 200)}`);
-      let j: FlashResponse;
-      try {
-        j = JSON.parse(bodyText) as FlashResponse;
-      } catch {
-        throw new ProviderError("tencent-flash-asr", "invalid_response", `non-JSON response: ${bodyText.slice(0, 120)}`);
+      const data = audio.toString("base64");
+      if (data.length > 5 * 1024 * 1024) {
+        throw new ProviderError("tencent-asr", "unsupported", `inline audio exceeds the 5 MB CreateRecTask limit (got ${Math.round(data.length / 1048576)} MB base64)`);
       }
-      if (j.code !== 0) throw new ProviderError("tencent-flash-asr", "invalid_response", `${j.code}: ${(j.message || "unknown error").slice(0, 200)}`);
-      const channel = j.flash_result?.[0];
-      const text = (channel?.text ?? "").trim();
-      const words: WordTiming[] = (channel?.word_list ?? [])
-        .filter((w) => typeof w.word === "string" && w.word.trim() && Number.isFinite(w.start_time) && Number.isFinite(w.end_time) && w.end_time >= w.start_time)
+      const client = opts.clientFactory ? opts.clientFactory() : await defaultClient({ secretId, secretKey, region });
+      const created = (await client.CreateRecTask({
+        EngineModelType: engine,
+        ChannelNum: 1,
+        ResTextFormat: 2, // word-level timestamps + punctuation
+        SourceType: 1,
+        Data: data,
+      })) as CreateRecTaskResult;
+      const taskId = created.Data?.TaskId;
+      if (typeof taskId !== "number") {
+        throw new ProviderError("tencent-asr", "invalid_response", "no TaskId returned");
+      }
+
+      // Poll until success/failure or deadline (report-service wraps this in
+      // the ASR timeout, so stay comfortably under 45 s).
+      const deadline = Date.now() + POLL_DEADLINE_MS;
+      let detail: TaskDetail | null = null;
+      while (Date.now() < deadline) {
+        if (transcribeOpts?.signal?.aborted) throw new ProviderError("tencent-asr", "timeout", "aborted");
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+        const status = (await client.DescribeTaskStatus({ TaskId: taskId })) as { Data?: TaskDetail };
+        detail = status.Data ?? null;
+        if (detail && (detail.Status === 2 || detail.Status === 3)) break;
+      }
+      if (!detail) throw new ProviderError("tencent-asr", "timeout", "no task status received in time");
+      if (detail.Status === 3) {
+        throw new ProviderError("tencent-asr", "invalid_response", `task failed: ${(detail.ErrorMsg || detail.StatusStr || "unknown").slice(0, 200)}`);
+      }
+      if (detail.Status !== 2) throw new ProviderError("tencent-asr", "timeout", "recognition did not finish in time");
+
+      const text = (detail.Text ?? "").trim();
+      const wordDetails = detail.Words ?? detail.ResultDetail?.flatMap((s) => s.Words ?? []) ?? [];
+      const words: WordTiming[] = wordDetails
+        .filter((w) => typeof w.Word === "string" && w.Word.trim() && Number.isFinite(w.OffsetStartMs) && Number.isFinite(w.OffsetEndMs))
         .map((w) => ({
-          word: w.word.trim().toLowerCase(),
-          start: Math.round(w.start_time) / 1000,
-          end: Math.round(w.end_time) / 1000,
-        }));
+          word: w.Word!.trim().toLowerCase(),
+          start: Math.max(0, Math.round(w.OffsetStartMs!)) / 1000,
+          end: Math.round(w.OffsetEndMs!) / 1000,
+        }))
+        .filter((w) => w.end >= w.start);
       return { text, words: words.length ? words : undefined, language: "en" };
     },
   };
