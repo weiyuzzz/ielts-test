@@ -192,6 +192,16 @@ LEARNING_CONTENT_DIR=/var/lib/bandnine/learning
 | 评分 | **不评分** | 未接入 AI 时只走完整考试流程，录音/转写/回放照常可用 |
 | Pronunciation | **不评估** | 不会根据文本估算发音 |
 
+## AI 服务配置（后台 `/admin`）
+
+LLM 评分、考官语音、转写、发音评测都能在 `/admin` 的「AI 服务」面板里配置，**保存即生效，无需重启**：
+
+- 每个服务独立开关：关掉 LLM → 考试照常完成、报告显示「未评分」（绝不伪造分数）；关掉 TTS → 回退浏览器语音；关掉 ASR → 用浏览器 Web Speech。
+- `provider = 自动` 沿用环境变量；显式选择后以面板为准（可填 Base URL / Model / Voice / Region）。
+- 密钥只写入服务器上的 `storage/ai-config.json`（已 gitignore），接口只回传 `••••后四位`，**永远不会发到浏览器**。
+- 该文件是**单实例**配置：多实例部署请用环境变量/密钥管理，或让各实例共享同一卷。
+- 设置了 `ADMIN_TOKEN` 时，保存操作需要页面上方的管理令牌。
+
 ## 测试
 ```bash
 npm run typecheck && npm run lint
