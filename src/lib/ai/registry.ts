@@ -12,7 +12,7 @@ import { ProviderError } from "./types";
 import { openAIASR, openAILLM, anthropicLLM, openAITTS, azureTTS, azurePronunciation } from "./providers";
 import { SPEECH_ACT_LIST } from "@/lib/speaking/speech-act";
 import { readAiConfig, envOverridesFor, withEnvOverrides, type ProviderKey } from "@/lib/server/ai-config";
-import { VOICE_PRESETS, resolveVoiceProfile, type VoiceProviderId } from "@/lib/speaking/voice-profile";
+import { VOICE_PRESETS, impliedVoiceGender, resolveVoiceProfile, type VoiceProviderId } from "@/lib/speaking/voice-profile";
 
 const hasOpenAI = () => !!(process.env.OPENAI_API_KEY || process.env.LLM_API_KEY || process.env.ASR_API_KEY);
 
@@ -144,6 +144,7 @@ export function capabilities() {
       profiles: VOICE_PRESETS.map((p) => ({
         id: p.id, name: p.name, provider: p.provider, voice: p.voice,
         speed: p.speed, pitch: p.pitch ?? 0, hasStyle: !!p.style,
+        gender: impliedVoiceGender(p),
       })),
       /** The default the UI should preselect: the deployment's ACTUALLY usable
        *  profile (env-resolved), never a hardcoded preset whose provider may

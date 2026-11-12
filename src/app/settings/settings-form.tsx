@@ -5,17 +5,13 @@ import { MicCheck } from "@/components/mic-check";
 import { loadVoices, speak, warmupSpeech } from "@/lib/audio/speech";
 
 interface S { displayName: string; targetBand: number; examDate: string; examinerVoice: string; examinerGender: "male" | "female"; showSubtitles: boolean }
-interface ProfileOption { id: string; name: string; provider: string }
+interface ProfileOption { id: string; name: string; provider: string; gender?: "male" | "female" | null }
 
-/**
- * Voice presets that belong to each examiner identity (image ↔ voice pairing),
- * per PROVIDER FAMILY: switching examiner keeps the engine the deployment
- * actually uses, so the pairing never selects a provider without credentials.
- */
+/** The default voice each provider family pairs with an examiner gender. */
 const GENDER_VOICE_BY_FAMILY: Record<string, Record<"male" | "female", string>> = {
-  kokoro: { female: "kokoro:bf_emma", male: "kokoro:bm_george" },
+  kokoro: { female: "kokoro-af-heart", male: "kokoro-bm-george" },
   azure: { female: "azure-sonia", male: "azure-ryan" },
-  openai: { female: "openai:marin", male: "openai:onyx" },
+  openai: { female: "openai-marin", male: "openai-onyx" },
   browser: { female: "auto", male: "auto" },
 };
 const GENDER_NAME: Record<"male" | "female", string> = { female: "Sarah", male: "James" };
@@ -54,19 +50,24 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
 
   /**
    * Examiner identity: the digital human AND the voice belong to one person.
-   * Switching gender re-pairs the voice WITHIN the same provider family, so a
-   * Kokoro deployment never gets pointed at an unconfigured Azure preset.
-   * A deliberate custom voice (Voice Lab) is never clobbered silently.
+   * Switching gender re-pairs the voice WITHIN the same provider family (a
+   * Kokoro deployment never gets pointed at an unconfigured Azure preset) and
+   * the voice list itself only offers voices matching the chosen gender.
    */
   function pickGender(gender: "male" | "female") {
     const family = voiceFamily(s.examinerVoice);
-    // Only re-pair when the current voice is the deployment default or itself a
-    // pairing slot; a deliberate custom voice stays untouched.
-    const knownPairingVoice = s.examinerVoice === "auto" ||
-      Object.values(GENDER_VOICE_BY_FAMILY).some((m) => Object.values(m).includes(s.examinerVoice));
+    const current = profiles.find((p) => p.id === s.examinerVoice);
+    // "auto" counts as MISMATCH: it hides which gender the deployment default
+    // speaks with, so picking an examiner always pins an explicit voice.
+    const isAuto = s.examinerVoice === "auto";
+    const genderMatches = !isAuto && (current?.gender == null || current.gender === gender);
     const paired = GENDER_VOICE_BY_FAMILY[family]?.[gender];
-    setS({ ...s, examinerGender: gender, examinerVoice: knownPairingVoice && paired ? paired : s.examinerVoice });
+    const nextVoice = genderMatches ? s.examinerVoice : paired ?? s.examinerVoice;
+    setS({ ...s, examinerGender: gender, examinerVoice: nextVoice });
   }
+
+  /** Voices offered for the chosen examiner: matching gender only (null-gender voices like "auto" always stay). */
+  const genderedProfiles = profiles.filter((p) => p.gender == null || p.gender === s.examinerGender);
 
   const field = "mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400";
   return (
@@ -89,7 +90,7 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
                 className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${s.examinerGender === g ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300"}`}
               >
                 <span className="block font-medium">{g === "female" ? "Female examiner" : "Male examiner"}</span>
-                <span className={`mt-0.5 block text-xs ${s.examinerGender === g ? "text-zinc-300" : "text-zinc-400"}`}>{GENDER_NAME[g]} · {GENDER_VOICE_BY_FAMILY[voiceFamily(s.examinerVoice)]?.[g]?.split(":").pop() ?? "voice"}</span>
+                <span className={`mt-0.5 block text-xs ${s.examinerGender === g ? "text-zinc-300" : "text-zinc-400"}`}>{GENDER_NAME[g]} · {(GENDER_VOICE_BY_FAMILY[voiceFamily(s.examinerVoice)]?.[g] ?? "").replace(/^(kokoro|openai|azure)[-:]/, "") || "voice"}</span>
               </button>
             ))}
           </div>
@@ -100,13 +101,16 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
             <>
               <select className={field} value={s.examinerVoice} onChange={(e) => setS({ ...s, examinerVoice: e.target.value })}>
                 <option value="auto">Auto · deployment default ({ttsVoice})</option>
-                {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                {genderedProfiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 {s.examinerVoice !== "auto" && !profiles.some((p) => p.id === s.examinerVoice) && (
                   <option value={s.examinerVoice}>{s.examinerVoice} · custom</option>
                 )}
+                {s.examinerVoice !== "auto" && profiles.some((p) => p.id === s.examinerVoice) && !genderedProfiles.some((p) => p.id === s.examinerVoice) && (
+                  <option value={s.examinerVoice}>{s.examinerVoice} · other gender</option>
+                )}
               </select>
               <span className="mt-1 block text-xs text-zinc-400">
-                {ttsStreaming ? "Progressive playback is on." : "Buffered playback."} A running exam keeps the voice it started with.
+                Only voices matching the {s.examinerGender === "female" ? "female" : "male"} examiner are listed — the digital human and the voice always belong to the same person. {ttsStreaming ? "Progressive playback is on." : "Buffered playback."} A running exam keeps the voice it started with.
               </span>
             </>
           ) : (
