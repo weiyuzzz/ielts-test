@@ -44,11 +44,14 @@ export async function runScoring(assessmentId: string): Promise<void> {
       idx++;
       let t = allT.find((x) => x.answerId === ans.id && x.status === "completed");
       const main = assets.find((x) => x.id === ans.audioAssetId);
+      // Server ASR prefers the 16 kHz mono WAV asset (correct container for
+      // every provider, timeline matches the pronunciation slicer).
+      const asrAsset = assets.find((x) => x.id === ans.wavAssetId) ?? main;
       // (re)transcribe on the server when needed and possible
-      if (!t && ans.status !== "no_response" && asr?.location === "server" && main) {
+      if (!t && ans.status !== "no_response" && asr?.location === "server" && asrAsset) {
         const started = Date.now();
         try {
-          const r = await withTimeout(asr.id, TIMEOUTS.asrMs, async (signal) => asr.transcribe(await readAudio(main.storageKey), main.mimeType, { signal, prompt: st.promptText }));
+          const r = await withTimeout(asr.id, TIMEOUTS.asrMs, async (signal) => asr.transcribe(await readAudio(asrAsset.storageKey), asrAsset.mimeType, { signal, prompt: st.promptText }));
           [t] = await db.insert(transcripts).values({ answerId: ans.id, provider: asr.id, model: asr.model, status: "completed", text: r.text, words: r.words ?? null, latencyMs: Date.now() - started }).returning();
         } catch (e) {
           await db.insert(transcripts).values({ answerId: ans.id, provider: asr.id, model: asr.model, status: "failed", error: (e as Error).message.slice(0, 500), latencyMs: Date.now() - started });

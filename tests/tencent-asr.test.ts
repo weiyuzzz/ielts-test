@@ -86,6 +86,23 @@ test("tencentAsr: failed task surfaces the server error message", async () => {
   await assert.rejects(() => asr.transcribe(wavBuffer(), "audio/wav"), /task failed: audio decode failed/);
 });
 
+test("tencentAsr: empty top-level Text falls back to ResultDetail sentences", async () => {
+  const script = new Map<string, unknown[]>([
+    ["CreateRecTask", [{ Data: { TaskId: 55 } }]],
+    ["DescribeTaskStatus", [{ Data: {
+      TaskId: 55, Status: 2, Text: "",
+      ResultDetail: [
+        { FinalSentence: "I usually listen to pop music.", Words: [{ Word: "i", OffsetStartMs: 100, OffsetEndMs: 200 }] },
+        { FinalSentence: "It helps me relax.", Words: [{ Word: "it", OffsetStartMs: 300, OffsetEndMs: 400 }] },
+      ],
+    } }]],
+  ]);
+  const asr = tencentAsr({ ...CREDENTIALS, clientFactory: () => stubClient(script, []) });
+  const r = await asr.transcribe(wavBuffer(), "audio/wav");
+  assert.equal(r.text, "I usually listen to pop music. It helps me relax.");
+  assert.equal(r.words?.length, 2);
+});
+
 test("tencentAsr: aborts promptly instead of polling forever", async () => {
   const script = new Map<string, unknown[]>([
     ["CreateRecTask", [{ Data: { TaskId: 7 } }]],

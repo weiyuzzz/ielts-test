@@ -322,7 +322,10 @@ export async function submitAnswer(user: User, id: string, form: FormData) {
       state.steps.filter((x) => x.kind === "follow_up").length,
       config,
     );
-    const work = () => transcribeAnswer(answer.id, main.storageKey, main.mimeType, prompt).then(() => undefined);
+    // Server ASR prefers the 16 kHz mono WAV asset: the correct container for
+    // every provider, and its timeline matches the pronunciation slicer.
+    const asrAsset = wavRow ?? main!;
+    const work = () => transcribeAnswer(answer.id, asrAsset.storageKey, asrAsset.mimeType, prompt).then(() => undefined);
     if (timing === "sync") {
       const asrStart = Date.now();
       await work();

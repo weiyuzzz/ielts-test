@@ -42,13 +42,19 @@ interface WordDetail {
   OffsetEndMs?: number;
 }
 
+interface SentenceDetail {
+  FinalSentence?: string;
+  SliceSentence?: string;
+  Words?: WordDetail[];
+}
+
 export interface TaskDetail {
   TaskId?: number;
   Status?: number;
   StatusStr?: string;
   Text?: string;
   ErrorMsg?: string;
-  ResultDetail?: { FinalSentence?: string; Words?: WordDetail[] }[];
+  ResultDetail?: SentenceDetail[];
   Words?: WordDetail[];
 }
 
@@ -114,7 +120,16 @@ export function tencentAsr(opts: TencentAsrOptions = {}): ASRProvider {
       }
       if (detail.Status !== 2) throw new ProviderError("tencent-asr", "timeout", "recognition did not finish in time");
 
-      const text = (detail.Text ?? "").trim();
+      // With ResTextFormat=2 the top-level Text field can come back EMPTY even
+      // when recognition succeeded — the sentences live in ResultDetail. Fall
+      // back to FinalSentence/SliceSentence so text is never silently empty.
+      const text =
+        (detail.Text ?? "").trim() ||
+        (detail.ResultDetail ?? [])
+          .map((s) => (s.FinalSentence || s.SliceSentence || "").trim())
+          .filter(Boolean)
+          .join(" ")
+          .trim();
       const wordDetails = detail.Words ?? detail.ResultDetail?.flatMap((s) => s.Words ?? []) ?? [];
       const words: WordTiming[] = wordDetails
         .filter((w) => typeof w.Word === "string" && w.Word.trim() && Number.isFinite(w.OffsetStartMs) && Number.isFinite(w.OffsetEndMs))
