@@ -67,18 +67,22 @@ services:
 ```bash
 npm ci
 npx next typegen
-npx drizzle-kit push --url="$DATABASE_URL" --force   # 建表
+npx drizzle-kit push --dialect postgresql --schema ./src/db/schema.ts --url="$DATABASE_URL" --force
 npm run build
 npx next start -p 3100 &                              # 生产服务
 # 轮询 /api/health 直到 200（最多 120s）
 node tests/integration.mjs http://localhost:3100      # 30 项
 ```
 
-### 为什么用 `--url`
+### 为什么用 `--url`（且必须同时给 `--dialect` / `--schema`）
 
 `drizzle.config.json` 里硬编码了本地连接串（`postgresql://postgres:postgres@127.0.0.1:5432/ielts_platform`），
-**不读 `DATABASE_URL`**。`drizzle-kit push --url=...` 可以覆盖它，
-这样 CI 不需要修改共享配置文件。
+**不读 `DATABASE_URL`**。`drizzle-kit push --url=...` 可以覆盖它，这样 CI 不需要修改共享配置文件。
+
+坑：一旦传 `--url`，drizzle-kit 就**不再读 config**，会报
+`Please provide required params: [x] dialect: undefined [x] schema: undefined`，
+所以必须显式补齐 `--dialect postgresql --schema ./src/db/schema.ts`。
+另外 `--config` 不能与其他 CLI 选项同时使用（`You can't use both --config and other cli options`）。
 
 > 建议后续把 `drizzle.config.json` 换成读取 `process.env.DATABASE_URL` 的 `drizzle.config.ts`，
 > 但这属于共享配置，本次未改（见 issue #7 第三节）。

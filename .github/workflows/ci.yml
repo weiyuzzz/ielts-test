@@ -107,10 +107,17 @@ jobs:
       - name: Generate Next.js route types
         run: npx next typegen
 
-      # --url overrides the hardcoded local credentials in drizzle.config.json,
-      # so the workflow does not need to modify shared project config.
+      # Passing --url makes drizzle-kit ignore drizzle.config.json, so --dialect
+      # and --schema must be supplied explicitly. This overrides the hardcoded
+      # local credentials in the config without modifying shared project config.
+      # (drizzle-kit rejects --config together with --url.)
       - name: Push schema to the test database
-        run: npx drizzle-kit push --url="$DATABASE_URL" --force
+        run: >-
+          npx drizzle-kit push
+          --dialect postgresql
+          --schema ./src/db/schema.ts
+          --url="$DATABASE_URL"
+          --force
 
       - name: Production build
         run: npm run build
@@ -139,7 +146,7 @@ jobs:
         run: node tests/integration.mjs http://localhost:3100
 
       - name: Server logs
-        if: always()
+        if: always() && hashFiles('next-server.log') != ''
         run: tail -n 300 next-server.log || true
 
       - name: Stop server
