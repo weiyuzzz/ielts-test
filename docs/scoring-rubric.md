@@ -114,11 +114,21 @@ DESCRIPTOR_SOURCE = {
 - 文本是**结构化转述**，不是官方原文，也不代表 IELTS 官方认可。
 - `revision` 每次改动判据都要升版；报告页会显示它，便于回溯某份报告用的是哪版标准。
 
-## 8. 待办 / 依赖
+## 8. 持久化（已完成）
 
-- **持久化依赖共享接口**：`assessmentFindings.descriptorRefs`（`assessment_findings.descriptor_refs`）
-  目前**不在 `src/db/schema.ts` 中**，而本任务禁止修改该文件。
-  代码侧已准备好一行插入（见 `report-service.ts` 的 TODO），列一旦加上即可落库并自动在报告页展示。
-  已在 issue #4 提出接口需求。
-- 真实 LLM 评分质量未验证：本仓库 CI 不调用付费模型，只校验**结构、引用合法性与单调性**。
-  自动化测试通过 ≠ 评分质量已验证。
+`assessment_findings.descriptor_refs` 已落地：
+
+- **Schema**：`jsonb("descriptor_refs").$type<string[]>().notNull().default([])`
+- **迁移**：`drizzle/0001_learning_audio_descriptor_refs.sql`
+  （同时补上 PR #9 加了列却没生成迁移的历史缺口；全部是 ADD COLUMN / SET DEFAULT，不删表不删数据）
+- **写入**：`report-service.ts` 在插入 finding 时写 `descriptorRefs: f.descriptorRefs ?? []`
+- **读取**：`getReport()` 把 `null` 归一化为 `[]`，旧记录照常展示
+- **验证**：`tests/integration.mjs` 用真实 PostgreSQL 写入 → SQL 读回 → 报告 API 读回；
+  `tests/migration-check.mjs` 校验迁移链与 `schema.ts` 完全一致
+
+## 9. 仍未验证
+
+- **真实 LLM 评分质量**：本仓库 CI 不调用付费模型，只校验**结构、引用合法性与单调性**。
+  自动化测试通过 ≠ 评分质量已验证。「同一回答换模型差异 ≤ 0.5」需要离线批跑 + 人工抽检。
+- 报告页的判据展示只在无 LLM 环境下做过降级验证（`unscored` 时无 findings），
+  带真实 findings 的视觉效果需在有 API Key 的环境人工确认。

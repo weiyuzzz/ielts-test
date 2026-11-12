@@ -167,12 +167,16 @@ export async function runScoring(assessmentId: string): Promise<void> {
     await db.transaction(async (tx) => {
       await tx.insert(assessmentDimensions).values(dims.map((d) => ({ assessmentId: a.id, dimension: d.dimension, band: d.band, status: d.band === null ? "not_assessed" : "scored", source: d.source, rationale: d.rationale })));
       if (findings.length)
-        // TODO(phase3-shared-interface): add `descriptorRefs: f.descriptorRefs ?? []`
-        // to this insert once `assessmentFindings.descriptorRefs` exists in
-        // src/db/schema.ts. The ids are already validated by
-        // validateLanguageScore()/checkDescriptorRefs(), so nothing invalid can
-        // be stored; only the column is missing. See issue #4.
-        await tx.insert(assessmentFindings).values(findings.map((f) => ({ assessmentId: a.id, dimension: f.dimension, answerId: f.answerId, kind: f.kind, category: f.category, originalText: f.originalText, suggestion: f.suggestion ?? null, explanation: f.explanation, possibleAsrError: !!f.possibleAsrError })));
+        await tx.insert(assessmentFindings).values(
+          findings.map((f) => ({
+            assessmentId: a.id, dimension: f.dimension, answerId: f.answerId, kind: f.kind,
+            category: f.category, originalText: f.originalText, suggestion: f.suggestion ?? null,
+            explanation: f.explanation, possibleAsrError: !!f.possibleAsrError,
+            // Only ids validated against the rubric reach this point
+            // (validateLanguageScore drops unknown / cross-dimension / far-band ids).
+            descriptorRefs: f.descriptorRefs ?? [],
+          })),
+        );
       const weakest = dims.filter((d) => d.band !== null).sort((x, y) => (x.band as number) - (y.band as number))[0];
       const summary = lang.summary || (overall !== null ? `Estimated band ${overall}. Weakest area: ${DIMENSION_LABELS[weakest.dimension as "FC"]}.` : `Language criteria assessed. Weakest area: ${DIMENSION_LABELS[weakest.dimension as "FC"]}. Pronunciation was not assessed, so no overall band is shown.`);
       await tx.delete(examReports).where(eq(examReports.sessionId, a.sessionId));
@@ -196,7 +200,10 @@ export async function getReport(sessionId: string) {
   const [a] = await db.select().from(assessments).where(eq(assessments.sessionId, sessionId)).orderBy(desc(assessments.startedAt)).limit(1);
   if (!a) return null;
   const dims = await db.select().from(assessmentDimensions).where(eq(assessmentDimensions.assessmentId, a.id));
-  const findings = await db.select().from(assessmentFindings).where(eq(assessmentFindings.assessmentId, a.id));
+  const rows = await db.select().from(assessmentFindings).where(eq(assessmentFindings.assessmentId, a.id));
+  // Rows written before the column existed (or by a pre-migration deployment)
+  // come back as null; normalise to [] so the report never renders "undefined".
+  const findings = rows.map((f) => ({ ...f, descriptorRefs: Array.isArray(f.descriptorRefs) ? f.descriptorRefs : [] }));
   const [report] = await db.select().from(examReports).where(eq(examReports.assessmentId, a.id)).limit(1);
   return { assessment: a, dimensions: dims, findings, report: report ?? null };
 }
