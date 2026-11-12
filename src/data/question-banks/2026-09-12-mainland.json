@@ -3,7 +3,7 @@
  "region": "大陆地区",
  "label": "2026 年 9–12 月（大陆）",
  "source": "腾讯文档《雅思口语9-12月题库【Part123】》",
- "importedAt": "2026-11-12",
+ "note": "Part 3 questions are the examiner follow-ups that belong to each Part 2 cue card; every card keeps its own discussion set.",
  "topics": [
   {
    "key": "paper",
@@ -1058,11 +1058,977 @@
    "part3": []
   },
   {
-   "key": "p2-9b2a70",
+   "key": "p2-e0aac9f9",
+   "name": "嘈杂地",
+   "nameZh": "嘈杂地",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a noisy place you have been to",
+     "cuePoints": [
+      "Where it is",
+      "When you went there",
+      "What you did there",
+      "And explain why you feel it’s a noisy place",
+      "Where it was"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "How can people consider others' feelings when chatting in public?",
+     "textZh": "在公共场合聊天时，人们如何考虑他人的感受？"
+    },
+    {
+     "text": "How would people usually respond to noises in your country?",
+     "textZh": "在你们国家，人们通常如何应对噪音？"
+    },
+    {
+     "text": "Which area is exposed to noise more, the city or the countryside?",
+     "textZh": "哪个地方更容易受到噪音影响，城市还是乡村？"
+    },
+    {
+     "text": "What kinds of noises are there in our life?",
+     "textZh": "我们生活中有哪些类型的噪音？"
+    },
+    {
+     "text": "Should children not be allowed to make noise under any circumstances?",
+     "textZh": "是否应该完全禁止孩子发出噪音？"
+    },
+    {
+     "text": "Do you think it is good for children to make noise?",
+     "textZh": "你认为孩子发出噪音是好事吗？"
+    }
+   ]
+  },
+  {
+   "key": "p2-f95bb8fc",
+   "name": "拥挤地方",
+   "nameZh": "拥挤地方",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a crowded place you went to",
+     "cuePoints": [
+      "Where it was",
+      "When you went there",
+      "Who you went there with",
+      "What you did there",
+      "Where you go"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Do you think it is a good trend to have more big cities?",
+     "textZh": "你认为出现更多大城市是一个好趋势吗？"
+    },
+    {
+     "text": "Do you think there are some people who enjoy crowded places?",
+     "textZh": "你认为有些人喜欢拥挤的地方吗？"
+    },
+    {
+     "text": "Why do people go to crowded places?",
+     "textZh": "人们为什么会去拥挤的地方？"
+    },
+    {
+     "text": "Will people use bikes more or less in cities in the future?",
+     "textZh": "未来城市里人们会更多还是更少使用自行车？"
+    },
+    {
+     "text": "Will there be more or less green space in cities in the future?",
+     "textZh": "未来城市里的绿地会更多还是更少？"
+    },
+    {
+     "text": "Which cities are overcrowded in your country?",
+     "textZh": "你们国家哪些城市过度拥挤？"
+    }
+   ]
+  },
+  {
+   "key": "p2-9c63fe4e",
+   "name": "不喜欢的短途旅行",
+   "nameZh": "不喜欢的短途旅行",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a short trip you often take but do not like",
+     "cuePoints": [
+      "Where you go",
+      "When you go there",
+      "Why you go there",
+      "Why you do not like the trip",
+      "What you lost"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "What problems does it cause for transportation when everyone commutes at the same time?",
+     "textZh": "当所有人同时通勤时，会给交通带来什么问题？"
+    },
+    {
+     "text": "What are the benefits of travelling abroad?",
+     "textZh": "出国旅行有什么好处？"
+    },
+    {
+     "text": "How much time do you think people should spend on a trip abroad?",
+     "textZh": "你认为人们出国旅行应该花多少时间？"
+    },
+    {
+     "text": "Do Chinese people like travelling abroad?",
+     "textZh": "中国人喜欢出国旅行吗？"
+    }
+   ]
+  },
+  {
+   "key": "p2-ceb3eb76",
+   "name": "去过的无聊地方",
+   "nameZh": "去过的无聊地方",
+   "type": "retained",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a boring place",
+     "cuePoints": [
+      "Where it is",
+      "Who you went there with",
+      "What you did there",
+      "Why you think it is a boring place"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Why do most children think education is boring?",
+     "textZh": "为什么大多数孩子觉得教育很无聊？"
+    },
+    {
+     "text": "Why aren’t young people willing to listen to the experiences of older people?",
+     "textZh": "为什么年轻人不愿意听老年人的经验？"
+    },
+    {
+     "text": "What can people do when they feel bored?",
+     "textZh": "当人们感到无聊时可以做什么？"
+    },
+    {
+     "text": "Why do some young people feel bored when talking with old people?",
+     "textZh": "为什么有些年轻人觉得和老年人交谈很无聊？"
+    },
+    {
+     "text": "Do most people think news about celebrities is boring?",
+     "textZh": "大多数人认为关于名人的新闻无聊吗？"
+    }
+   ]
+  },
+  {
+   "key": "p2-5f1b5f20",
+   "name": "好的购物服务",
+   "nameZh": "好的购物服务",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a time when you received good service in a shop/store",
+     "cuePoints": [
+      "Where the shop is",
+      "When you went to the shop",
+      "What service you received from the staff",
+      "And explain how you felt about the service",
+      "When you visited it"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Can consumption drive economic growth?",
+     "textZh": "消费能推动经济增长吗？"
+    },
+    {
+     "text": "What are the advantages and disadvantages of shopping online?",
+     "textZh": "网购有哪些优点和缺点？"
+    },
+    {
+     "text": "What are the differences between online shopping and in-store shopping?",
+     "textZh": "网购和实体店购物有什么区别？"
+    },
+    {
+     "text": "Why do some people not like shopping in small shops?",
+     "textZh": "为什么有些人不喜欢在小商店购物？"
+    },
+    {
+     "text": "What are the advantages and disadvantages of shopping in small shops?",
+     "textZh": "在小商店购物有哪些优点和缺点？"
+    },
+    {
+     "text": "Why are shopping malls so popular in China?",
+     "textZh": "为什么购物中心在中国这么受欢迎？"
+    }
+   ]
+  },
+  {
+   "key": "p2-36edd94a",
+   "name": "推荐旅行过的地方",
+   "nameZh": "推荐旅行过的地方",
+   "type": "retained",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a place you have travelled to that you would like to recommend to others",
+     "cuePoints": [
+      "What it is",
+      "Where it is",
+      "What you saw and did there",
+      "Why you would like to recommend it to others"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Where do people in your country often go for holidays?",
+     "textZh": "你们国家的人通常去哪里度假？"
+    },
+    {
+     "text": "Where do young people in your country often go for holidays?",
+     "textZh": "你们国家的年轻人通常去哪里度假？"
+    },
+    {
+     "text": "What is the ideal length for a holiday?",
+     "textZh": "度假的理想时长是多少？"
+    },
+    {
+     "text": "How do people usually plan holidays?",
+     "textZh": "人们通常是如何计划假期的？"
+    },
+    {
+     "text": "Is it important to plan a holiday ahead?",
+     "textZh": "提前计划假期重要吗？"
+    },
+    {
+     "text": "Why do many countries try to attract people to visit?",
+     "textZh": "为什么很多国家努力吸引游客前来？"
+    },
+    {
+     "text": "How do people decide when to travel?",
+     "textZh": "人们如何决定什么时候旅行？"
+    }
+   ]
+  },
+  {
+   "key": "p2-574598ec",
+   "name": "喜欢的城市自然之地",
+   "nameZh": "喜欢的城市自然之地",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a natural place in your city that you enjoy visiting",
+     "cuePoints": [
+      "Where it is",
+      "What it is like",
+      "How often you go there",
+      "Who you often go there with",
+      "And explain why you enjoy visiting there"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Which is more important, protecting the environment or developing the economy?",
+     "textZh": "保护环境和发展经济，哪个更重要？"
+    },
+    {
+     "text": "Do you think staying in a natural place would help change people’s mood?",
+     "textZh": "你认为待在自然环境中会改变人们的心情吗？"
+    },
+    {
+     "text": "Do you think there should be many natural places in cities?",
+     "textZh": "你认为城市里应该有很多自然场所吗？"
+    }
+   ]
+  },
+  {
+   "key": "p2-a7b9abc6",
+   "name": "喜欢拜访但不想住的家",
+   "nameZh": "喜欢拜访但不想住的家",
+   "type": "retained",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a home that you like to visit but do not want to live in",
+     "cuePoints": [
+      "Where it is",
+      "What it is like",
+      "What it is like",
+      "Why you like to visit it",
+      "And explain why you would not like to live there"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Do Chinese people like to visit others’ homes?",
+     "textZh": "中国人喜欢拜访别人家吗？"
+    },
+    {
+     "text": "What do Chinese people do when they visit others?",
+     "textZh": "中国人拜访别人时通常做什么？"
+    },
+    {
+     "text": "What kind of place do people in your country like to live in?",
+     "textZh": "你们国家的人喜欢住在什么样的地方？"
+    },
+    {
+     "text": "What's the difference between homes in cities and those in the countryside?",
+     "textZh": "城市的家和农村的家有什么区别？"
+    },
+    {
+     "text": "Can't offerWhat kind of gifts do people usually bring when they visit others?",
+     "textZh": "人们拜访别人时通常带什么礼物？"
+    },
+    {
+     "text": "How often do you visit your relatives or friends?",
+     "textZh": "你多久拜访一次亲戚或朋友？"
+    }
+   ]
+  },
+  {
+   "key": "p2-3d82d62f",
+   "name": "喜欢的公共建筑",
+   "nameZh": "喜欢的公共建筑",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a pubilc building you enjoy visiting(e.g. a library, a shopping mall,etc)",
+     "cuePoints": [
+      "Where it is",
+      "How you knew it",
+      "What it looks like",
+      "Why you enjoy visiting it",
+      "What it is used for"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Do you think all old buildings should be demolished ?",
+     "textZh": "你认为所有老建筑都应该被拆除吗？"
+    },
+    {
+     "text": "Do you think old buildings are valuable ?",
+     "textZh": "你认为老建筑有价值吗？"
+    }
+   ]
+  },
+  {
+   "key": "p2-6045dc55",
+   "name": "喜欢或不喜欢的高建筑",
+   "nameZh": "喜欢或不喜欢的高建筑",
+   "type": "retained",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a tall building you like or dislike",
+     "cuePoints": [
+      "What it is used for",
+      "Where it is",
+      "What it looks like"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Are there many tall buildings in your country?",
+     "textZh": "你们国家有很多高楼吗？"
+    },
+    {
+     "text": "What are the differences between those tall buildings in your country?",
+     "textZh": "你们国家高楼之间有什么区别？"
+    },
+    {
+     "text": "Why are different places laid out and designed differently?",
+     "textZh": "为什么不同地方的布局和设计各不相同？"
+    },
+    {
+     "text": "What are the advantages of living in tall buildings?",
+     "textZh": "住在高楼里有什么好处？"
+    },
+    {
+     "text": "Why do some people like to remodel and decorate their homes themselves?",
+     "textZh": "为什么有些人喜欢自己改造和装饰房间？"
+    },
+    {
+     "text": "What kind of interior design style do most people like?",
+     "textZh": "大多数人喜欢什么样的室内设计风格？"
+    }
+   ]
+  },
+  {
+   "key": "p2-f6854653",
+   "name": "浪费时间的活动",
+   "nameZh": "浪费时间的活动",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe an activity you do regularly that you think is a waste of time",
+     "cuePoints": [
+      "What it is",
+      "When you usually do it",
+      "Why you do it",
+      "And explain why you think it is a waste of time",
+      "What it is"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Why do some people refuse to abide by rules?",
+     "textZh": "为什么有些人拒绝遵守规则？"
+    },
+    {
+     "text": "What kinds of things make people feel pressured?",
+     "textZh": "什么样的事情会让人感到有压力？"
+    },
+    {
+     "text": "Will you continue doing something when you are aware that it’s a waste of time?",
+     "textZh": "如果你意识到某件事在浪费时间，你还会继续做吗？"
+    },
+    {
+     "text": "How do you balance life and work?",
+     "textZh": "你如何平衡生活和工作？"
+    },
+    {
+     "text": "Is it good to have a daily routine?",
+     "textZh": "拥有每日固定作息好吗？"
+    },
+    {
+     "text": "Do you think stress is important in people's lives?",
+     "textZh": "你认为压力在人们的生活中重要吗？"
+    }
+   ]
+  },
+  {
+   "key": "p2-9aa854ae",
+   "name": "帮别人提升健康",
+   "nameZh": "帮别人提升健康",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a person whose health and fitness you have helped to improve",
+     "cuePoints": [
+      "Who this person was",
+      "And explain whether it was easy or difficult",
+      "Why you helped",
+      "How you helped",
+      "How you felt about it"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Which group pays more attention to health , young people or old people ?",
+     "textZh": "哪个群体更关注健康，年轻人还是老年人？"
+    }
+   ]
+  },
+  {
+   "key": "p2-3d02f6ff",
+   "name": "读起来开心的书",
+   "nameZh": "读起来开心的书",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a book you read that made you happy",
+     "cuePoints": [
+      "What kind of book it was",
+      "What it was about",
+      "Why you read it",
+      "Why it made you happy",
+      "Who this person was"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "What kind of books useful to everyone?",
+     "textZh": "什么样的书对每个人都有用？"
+    },
+    {
+     "text": "Do you think people should read the original book before watching the movie?",
+     "textZh": "你认为人们应该在看电影之前先读原著吗？"
+    },
+    {
+     "text": "Are success books useful to everyone ?",
+     "textZh": "成功学书籍对每个人都有用吗？"
+    }
+   ]
+  },
+  {
+   "key": "p2-d4141f09",
+   "name": "帮助他人",
+   "nameZh": "帮助他人",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a time when you helped someone",
+     "cuePoints": [
+      "Why you helped",
+      "How you helped",
+      "How you felt about it"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Should people be very kind when they help others ?",
+     "textZh": "人们帮助别人时，应该表现得非常友善吗？"
+    },
+    {
+     "text": "Should children be taught to be kind to others ?",
+     "textZh": "应该教育孩子友善待人吗？"
+    },
+    {
+     "text": "Should parents help their kids with their homework ?",
+     "textZh": "父母应该帮助孩子做家庭作业吗？"
+    },
+    {
+     "text": "What kind of advice should parents give to their children ?",
+     "textZh": "父母应该给孩子哪些方面的建议？"
+    },
+    {
+     "text": "Can kids provide any help to parents ?",
+     "textZh": "孩子能为父母提供帮助吗？"
+    }
+   ]
+  },
+  {
+   "key": "p2-e7619410",
+   "name": "不喜欢的电影",
+   "nameZh": "不喜欢的电影",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a movie/film you don't like",
+     "cuePoints": [
+      "When you watched it",
+      "Where you watched it",
+      "What it was about",
+      "Why it's your least favourite movie",
+      "Who the person was"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Do people’s movie preferences change as they get older ?",
+     "textZh": "人们对电影的偏好会随着年龄增长而改变吗？"
+    },
+    {
+     "text": "Should documentary films be completely truthful ?",
+     "textZh": "纪录片应该完全真实吗？"
+    },
+    {
+     "text": "Can movies help people better understand the cultural background of a country ?",
+     "textZh": "电影能帮助人们更好地理解一个国家的文化背景吗？"
+    },
+    {
+     "text": "Are movies more likely to help people become more creative than books ?",
+     "textZh": "电影比书籍更能帮助人们变得更有创造力吗？"
+    },
+    {
+     "text": "What are the differences between watching movies at home and in a cinema ?",
+     "textZh": "在家看电影和在电影院看电影有什么区别？"
+    },
+    {
+     "text": "What kinds of movies are the most popular in China ?",
+     "textZh": "在中国，哪些类型的电影最受欢迎？"
+    }
+   ]
+  },
+  {
+   "key": "p2-37eec66e",
+   "name": "听不感兴趣的话",
+   "nameZh": "听不感兴趣的话",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a time when someone talked about something you were not interested in but you kept listening",
+     "cuePoints": [
+      "Who the person was",
+      "Why you kept listening",
+      "And explain how you felt about the experience"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "How can we tell if a listener is listening carefully?",
+     "textZh": "我们如何判断一个听众是否在认真听？"
+    },
+    {
+     "text": "What would happen if the listener didn’t listen carefully?",
+     "textZh": "如果听众没有认真听会发生什么？"
+    },
+    {
+     "text": "What kind of topics do young people like to talk about today?",
+     "textZh": "现在的年轻人喜欢聊什么话题？"
+    }
+   ]
+  },
+  {
+   "key": "p2-859b8b75",
+   "name": "对结果开心的重要决定",
+   "nameZh": "对结果开心的重要决定",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a time you made an important decision and were happy with the result",
+     "cuePoints": [
+      "What the decision was",
+      "Why you made the decision",
+      "How easy it was for you to make the decision",
+      "And explain why you were happy with the result",
+      "When you changed the decision"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Which is better, to make a decision quickly or slowly?",
+     "textZh": "快速做决定好还是慢慢做决定好？"
+    },
+    {
+     "text": "Do you think most people's decisions are made in their 20s?",
+     "textZh": "你认为大多数人的重要决定都是在20多岁时做出的吗？"
+    },
+    {
+     "text": "What if people in a group have different opinions on a decision?",
+     "textZh": "如果一个小组里的人对某个决定有不同意见怎么办？"
+    },
+    {
+     "text": "What little decisions do people make every day?",
+     "textZh": "人们每天会做哪些小决定？"
+    },
+    {
+     "text": "Do you think it is a good idea to make a small decision every day?",
+     "textZh": "你认为每天做一个小决定是个好主意吗？"
+    },
+    {
+     "text": "How can we tell the difference between an important and an easy decision?",
+     "textZh": "我们如何区分一个重要的决定和一个简单的决定？"
+    }
+   ]
+  },
+  {
+   "key": "p2-e17f4f2d",
+   "name": "改变重要想法",
+   "nameZh": "改变重要想法",
+   "type": "retained",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a time when you changed an important opinion of yours",
+     "cuePoints": [
+      "When you changed your opinion",
+      "What the original opinion was",
+      "Why you changed it",
+      "And explain how you felt about the experience",
+      "When this happened"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "When do most children begin to have their own opinions ?",
+     "textZh": "大多数孩子什么时候开始有自己的想法？"
+    },
+    {
+     "text": "Do children communicate more with teachers or with parents ?",
+     "textZh": "孩子与老师还是与父母交流更多？"
+    },
+    {
+     "text": "Who do young people like to share opinions with ?",
+     "textZh": "年轻人喜欢和谁分享意见？"
+    }
+   ]
+  },
+  {
+   "key": "p2-ae56a066",
+   "name": "近期改变的计划",
+   "nameZh": "近期改变的计划",
+   "type": "retained",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a plan that you had to change recently",
+     "cuePoints": [
+      "When this happened",
+      "What made you changed the plan",
+      "What the new plan was",
+      "How you feel about the change",
+      "What the change was"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Do people often change their plans?",
+     "textZh": "人们经常改变计划吗？"
+    },
+    {
+     "text": "Would you tell others if you change your plan?",
+     "textZh": "如果你改变了计划你会告诉别人吗？"
+    },
+    {
+     "text": "Why do you think parents still make plans for their children nowadays?",
+     "textZh": "你认为为什么现在的父母仍然为孩子制定计划？"
+    },
+    {
+     "text": "How does technology help people make plans?",
+     "textZh": "科技如何帮助人们制定计划？"
+    },
+    {
+     "text": "What kind of plans do people often make?",
+     "textZh": "人们通常会制定哪些计划？"
+    },
+    {
+     "text": "Do you think people like the process of making plans more, or the moment of carrying them out?",
+     "textZh": "你认为人们更喜欢制定计划的过程，还是执行计划的时刻？"
+    }
+   ]
+  },
+  {
+   "key": "p2-f7f62893",
+   "name": "近期改变",
+   "nameZh": "近期改变",
+   "type": "retained",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a change that you made recently",
+     "cuePoints": [
+      "What the change was",
+      "What caused the change",
+      "What you did for the change",
+      "How you feel about the change",
+      "What the decision was"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Do you think it is good to change one’s daily routine?",
+     "textZh": "你认为改变日常习惯好吗？"
+    },
+    {
+     "text": "Do you think it is good to change jobs?",
+     "textZh": "你认为换工作好吗？"
+    },
+    {
+     "text": "Is it good for people to get a job promotion?",
+     "textZh": "晋升对人们有好处吗？"
+    },
+    {
+     "text": "Do people often make plans around their regular routines?",
+     "textZh": "人们通常会围绕日常习惯制定计划吗？"
+    },
+    {
+     "text": "Who tend to change their daily routine more, young people or old people?",
+     "textZh": "年轻人还是老年人更倾向于改变日常习惯？"
+    }
+   ]
+  },
+  {
+   "key": "p2-15a5d4b0",
+   "name": "重要决定",
+   "nameZh": "重要决定",
+   "type": "retained",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a time you made an important decision and were happy with the result",
+     "cuePoints": [
+      "What the decision was",
+      "Why you made the decision",
+      "How easy it was for you to make the decision",
+      "And explain why you were happy with the result",
+      "When you changed the decision"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Do you think children sometimes have to make important decisions?",
+     "textZh": "你认为孩子有时需要做出重要决定吗？"
+    },
+    {
+     "text": "What important decisions do teenagers need to make after graduation?",
+     "textZh": "青少年毕业后需要做出哪些重要决定？"
+    },
+    {
+     "text": "Who can children turn to for help when making a decision?",
+     "textZh": "孩子在做决定时可以向谁寻求帮助？"
+    },
+    {
+     "text": "Do you think advertisements can influence our decisions when shopping?",
+     "textZh": "你认为广告会影响我们购物时的决定吗？"
+    },
+    {
+     "text": "Do you think the influence of advertising is good?",
+     "textZh": "你认为广告的影响是好的吗？"
+    },
+    {
+     "text": "How do people usually make important decisions?",
+     "textZh": "人们通常如何做出重要决定？"
+    }
+   ]
+  },
+  {
+   "key": "p2-a63a2ff2",
+   "name": "长久目标/抱负",
+   "nameZh": "长久目标/抱负",
+   "type": "retained",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a long-term goal/ambition you would like to achieve",
+     "cuePoints": [
+      "What it is",
+      "How you will achieve it",
+      "Why you set it"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Why should children have ambitions?",
+     "textZh": "为什么孩子应该有抱负？"
+    },
+    {
+     "text": "What do you think of people going after high positions?",
+     "textZh": "你怎么看待追求高职位的人？"
+    },
+    {
+     "text": "Why are some young people keen on being fans of superstars?",
+     "textZh": "为什么有些年轻人热衷于成为超级明星的粉丝？"
+    },
+    {
+     "text": "Is it good for a person to be ambitious?",
+     "textZh": "一个人有抱负好吗？"
+    },
+    {
+     "text": "Do you think it is necessary to be ambitious when working in a team in a company?",
+     "textZh": "你认为在公司团队中工作时有抱负是必要的吗？"
+    },
+    {
+     "text": "Should parents support their children in pursuing their ambitions?",
+     "textZh": "父母应该支持孩子追求抱负吗？"
+    }
+   ]
+  },
+  {
+   "key": "p2-9a4a07c9",
+   "name": "擅长学习和说语言的人",
+   "nameZh": "擅长学习和说语言的人",
+   "type": "retained",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a person who is good at learning and speaking new languages",
+     "cuePoints": []
+    }
+   ],
+   "part3": [
+    {
+     "text": "Are there many people who can speak foreign languages in your country?",
+     "textZh": "你们国家有很多人会说外语吗？"
+    },
+    {
+     "text": "Does speaking other languages help at work?",
+     "textZh": "说其他语言在工作中有帮助吗？"
+    },
+    {
+     "text": "Do people learn any languages other than English?",
+     "textZh": "除了英语，人们还会学习其他语言吗？"
+    },
+    {
+     "text": "Why is it easier for children to learn new things than for adults?",
+     "textZh": "为什么孩子比成人更容易学习新事物？"
+    },
+    {
+     "text": "How do people learn new things?",
+     "textZh": "人们是如何学习新事物的？"
+    },
+    {
+     "text": "What is the most important thing for learning a language well?",
+     "textZh": "学好一门语言最重要的是什么？"
+    }
+   ]
+  },
+  {
+   "key": "p2-82b9102c",
    "name": "想颁布的新法律",
    "nameZh": "想颁布的新法律",
    "type": "retained",
    "category": "part23",
+   "examinees": null,
    "part1": [],
    "part2": [
     {
@@ -1076,14 +2042,40 @@
      ]
     }
    ],
-   "part3": []
+   "part3": [
+    {
+     "text": "What rules should students follow at school?",
+     "textZh": "学生在学校应该遵守哪些规则？"
+    },
+    {
+     "text": "Do people in your country usually obey the law?",
+     "textZh": "你们国家的人通常遵守法律吗？"
+    },
+    {
+     "text": "What kinds of behavior are considered as good behavior?",
+     "textZh": "什么样的行为被认为是良好行为？"
+    },
+    {
+     "text": "Do you think children can learn about the law outside of school?",
+     "textZh": "你认为孩子可以在学校以外学习法律知识吗？"
+    },
+    {
+     "text": "Why rules exist matterWhat are the benefits for people to obey rules?",
+     "textZh": "人们遵守规则有什么好处？"
+    },
+    {
+     "text": "How can parents teach children to obey rules?",
+     "textZh": "父母如何教孩子遵守规则？"
+    }
+   ]
   },
   {
-   "key": "p2-ca1f69",
+   "key": "p2-5e17f86f",
    "name": "想要颁布的环保法律",
    "nameZh": "想要颁布的环保法律",
    "type": "retained",
    "category": "part23",
+   "examinees": null,
    "part1": [],
    "part2": [
     {
@@ -1092,35 +2084,37 @@
       "What the law should be",
       "Why people shouled follow the law",
       "Whether the law will be popular",
-      "How you feel about this law"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-69bfe8",
-   "name": "包含动物的故事或书",
-   "nameZh": "包含动物的故事或书",
-   "type": "retained",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a story/book with animals in it",
-     "cuePoints": [
+      "How you feel about this law",
       "What animals are in it"
      ]
     }
    ],
-   "part3": []
+   "part3": [
+    {
+     "text": "How does technology affect the law ?",
+     "textZh": "科技如何影响法律？"
+    },
+    {
+     "text": "What kinds of rules do schools in China have ?",
+     "textZh": "中国学校有哪些规则？"
+    },
+    {
+     "text": "Will there be a law that is universally accepted ?",
+     "textZh": "会有一部被普遍接受的法律吗？"
+    },
+    {
+     "text": "What environmental laws does your country already have ?",
+     "textZh": "你们国家已经有哪些环境法律？"
+    }
+   ]
   },
   {
-   "key": "p2-8e0aaf",
+   "key": "p2-b36e5b80",
    "name": "保护环境的法律",
    "nameZh": "保护环境的法律",
    "type": "retained",
    "category": "part23",
+   "examinees": null,
    "part1": [],
    "part2": [
     {
@@ -1135,393 +2129,81 @@
    ],
    "part3": [
     {
-     "text": "How can people consider others' feelings when chatting in public?",
-     "textZh": "在公共场合聊天时，人们如何考虑他人的感受？"
+     "text": "What kinds of rules do schools in China have ?",
+     "textZh": "中国学校有哪些规则？"
     },
     {
-     "text": "Do you think it is a good trend to have more big cities?",
-     "textZh": "你认为出现更多大城市是一个好趋势吗？"
+     "text": "Do you think school rules are important ?",
+     "textZh": "你认为校规重要吗？"
     },
     {
-     "text": "Which is more important, protecting the environment or developing the economy?",
-     "textZh": "保护环境和发展经济，哪个更重要？"
+     "text": "Are children unhappy with the school rules?",
+     "textZh": "孩子们对校规不满意吗？"
     },
     {
-     "text": "Where do people in your country often go for holidays?",
-     "textZh": "你们国家的人通常去哪里度假？"
+     "text": "How can parents and teachers help children understand and follow rules ?",
+     "textZh": "父母和老师如何帮助孩子理解和遵守规则？"
     },
     {
-     "text": "Why do most children think education is boring?",
-     "textZh": "为什么大多数孩子觉得教育很无聊？"
+     "text": "What are the rules people should obey at work ?",
+     "textZh": "人们在工作中应该遵守哪些规则？"
     },
     {
-     "text": "Do Chinese people like to visit others’ homes?",
-     "textZh": "中国人喜欢拜访别人家吗？"
+     "text": "What is the purpose of punishment ?",
+     "textZh": "惩罚的目的是什么？"
     }
    ]
   },
   {
-   "key": "p2-141eb9",
-   "name": "嘈杂地",
-   "nameZh": "嘈杂地",
-   "type": "new",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a noisy place you have been to",
-     "cuePoints": [
-      "Where it is",
-      "When you went there",
-      "What you did there",
-      "And explain why you feel it’s a noisy place"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-0e1129",
-   "name": "拥挤地方",
-   "nameZh": "拥挤地方",
-   "type": "new",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a crowded place you went to",
-     "cuePoints": [
-      "Where it was",
-      "When you went there",
-      "Who you went there with",
-      "What you did there"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-99e11a",
-   "name": "不喜欢的短途旅行",
-   "nameZh": "不喜欢的短途旅行",
-   "type": "new",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a short trip you often take but do not like",
-     "cuePoints": [
-      "Where you go",
-      "When you go there",
-      "Why you go there",
-      "Why you do not like the trip"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-46e3e5",
-   "name": "去过的无聊地方",
-   "nameZh": "去过的无聊地方",
+   "key": "p2-f116f327",
+   "name": "包含动物的故事或书",
+   "nameZh": "包含动物的故事或书",
    "type": "retained",
    "category": "part23",
+   "examinees": null,
    "part1": [],
    "part2": [
     {
-     "text": "Describe a boring place",
+     "text": "Describe a story/book with animals in it",
      "cuePoints": [
-      "Where it is",
-      "Who you went there with",
-      "What you did there",
-      "Why you think it is a boring place"
+      "What animals are in it"
      ]
     }
    ],
-   "part3": []
-  },
-  {
-   "key": "p2-72c7c9",
-   "name": "当地新闻",
-   "nameZh": "当地新闻",
-   "type": "retained",
-   "category": "part23",
-   "part1": [],
-   "part2": [
+   "part3": [
     {
-     "text": "Describe a piece of local news that people are interested in",
-     "cuePoints": [
-      "What it was about",
-      "Who has involved",
-      "Why people were interested in it"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-81529b",
-   "name": "早起经历",
-   "nameZh": "早起经历",
-   "type": "retained",
-   "category": "part23",
-   "part1": [],
-   "part2": [
+     "text": "Should schools teach children about animals?",
+     "textZh": "学校应该教孩子关于动物的知识吗？"
+    },
     {
-     "text": "Describe a time when you got up early",
-     "cuePoints": [
-      "When it was",
-      "What you did",
-      "Why you got up early",
-      "How you felt about it"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-28a825",
-   "name": "在团队中工作",
-   "nameZh": "在团队中工作",
-   "type": "retained",
-   "category": "part23",
-   "part1": [],
-   "part2": [
+     "text": "Some people think pets should not be kept in cities. What do you think?",
+     "textZh": "有些人认为不应该在城市里养宠物，你怎么看？"
+    },
     {
-     "text": "Describe a time when you worked in a group",
-     "cuePoints": [
-      "What you did",
-      "Who you worked with",
-      "What problems you faced",
-      "Why you worked in the group"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-5e2d10",
-   "name": "喜欢的现场体育赛事",
-   "nameZh": "喜欢的现场体育赛事",
-   "type": "retained",
-   "category": "part23",
-   "part1": [],
-   "part2": [
+     "text": "Many people regard pets as members of their family. What do you think?",
+     "textZh": "很多人把宠物视为家庭成员，你怎么看？"
+    },
     {
-     "text": "Describe a live sports event you watched and liked",
-     "cuePoints": [
-      "What it was",
-      "When and where you watched it",
-      "Who you watched it with",
-      "And explain why you liked it"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-79bd8b",
-   "name": "名人出演的广告",
-   "nameZh": "名人出演的广告",
-   "type": "retained",
-   "category": "part23",
-   "part1": [],
-   "part2": [
+     "text": "Do many people keep pets in your country?",
+     "textZh": "你们国家有很多人养宠物吗？"
+    },
     {
-     "text": "Describe an advertisement with a famous person in it",
-     "cuePoints": [
-      "Who the person is",
-      "Where you can see it",
-      "What the advertisement is about",
-      "How you feel about the advertisement"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-6ec00b",
-   "name": "有趣视频",
-   "nameZh": "有趣视频",
-   "type": "retained",
-   "category": "part23",
-   "part1": [],
-   "part2": [
+     "text": "What are the advantages of keeping a pet?",
+     "textZh": "养宠物有什么好处？"
+    },
     {
-     "text": "Describe an interesting video",
-     "cuePoints": [
-      "When and where you watched it",
-      "What it is about",
-      "Why you watched it",
-      "How you feel about it"
-     ]
+     "text": "Why do people always tell children stories with animals?",
+     "textZh": "为什么人们总是给孩子讲有动物的故事？"
     }
-   ],
-   "part3": []
+   ]
   },
   {
-   "key": "p2-9e9e3b",
-   "name": "特别场合的食物",
-   "nameZh": "特别场合的食物",
-   "type": "retained",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a food that people eat on special occasions/events",
-     "cuePoints": [
-      "What it is"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-60c432",
-   "name": "好的购物服务",
-   "nameZh": "好的购物服务",
-   "type": "new",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a time when you received good service in a shop/store",
-     "cuePoints": [
-      "Where the shop is",
-      "When you went to the shop",
-      "What service you received from the staff",
-      "And explain how you felt about the service"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-3836a1",
-   "name": "推荐旅行过的地方",
-   "nameZh": "推荐旅行过的地方",
-   "type": "retained",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a place you have travelled to that you would like to recommend to others",
-     "cuePoints": [
-      "What it is",
-      "Where it is",
-      "What you saw and did there",
-      "Why you would like to recommend it to others"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-6e264e",
-   "name": "Describe a bicycle",
-   "nameZh": "Describe a bicycle",
-   "type": "retained",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a bicycle/motorcycle/car trip you would like to go",
-     "cuePoints": [
-      "Who you would like to go with",
-      "Where you would like to go",
-      "When you would like to go"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-5c9842",
-   "name": "喜欢的城市自然之地",
-   "nameZh": "喜欢的城市自然之地",
-   "type": "new",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a natural place in your city that you enjoy visiting",
-     "cuePoints": [
-      "Where it is",
-      "What it is like",
-      "How often you go there",
-      "Who you often go there with",
-      "And explain why you enjoy visiting there"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-75b820",
-   "name": "喜欢拜访但不想住的家",
-   "nameZh": "喜欢拜访但不想住的家",
-   "type": "retained",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a home that you like to visit but do not want to live in",
-     "cuePoints": [
-      "Where it is",
-      "What it is like",
-      "What it is like",
-      "Why you like to visit it",
-      "And explain why you would not like to live there"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-3df917",
-   "name": "喜欢拜访但不想住的家",
-   "nameZh": "喜欢拜访但不想住的家",
-   "type": "new",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a pubilc building you enjoy visiting(e.g. a library, a shopping mall,etc)",
-     "cuePoints": [
-      "Where it is",
-      "How you knew it",
-      "What it looks like",
-      "Why you enjoy visiting it"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-0995dd",
-   "name": "喜欢或不喜欢的高建筑",
-   "nameZh": "喜欢或不喜欢的高建筑",
-   "type": "retained",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a tall building you like or dislike",
-     "cuePoints": [
-      "What it is used for",
-      "Where it is",
-      "What it looks like"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-0aaa13",
+   "key": "p2-8410a60e",
    "name": "不会用的科技产品",
    "nameZh": "不会用的科技产品",
    "type": "new",
    "category": "part23",
+   "examinees": null,
    "part1": [],
    "part2": [
     {
@@ -1530,18 +2212,20 @@
       "What it was",
       "Why you didn't know how to use it",
       "Whether you learned to use it at last",
-      "How you felt about it"
+      "How you felt about it",
+      "What the problem was"
      ]
     }
    ],
    "part3": []
   },
   {
-   "key": "p2-d0c436",
+   "key": "p2-4a0ded04",
    "name": "遇到的科技问题",
    "nameZh": "遇到的科技问题",
    "type": "retained",
    "category": "part23",
+   "examinees": null,
    "part1": [],
    "part2": [
     {
@@ -1550,18 +2234,41 @@
       "What the problem was",
       "When and where you faced it",
       "How challenging it was",
-      "And explain how you solved it"
+      "And explain how you solved it",
+      "Who you sent it to"
      ]
     }
    ],
-   "part3": []
+   "part3": [
+    {
+     "text": "What are the advantages and disadvantages of AI ?",
+     "textZh": "人工智能的优缺点是什么？"
+    },
+    {
+     "text": "Do you think people today should learn about AI technology ?",
+     "textZh": "你认为现在的人应该学习人工智能技术吗？"
+    },
+    {
+     "text": "Should children learn to use AI ?",
+     "textZh": "孩子应该学习使用AI吗？"
+    },
+    {
+     "text": "Do you think students are overly reliant on AI ?",
+     "textZh": "你认为学生过度依赖AI吗？"
+    },
+    {
+     "text": "What can teachers do to stop students relying too much on AI ?",
+     "textZh": "老师可以做什么来阻止学生过度依赖AI？"
+    }
+   ]
   },
   {
-   "key": "p2-170a39",
+   "key": "p2-09ca93a1",
    "name": "很久没收到回复的信息",
    "nameZh": "很久没收到回复的信息",
    "type": "retained",
    "category": "part23",
+   "examinees": null,
    "part1": [],
    "part2": [
     {
@@ -1573,466 +2280,341 @@
      ]
     }
    ],
-   "part3": []
+   "part3": [
+    {
+     "text": "In what situations do people spend a long time responding to others messages?",
+     "textZh": "在什么情况下人们会花很长时间回复别人的消息？"
+    },
+    {
+     "text": "In what situations do people not respond to messages right away ?",
+     "textZh": "在什么情况下人们不会立即回复消息？"
+    },
+    {
+     "text": "What would you do if you haven’t received a reply after sending out a message ?",
+     "textZh": "如果你发出消息后没有收到回复你会怎么做？"
+    },
+    {
+     "text": "Why do some people prefer sending a message instead of making a call ?",
+     "textZh": "为什么有些人更喜欢发消息而不是打电话？"
+    },
+    {
+     "text": "How do you show your respect in your messages ?",
+     "textZh": "你如何在消息中表达尊重？"
+    },
+    {
+     "text": "Why do some people feel angry when others don't reply to their messages ?",
+     "textZh": "为什么有些人在别人不回复他们的消息时会生气？"
+    }
+   ]
   },
   {
-   "key": "p2-8c72ad",
-   "name": "读起来开心的书",
-   "nameZh": "读起来开心的书",
+   "key": "p2-957c0bb5",
+   "name": "早起经历",
+   "nameZh": "早起经历",
    "type": "retained",
    "category": "part23",
+   "examinees": null,
    "part1": [],
    "part2": [
     {
-     "text": "Describe a book you read that made you happy",
+     "text": "Describe a time when you got up early",
      "cuePoints": [
-      "What kind of book it was",
-      "What it was about",
-      "Why you read it",
-      "Why it made you happy"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-51e494",
-   "name": "帮别人提升健康",
-   "nameZh": "帮别人提升健康",
-   "type": "retained",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a person whose health and fitness you have helped to improve",
-     "cuePoints": [
-      "Who this person was",
-      "And explain whether it was easy or difficult"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-63c7e9",
-   "name": "帮助他人",
-   "nameZh": "帮助他人",
-   "type": "retained",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a time when you helped someone",
-     "cuePoints": [
-      "Why you helped",
-      "How you helped",
-      "How you felt about it"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-f094e6",
-   "name": "不喜欢的电影",
-   "nameZh": "不喜欢的电影",
-   "type": "new",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a movie/film you don't like",
-     "cuePoints": [
-      "When you watched it",
-      "Where you watched it",
-      "What it was about",
-      "Why it's your least favourite movie"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-ecb68d",
-   "name": "听不感兴趣的话",
-   "nameZh": "听不感兴趣的话",
-   "type": "new",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a time when someone talked about something you were not interested in but you kept listening",
-     "cuePoints": [
-      "Who the person was",
-      "Why you kept listening",
-      "And explain how you felt about the experience"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-a50a61",
-   "name": "发小",
-   "nameZh": "发小",
-   "type": "retained",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a friend from your childhood",
-     "cuePoints": [
-      "Where and how you met each other",
-      "What you often did together",
-      "Who this person is"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-cf23f8",
-   "name": "拥有成功商业的人",
-   "nameZh": "拥有成功商业的人",
-   "type": "retained",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a person you know who has a successful business",
-     "cuePoints": [
-      "Why you think the business is successful"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-326da4",
-   "name": "想从事医疗行业的人",
-   "nameZh": "想从事医疗行业的人",
-   "type": "retained",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a person you know who would like to choose a career in the medical field (e.g. a doctor, a nurse)",
-     "cuePoints": []
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-ccdb48",
-   "name": "快乐人士",
-   "nameZh": "快乐人士",
-   "type": "new",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a happy person you know",
-     "cuePoints": [
-      "Who this person is"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-0af8ec",
-   "name": "有条理的人",
-   "nameZh": "有条理的人",
-   "type": "new",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a person you know who is very organized",
-     "cuePoints": [
-      "Who this person is",
-      "What this person usually does to stay organized"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-d45e15",
-   "name": "说很重要有健康习惯和作息的人",
-   "nameZh": "说很重要有健康习惯和作息的人",
-   "type": "new",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a person you know who has healthy habits and a healthy daily routine",
-     "cuePoints": [
-      "Who this person is",
-      "How you got to know each other"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-ddce54",
-   "name": "喜欢在家/花园种植物的人",
-   "nameZh": "喜欢在家/花园种植物的人",
-   "type": "retained",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a person who loves to grow plants (e.g. vegetables, flowers) at home or in the garden",
-     "cuePoints": [
-      "Who this person is"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-54e721",
-   "name": "对结果开心的重要决定",
-   "nameZh": "对结果开心的重要决定",
-   "type": "new",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a time you made an important decision and were happy with the result",
-     "cuePoints": [
-      "What the decision was",
-      "Why you made the decision",
-      "How easy it was for you to make the decision",
-      "And explain why you were happy with the result"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-d3ef13",
-   "name": "重要决定",
-   "nameZh": "重要决定",
-   "type": "retained",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe an important decision that you made",
-     "cuePoints": [
-      "What the decision was",
-      "How you made the decision",
-      "What the result of the decision were",
-      "Why it was important"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-655341",
-   "name": "长久目标/抱负",
-   "nameZh": "长久目标/抱负",
-   "type": "retained",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a long-term goal/ambition you would like to achieve",
-     "cuePoints": [
-      "What it is",
-      "How you will achieve it",
-      "Why you set it"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-2e0c99",
-   "name": "擅长学习和说语言的人",
-   "nameZh": "擅长学习和说语言的人",
-   "type": "retained",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a person who is good at learning and speaking new languages",
-     "cuePoints": []
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-ebdddc",
-   "name": "喜欢拍照的人",
-   "nameZh": "喜欢拍照的人",
-   "type": "new",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a person you know who really likes taking photos",
-     "cuePoints": [
-      "Who the person is"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-1f17ed",
-   "name": "攒钱买想要物品",
-   "nameZh": "攒钱买想要物品",
-   "type": "new",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a time when you saved money to buy something you wanted",
-     "cuePoints": [
-      "What you wanted to buy",
-      "Why you wanted to buy it",
-      "How you saved money for it",
-      "And explain how you felt after buying it"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-24d099",
-   "name": "Describe a gift yo",
-   "nameZh": "Describe a gift yo",
-   "type": "retained",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a gift you would like to buy for your friend",
-     "cuePoints": [
-      "How you knew your frined",
-      "How long you have known her"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-b97da8",
-   "name": "教你新技能的人",
-   "nameZh": "教你新技能的人",
-   "type": "new",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a person who taught you a new skill",
-     "cuePoints": [
-      "Who this person was",
-      "What the skill was",
-      "How you learned it",
-      "How you felt about this person"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-350f5c",
-   "name": "擅长做手工的人",
-   "nameZh": "擅长做手工的人",
-   "type": "new",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a person who is good at making things by hand",
-     "cuePoints": [
-      "Who this person is",
-      "Why you think this person is good at making things by hand"
-     ]
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p2-c741e9",
-   "name": "小时候学到的新技能",
-   "nameZh": "小时候学到的新技能",
-   "type": "new",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a new skill you learned when you were a child",
-     "cuePoints": [
-      "What the skill was",
-      "Who taught you this skill",
-      "How you learned it",
-      "How you felt about learning the skill"
+      "When it was",
+      "What you did",
+      "Why you got up early",
+      "How you felt about it",
+      "What you did"
      ]
     }
    ],
    "part3": [
     {
-     "text": "Is it important for everyone to have a specialized skill?",
-     "textZh": "每个人拥有一项专业技能重要吗？"
+     "text": "Is it good to arrive early in any situation ?",
+     "textZh": "在任何情况下提前到达都好吗？"
     },
     {
-     "text": "Why do people need friends?",
-     "textZh": "人们为什么需要朋友？"
+     "text": "Do you know anyone who likes to get up early?",
+     "textZh": "你认识喜欢早起的人吗？"
     },
     {
-     "text": "Do you think all old buildings should be demolished?",
-     "textZh": "你认为所有老建筑都应该被拆除吗？"
+     "text": "Why do people get up early?",
+     "textZh": "人们为什么早起？"
     },
     {
-     "text": "Do people’s movie preferences change as they get older?",
-     "textZh": "人们对电影的偏好会随着年龄增长而改变吗？"
+     "text": "What kinds of occasions need people to arrive early?",
+     "textZh": "哪些场合需要人们提前到达？"
     },
     {
-     "text": "What kind of books useful to everyone?",
-     "textZh": "什么样的书对每个人都有用？"
+     "text": "Why do some people like to stay up late?",
+     "textZh": "为什么有些人喜欢熬夜？"
     },
     {
-     "text": "What are the advantages and disadvantages of advertisements?",
-     "textZh": "广告有哪些优缺点？"
+     "text": "What kind of people like getting up early ?",
+     "textZh": "什么样的人喜欢早起？"
+    }
+   ]
+  },
+  {
+   "key": "p2-001fd3a4",
+   "name": "在团队中工作",
+   "nameZh": "在团队中工作",
+   "type": "retained",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a time when you worked in a group",
+     "cuePoints": [
+      "What you did",
+      "Who you worked with",
+      "What problems you faced",
+      "Why you worked in the group",
+      "What it was"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Why do some people prefer to work by themselves?",
+     "textZh": "为什么有些人更喜欢独自工作？"
     },
+    {
+     "text": "What should a leader do to make team members want to follow him or her?",
+     "textZh": "领导者应该做什么让团队成员愿意跟随他/她？"
+    },
+    {
+     "text": "Should students learn to do group work?",
+     "textZh": "学生应该学习做小组作业吗？"
+    },
+    {
+     "text": "What group tasks are there in schools?",
+     "textZh": "学校里有哪些小组任务？"
+    },
+    {
+     "text": "What advantages are there for students experiencing teamwork at school?",
+     "textZh": "学生在学校体验团队合作有什么好处？"
+    },
+    {
+     "text": "How can you tell if a person is a good leader?",
+     "textZh": "你如何判断一个人是否是好的领导者？"
+    }
+   ]
+  },
+  {
+   "key": "p2-7cfdcd64",
+   "name": "有趣视频",
+   "nameZh": "有趣视频",
+   "type": "retained",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe an interesting video",
+     "cuePoints": [
+      "When and where you watched it",
+      "What it is about",
+      "Why you watched it",
+      "How you feel about it",
+      "What it is"
+     ]
+    }
+   ],
+   "part3": [
     {
      "text": "What kind of videos do people in your country like to watch?",
      "textZh": "你们国家的人喜欢看什么类型的视频？"
     },
     {
-     "text": "Why are there special foods on special occasions or events?",
-     "textZh": "为什么特殊场合或活动上会有特别的食物？"
+     "text": "Which is more helpful, watching videos or reading books?",
+     "textZh": "看视频和读书哪个更有帮助？"
+    },
+    {
+     "text": "What skills can people learn from watching videos?",
+     "textZh": "人们可以从看视频中学到什么技能？"
+    },
+    {
+     "text": "Are there any differences between the videos that young people and old people like to watch?",
+     "textZh": "年轻人和老年人喜欢看的视频有什么区别？"
+    },
+    {
+     "text": "Are there any differences between the videos that young men and young women like to watch ?",
+     "textZh": "年轻男性和年轻女性喜欢看的视频有什么区别？"
+    },
+    {
+     "text": "What makes a video go viral online ?",
+     "textZh": "是什么让一个视频在网上走红？"
     }
    ]
   },
   {
-   "key": "p2-9350c1",
-   "name": "钦佩的运动员",
-   "nameZh": "钦佩的运动员",
-   "type": "new",
+   "key": "p2-863ab57b",
+   "name": "名人出演的广告",
+   "nameZh": "名人出演的广告",
+   "type": "retained",
    "category": "part23",
+   "examinees": null,
    "part1": [],
    "part2": [
     {
-     "text": "Describe a sucessful sports person you admire",
-     "cuePoints": []
+     "text": "Describe an advertisement with a famous person in it",
+     "cuePoints": [
+      "Who the person is",
+      "Where you can see it",
+      "What the advertisement is about",
+      "How you feel about the advertisement",
+      "When and where you watched it"
+     ]
     }
    ],
-   "part3": []
+   "part3": [
+    {
+     "text": "What are the advantages and disadvantages of advertisements?",
+     "textZh": "广告有哪些优缺点？"
+    },
+    {
+     "text": "What is the most important factor in an advertisement?",
+     "textZh": "广告中最重要的因素是什么？"
+    },
+    {
+     "text": "Why are some advertisements boring?",
+     "textZh": "为什么有些广告很无聊？"
+    },
+    {
+     "text": "Which is more effective, online advertising or offline advertising?",
+     "textZh": "网络广告和线下广告哪个更有效？"
+    }
+   ]
   },
   {
-   "key": "p2-5283df",
+   "key": "p2-be4b6c00",
+   "name": "喜欢的现场体育赛事",
+   "nameZh": "喜欢的现场体育赛事",
+   "type": "retained",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a live sports event you watched and liked",
+     "cuePoints": [
+      "What it was",
+      "When and where you watched it",
+      "Who you watched it with",
+      "And explain why you liked it",
+      "Who the person is"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Why do some people like to watch sports events?",
+     "textZh": "为什么有些人喜欢观看体育赛事？"
+    },
+    {
+     "text": "Where do people normally watch sports events?",
+     "textZh": "人们通常在哪里观看体育赛事？"
+    },
+    {
+     "text": "What are the advantages of watching sports events online?",
+     "textZh": "在线观看体育赛事有什么优势？"
+    },
+    {
+     "text": "What sports matches are suitable for children to attend?",
+     "textZh": "什么体育比赛适合孩子参加？"
+    },
+    {
+     "text": "Why do some people spend a lot going to other countries to watch sports events?",
+     "textZh": "为什么有些人花大量金钱去其他国家观看体育赛事？"
+    },
+    {
+     "text": "What sports games are popular in your country?",
+     "textZh": "你们国家流行哪些体育运动？"
+    }
+   ]
+  },
+  {
+   "key": "p2-3c255c30",
+   "name": "当地新闻",
+   "nameZh": "当地新闻",
+   "type": "retained",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a piece of local news that people are interested in",
+     "cuePoints": [
+      "What it was about",
+      "Who has involved",
+      "Why people were interested in it",
+      "When it was",
+      "What you did"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Do people read the newspaper where you live?",
+     "textZh": "你居住的地方的人们读报纸吗？"
+    },
+    {
+     "text": "Do people prefer local or international news?",
+     "textZh": "人们更喜欢本地新闻还是国际新闻？"
+    },
+    {
+     "text": "Do you think it's important to have a national identity?",
+     "textZh": "你认为拥有国家认同感重要吗？"
+    },
+    {
+     "text": "How can people develop their national identity?",
+     "textZh": "人们如何培养国家认同感？"
+    }
+   ]
+  },
+  {
+   "key": "p2-9e1ad495",
+   "name": "特别场合的食物",
+   "nameZh": "特别场合的食物",
+   "type": "retained",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a food that people eat on special occasions/events",
+     "cuePoints": [
+      "What it is"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Why are there special foods on special occasions or events ?",
+     "textZh": "为什么特殊场合或活动上会有特别的食物？"
+    },
+    {
+     "text": "What are the differences between everyday food and festival food ?",
+     "textZh": "日常食物和节日食物有什么区别？"
+    },
+    {
+     "text": "Are there any differences between the food people eat today and the food people ate in the past ?",
+     "textZh": "现代人吃的食物和过去人们吃的食物有什么区别？"
+    },
+    {
+     "text": "Do people today prefer eating at home or in a restaurant ?",
+     "textZh": "现代人更喜欢在家吃饭还是去餐厅吃饭？"
+    }
+   ]
+  },
+  {
+   "key": "p2-cce64ffb",
    "name": "看过的名人采访",
    "nameZh": "看过的名人采访",
    "type": "new",
    "category": "part23",
+   "examinees": null,
    "part1": [],
    "part2": [
     {
@@ -2041,18 +2623,41 @@
       "Who the famous person was",
       "What the interview was about",
       "When and where you watched the interview",
-      "How you felt about the interview"
+      "How you felt about the interview",
+      "Who this person is"
      ]
     }
    ],
-   "part3": []
+   "part3": [
+    {
+     "text": "What should people wear to a job interview?",
+     "textZh": "人们参加工作面试应该穿什么？"
+    },
+    {
+     "text": "Why do we need to attend interviews when applying for jobs?",
+     "textZh": "申请工作时为什么需要参加面试？"
+    },
+    {
+     "text": "What should people do to prepare for a job interview?",
+     "textZh": "人们应该如何为工作面试做准备？"
+    },
+    {
+     "text": "Why do some people think interviews are a waste of time?",
+     "textZh": "为什么有些人认为面试是在浪费时间？"
+    },
+    {
+     "text": "Why do some people dislike being interviewed?",
+     "textZh": "为什么有些人不喜欢被面试？"
+    }
+   ]
   },
   {
-   "key": "p2-60acfb",
+   "key": "p2-dd3a4e51",
    "name": "做困难事情并成功的人",
    "nameZh": "做困难事情并成功的人",
    "type": "new",
    "category": "part23",
+   "examinees": null,
    "part1": [],
    "part2": [
     {
@@ -2061,18 +2666,41 @@
       "Who this person is",
       "What difficult thing this person did",
       "Why this person was successful",
-      "And explain how you feel about this person"
+      "And explain how you feel about this person",
+      "Who this person is"
      ]
     }
    ],
-   "part3": []
+   "part3": [
+    {
+     "text": "In which sectors are companies more likely to succeed in China?",
+     "textZh": "在中国，哪些行业的公司更容易成功？"
+    },
+    {
+     "text": "Is it easy to start up a company?",
+     "textZh": "创办公司容易吗？"
+    },
+    {
+     "text": "Does money equal success ?",
+     "textZh": "金钱等同于成功吗 ？"
+    },
+    {
+     "text": "How can companies help protect the environment?",
+     "textZh": "公司可以如何帮助保护环境？"
+    },
+    {
+     "text": "Is it difficult to do business in today's world?",
+     "textZh": "在当今世界做生意困难吗？"
+    }
+   ]
   },
   {
-   "key": "p2-63ef09",
+   "key": "p2-c4dab683",
    "name": "尊敬的比你年长的人",
    "nameZh": "尊敬的比你年长的人",
    "type": "new",
    "category": "part23",
+   "examinees": null,
    "part1": [],
    "part2": [
     {
@@ -2081,35 +2709,76 @@
       "Who this person is",
       "How you knew this person",
       "What kinds of things you like to do together",
-      "And explain how you feel about this person"
+      "And explain how you feel about this person",
+      "Who this person is"
      ]
     }
    ],
-   "part3": []
+   "part3": [
+    {
+     "text": "What do old people usually do in their daily life?",
+     "textZh": "老年人日常生活通常会做些什么？"
+    },
+    {
+     "text": "Why is there a generation gap between the young and the old?",
+     "textZh": "为什么年轻人和老年人之间存在代沟？"
+    },
+    {
+     "text": "Has old people's life quality improved when compared to the past?",
+     "textZh": "和过去相比，老年人的生活质量提高了吗？"
+    },
+    {
+     "text": "What can young and old people learn from each other?",
+     "textZh": "年轻人和老年人可以互相学习什么？"
+    }
+   ]
   },
   {
-   "key": "p2-8d2d76",
+   "key": "p2-803d6aef",
    "name": "学习并喜欢历史的人",
    "nameZh": "学习并喜欢历史的人",
    "type": "new",
    "category": "part23",
+   "examinees": null,
    "part1": [],
    "part2": [
     {
      "text": "Describe a person who learns history and loves history",
      "cuePoints": [
-      "Who this person is"
+      "Who this person is",
+      "Who this person is",
+      "What kind of person he or she is",
+      "Why you think this person is popular",
+      "Why you want to"
      ]
     }
    ],
-   "part3": []
+   "part3": [
+    {
+     "text": "Do you think people should learn ancient history before learning modern history?",
+     "textZh": "你认为人们应该先学古代史再学现代史吗？"
+    },
+    {
+     "text": "Is it important to learn how people in the past lived their lives?",
+     "textZh": "了解过去人们是如何生活的重要吗？"
+    },
+    {
+     "text": "How do children learn history before they attend school?",
+     "textZh": "孩子上学前是如何学习历史的？"
+    },
+    {
+     "text": "Do you think children should begin learning history from an early age?",
+     "textZh": "你认为孩子应该从小就开始学习历史吗？"
+    }
+   ]
   },
   {
-   "key": "p2-5e1445",
+   "key": "p2-6004a66a",
    "name": "受欢迎的人",
    "nameZh": "受欢迎的人",
    "type": "new",
    "category": "part23",
+   "examinees": null,
    "part1": [],
    "part2": [
     {
@@ -2121,159 +2790,665 @@
      ]
     }
    ],
-   "part3": []
-  },
-  {
-   "key": "p2-e0d3b7",
-   "name": "Describe a person ",
-   "nameZh": "Describe a person ",
-   "type": "retained",
-   "category": "part23",
-   "part1": [],
-   "part2": [
-    {
-     "text": "Describe a person you only met once recently and want to know more about",
-     "cuePoints": []
-    }
-   ],
-   "part3": []
-  },
-  {
-   "key": "p3-general",
-   "name": "General discussion",
-   "nameZh": "通用讨论",
-   "type": "retained",
-   "category": "part3",
-   "part1": [],
-   "part2": [],
    "part3": [
-    {
-     "text": "What do old people usually do in their daily life?",
-     "textZh": "老年人日常生活通常会做些什么？"
-    },
-    {
-     "text": "In which sectors are companies more likely to succeed in China?",
-     "textZh": "在中国，哪些行业的公司更容易成功？"
-    },
-    {
-     "text": "Besides big historical events, what else is important when learning history?",
-     "textZh": "除了重大历史事件，学习历史时还有什么重要的？"
-    },
     {
      "text": "Why do people want to be popular?",
      "textZh": "人们为什么想要受欢迎？"
     },
     {
-     "text": "When do you think people are happiest?",
-     "textZh": "人们什么时候最快乐？"
+     "text": "Is it easier to become popular nowadays?",
+     "textZh": "现在变得受欢迎更容易了吗？"
     },
     {
-     "text": "Do you think it is important for managers to be well organized?",
-     "textZh": "你认为经理做事有条理很重要吗？"
+     "text": "What are the qualities of being a good teacher?",
+     "textZh": "一位好老师应该具备哪些品质？"
     },
     {
-     "text": "Some people don't mind others walking into their shot when they're taking photos.What do you think?",
+     "text": "Do you think good teachers are always popular among students?",
+     "textZh": "你认为好老师总是受学生欢迎吗？"
+    },
+    {
+     "text": "Is it important for a teacher to be popular?",
+     "textZh": "老师受欢迎重要吗？"
+    },
+    {
+     "text": "Why are some students popular in school?",
+     "textZh": "为什么有些学生在学校很受欢迎？"
+    },
+    {
+     "text": "Which group pays more attention to health , young people or old people ?",
+     "textZh": "哪个群体更关注健康，年轻人还是老年人？"
+    }
+   ]
+  },
+  {
+   "key": "p2-b06e9de0",
+   "name": "和朋友度过的愉快夜晚",
+   "nameZh": "和朋友度过的愉快夜晚",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe an enjoyable evening you had with your friends",
+     "cuePoints": [
+      "When and where it was",
+      "What you did",
+      "Who you spent the evening with",
+      "And explain why it was enjoyable",
+      "When and where it was held"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Why do people need friends?",
+     "textZh": "人们为什么需要朋友？"
+    },
+    {
+     "text": "Do older people prefer spending time with family or with friends?",
+     "textZh": "老年人更喜欢和家人还是朋友待在一起？"
+    },
+    {
+     "text": "Do young people prefer spending time with family or with friends?",
+     "textZh": "年轻人更喜欢和家人还是朋友待在一起？"
+    },
+    {
+     "text": "What are the differences between young people’s leisure time activities and those of old people?",
+     "textZh": "年轻人和老年人的休闲活动有什么区别？"
+    },
+    {
+     "text": "What can we do to bring family members closer together?",
+     "textZh": "我们可以做什么来让家人之间更亲密？"
+    },
+    {
+     "text": "How do people get along in a big family?",
+     "textZh": "在一个大家庭中，人们如何相处？"
+    }
+   ]
+  },
+  {
+   "key": "p2-811e6224",
+   "name": "喜欢拍照的人",
+   "nameZh": "喜欢拍照的人",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a person you know who really likes taking photos",
+     "cuePoints": [
+      "Who the person is",
+      "What you wanted to buy",
+      "Why you wanted to buy it",
+      "How you saved money for it",
+      "And explain how you felt after buying it"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Some people don't mind others walking into their shot when they're taking photos.What do you think ?",
      "textZh": "有些人不介意别人走进他们的拍照画面。你怎么看？"
     },
     {
-     "text": "Does art, like music or theater, have an impact on society?",
-     "textZh": "音乐或戏剧这样的艺术对社会有影响吗？"
+     "text": "What are the downsides of constantly taking photos while traveling ?",
+     "textZh": "旅行时不停拍照有什么坏处？"
     },
     {
-     "text": "Why is self-discipline important when learning a new skill?",
-     "textZh": "学习新技能时为什么自律很重要？"
+     "text": "Do you think it’s ok to take photos everywhere?",
+     "textZh": "你觉得到处拍照都可以吗？"
     },
     {
-     "text": "Why are there so few top athletes?",
-     "textZh": "为什么顶尖运动员这么少？"
+     "text": "What kind of photos do people often take?",
+     "textZh": "人们通常会拍什么样的照片？"
     },
     {
-     "text": "Why do some people start their own business?",
-     "textZh": "为什么有些人选择自己创业？"
+     "text": "Why are some people keen on taking photos?",
+     "textZh": "为什么有些人特别热衷于拍照？"
     },
     {
-     "text": "Do you think being a doctor is easy or difficult?",
-     "textZh": "你认为当医生容易还是困难？"
-    },
+     "text": "When do people like taking photos?",
+     "textZh": "人们通常什么时候喜欢拍照？"
+    }
+   ]
+  },
+  {
+   "key": "p2-0f765bb8",
+   "name": "攒钱买特别物品",
+   "nameZh": "攒钱买特别物品",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
     {
-     "text": "What are the advantages of growing vegetables or flowers at home?",
-     "textZh": "在家种蔬菜或花卉有什么好处？"
-    },
-    {
-     "text": "Are there many people who can speak foreign languages in your country?",
-     "textZh": "你们国家有很多人会说外语吗？"
-    },
-    {
-     "text": "What should people wear to a job interview?",
-     "textZh": "人们参加工作面试应该穿什么？"
-    },
-    {
-     "text": "Can consumption drive economic growth?",
-     "textZh": "消费能推动经济增长吗？"
-    },
+     "text": "Describe a time when you saved money to buy something you wanted",
+     "cuePoints": [
+      "What you wanted to buy",
+      "Why you wanted to buy it",
+      "How you saved money for it",
+      "And explain how you felt after buying it",
+      "When and where it was"
+     ]
+    }
+   ],
+   "part3": [
     {
      "text": "What kind of things do people usually save money for?",
      "textZh": "人们通常会为什么东西存钱？"
     },
     {
+     "text": "Is it easier to spend money or save money?",
+     "textZh": "花钱容易还是存钱容易？"
+    },
+    {
+     "text": "Do you think it is easier to teach teenagers how to manage money when they are around 16 or 17 years old?",
+     "textZh": "你认为在孩子16、17岁左右教他们理财更容易吗？"
+    },
+    {
+     "text": "Should parents teach their children to spend money freely or to save money?",
+     "textZh": "父母应该教孩子自由花钱还是存钱？"
+    },
+    {
+     "text": "Should schools teach children how to manage money from a young age?",
+     "textZh": "学校应该从小教孩子理财吗？"
+    }
+   ]
+  },
+  {
+   "key": "p2-d80d0182",
+   "name": "印象深刻的聚会",
+   "nameZh": "印象深刻的聚会",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe an enjoyable evening you had with your friends",
+     "cuePoints": [
+      "When and where it was held",
+      "What the party was held for",
+      "How many people attended it",
+      "And explain why it impressed you a lot",
+      "How you knew your frined"
+     ]
+    }
+   ],
+   "part3": [
+    {
      "text": "What special events are celebrated in your country?",
      "textZh": "你们国家会庆祝哪些特殊节日？"
     },
     {
-     "text": "Which is better, to make a decision quickly or slowly?",
-     "textZh": "快速做决定好还是慢慢做决定好？"
+     "text": "Do most people prefer to hold a party in a restaurant or in a pub?",
+     "textZh": "大多数人更喜欢在餐厅还是酒吧办派对？"
     },
     {
-     "text": "What problems does it cause for transportation when everyone commutes at the same time?",
-     "textZh": "当所有人同时通勤时，会给交通带来什么问题？"
+     "text": "Do most people prefer to hold a party in a public place or a private place?",
+     "textZh": "大多数人更喜欢在公共场所还是私人场所办派对？"
     },
     {
-     "text": "How can we tell if a listener is listening carefully?",
-     "textZh": "我们如何判断一个听众是否在认真听？"
+     "text": "When do people like to hold a party?",
+     "textZh": "人们喜欢在什么时候办派对？"
+    }
+   ]
+  },
+  {
+   "key": "p2-9aac660a",
+   "name": "教你新技能的人",
+   "nameZh": "教你新技能的人",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a person who taught you a new skill",
+     "cuePoints": [
+      "Who this person was",
+      "What the skill was",
+      "How you learned it",
+      "How you felt about this person",
+      "Who this person is"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Why is self-discipline important when learning a new skill?",
+     "textZh": "学习新技能时为什么自律很重要？"
     },
     {
-     "text": "Which group pays more attention to health , young people or old people?",
-     "textZh": "哪个群体更关注健康，年轻人还是老年人？"
+     "text": "What are the differences between learning from a teacher and learning by oneself?",
+     "textZh": "跟老师学和自学有什么区别？"
     },
     {
-     "text": "Should people be very kind when they help others?",
-     "textZh": "人们帮助别人时，应该表现得非常友善吗？"
+     "text": "How do adults learn a new skill?",
+     "textZh": "成年人是如何学习新技能的？"
     },
     {
-     "text": "Why do some people refuse to abide by rules?",
-     "textZh": "为什么有些人拒绝遵守规则？"
+     "text": "How can parents and teachers teach children new skills?",
+     "textZh": "父母和老师如何教孩子学习新技能？"
     },
     {
-     "text": "Do people read the newspaper where you live?",
-     "textZh": "你居住的地方的人们读报纸吗？"
+     "text": "Where can children learn new skills?",
+     "textZh": "孩子可以在哪里学习新技能？"
     },
     {
-     "text": "In what situations do people spend a long time responding to others messages?",
-     "textZh": "在什么情况下人们会花很长时间回复别人的消息？"
+     "text": "Why should children learn new skills?",
+     "textZh": "孩子为什么应该学习新技能？"
+    }
+   ]
+  },
+  {
+   "key": "p2-7a4f0222",
+   "name": "擅长做手工的人",
+   "nameZh": "擅长做手工的人",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a person who is good at making things by hand",
+     "cuePoints": [
+      "Who this person is",
+      "Why you think this person is good at making things by hand",
+      "What the skill was",
+      "Who taught you this skill",
+      "How you learned it"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Does art, like music or theater, have an impact on society?",
+     "textZh": "音乐或戏剧这样的艺术对社会有影响吗？"
     },
     {
-     "text": "What are the advantages and disadvantages of AI?",
-     "textZh": "人工智能的优缺点是什么？"
+     "text": "Is it good to have creative people in a team?",
+     "textZh": "团队里有有创造力的人是好事吗？"
     },
     {
-     "text": "Why do some people prefer to work by themselves?",
-     "textZh": "为什么有些人更喜欢独自工作？"
+     "text": "What impact can artistic buildings have on society?",
+     "textZh": "有艺术感的建筑能对社会产生什么影响？"
     },
     {
-     "text": "Is it good to arrive early in any situation?",
-     "textZh": "在任何情况下提前到达都好吗？"
+     "text": "Do children these days still like doing arts and ?",
+     "textZh": "现在的孩子还喜欢做手工艺术吗？"
     },
     {
-     "text": "When do most children begin to have their own opinions?",
-     "textZh": "大多数孩子什么时候开始有自己的想法？"
+     "text": "Why do some children enjoy making things by hand?",
+     "textZh": "为什么有些孩子喜欢动手制作东西？"
     },
     {
-     "text": "Do you think it is good to change one’s daily routine?",
-     "textZh": "你认为改变日常习惯好吗？"
+     "text": "Do you think art classes are important for children?",
+     "textZh": "你认为艺术课对孩子来说重要吗？"
+    }
+   ]
+  },
+  {
+   "key": "p2-1e555f72",
+   "name": "小时候学到的新技能",
+   "nameZh": "小时候学到的新技能",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a new skill you learned when you were a child",
+     "cuePoints": [
+      "What the skill was",
+      "Who taught you this skill",
+      "How you learned it",
+      "How you felt about learning the skill",
+      "What the course was about"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Is it important for everyone to have a specialized skill?",
+     "textZh": "每个人拥有一项专业技能重要吗？"
     },
     {
-     "text": "Why do some people like to watch sports events?",
-     "textZh": "为什么有些人喜欢观看体育赛事？"
+     "text": "Can a child learn skills from another child?",
+     "textZh": "孩子可以从另一个孩子身上学到技能吗？"
+    },
+    {
+     "text": "Do you think it is easier for children to learn new skills than for adults?",
+     "textZh": "你认为孩子学习新技能比成年人更容易吗？"
+    },
+    {
+     "text": "What are the differences between the way adults learn and the way children learn?",
+     "textZh": "成年人和孩子的学习方式有什么区别？"
+    },
+    {
+     "text": "What are the differences between learning in a group and learning by yourself ?",
+     "textZh": "小组学习和独自学习有什么区别？"
+    },
+    {
+     "text": "What skills should children learn before they go to school ?",
+     "textZh": "孩子在上学前应该学会哪些技能？"
+    }
+   ]
+  },
+  {
+   "key": "p2-38957a5c",
+   "name": "有创造力的朋友",
+   "nameZh": "有创造力的朋友",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a friend of yours who is creative",
+     "cuePoints": [
+      "What the course was about",
+      "Where you took the course",
+      "What you did during the course",
+      "Why it impressed you a lot"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-11cbafc3",
+   "name": "快乐人士",
+   "nameZh": "快乐人士",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a happy person you know",
+     "cuePoints": [
+      "Who this person is",
+      "Who this person is",
+      "What this person usually does to stay organized"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "When do you think people are happiest?",
+     "textZh": "人们什么时候最快乐？"
+    },
+    {
+     "text": "How can the arts spread positive emotions in society?",
+     "textZh": "艺术如何在社会中传播积极情绪？"
+    },
+    {
+     "text": "Do you think teachers are able to spot the unhappy children?",
+     "textZh": "你认为老师能够发现不开心的孩子吗？"
+    },
+    {
+     "text": "Should teachers know what children are doing all the time?",
+     "textZh": "老师应该一直知道孩子们在做什么吗？"
+    },
+    {
+     "text": "What would make a student happy at school?",
+     "textZh": "什么能让学生在学校感到快乐？"
+    },
+    {
+     "text": "Do you think doing a job that you like is more important than other things?",
+     "textZh": "你认为做一份喜欢的工作比其他事情更重要吗？"
+    }
+   ]
+  },
+  {
+   "key": "p2-5e58f99e",
+   "name": "有条理的人",
+   "nameZh": "有条理的人",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a person you know who is very organized",
+     "cuePoints": [
+      "Who this person is",
+      "What this person usually does to stay organized",
+      "Who this person is",
+      "How you got to know each other"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Do you think it is important for managers to be well organized?",
+     "textZh": "你认为经理做事有条理很重要吗？"
+    },
+    {
+     "text": "Should parents teach their children to be organized?",
+     "textZh": "父母应该教孩子做事有条理吗？"
+    },
+    {
+     "text": "What can people do to become more organized?",
+     "textZh": "人们可以做些什么来变得更有条理？"
+    },
+    {
+     "text": "Are organized people more likely to be successful at work or in their studies?",
+     "textZh": "有条理的人在工作或学习上更容易成功吗？"
+    },
+    {
+     "text": "Do you think children should learn to be organized from a young age?",
+     "textZh": "你认为孩子应该从小就学会有条理吗？"
+    },
+    {
+     "text": "Why is it important for people to be organized?",
+     "textZh": "为什么人们做事有条理很重要？"
+    }
+   ]
+  },
+  {
+   "key": "p2-e4442e44",
+   "name": "拥有健康习惯和作息的人",
+   "nameZh": "拥有健康习惯和作息的人",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a person you know who has healthy habits and a healthy daily routine",
+     "cuePoints": [
+      "Who this person is",
+      "How you got to know each other",
+      "Who this person is"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-e391d007",
+   "name": "喜欢在家/花园种植物的人",
+   "nameZh": "喜欢在家/花园种植物的人",
+   "type": "retained",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a person who loves to grow plants (e.g. vegetables, flowers) at home or in the garden",
+     "cuePoints": [
+      "Who this person is"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "What are the advantages of growing vegetables or flowers at home?",
+     "textZh": "在家种蔬菜或花卉有什么好处？"
+    },
+    {
+     "text": "Do many people grow vegetables or flowers at home in your country?",
+     "textZh": "在你们国家有很多人在家种蔬菜或花卉吗？"
+    },
+    {
+     "text": "Is it easy to grow plants at home?",
+     "textZh": "在家种植物容易吗？"
+    },
+    {
+     "text": "Why do some people like to grow plants?",
+     "textZh": "为什么有些人喜欢种植物？"
+    }
+   ]
+  },
+  {
+   "key": "p2-aa11bb34",
+   "name": "钦佩的运动员",
+   "nameZh": "钦佩的运动员",
+   "type": "new",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a sucessful sports person you admire",
+     "cuePoints": []
+    }
+   ],
+   "part3": [
+    {
+     "text": "Why are there so few top athletes?",
+     "textZh": "为什么顶尖运动员这么少？"
+    },
+    {
+     "text": "What is the most popular sport in your country?",
+     "textZh": "你们国家最受欢迎的运动是什么？"
+    },
+    {
+     "text": "Is it easy to identify children’s talents?",
+     "textZh": "发现孩子的天赋容易吗？"
+    },
+    {
+     "text": "Is talent important in sports?",
+     "textZh": "天赋在体育运动中重要吗？"
+    },
+    {
+     "text": "What qualities should an athlete have?",
+     "textZh": "一名运动员应该具备哪些品质？"
+    },
+    {
+     "text": "Should students have physical education and do sports at school?",
+     "textZh": "学生应该在学校上体育课并参加体育运动吗？"
+    }
+   ]
+  },
+  {
+   "key": "p2-f226c965",
+   "name": "发小",
+   "nameZh": "发小",
+   "type": "retained",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a friend from your childhood",
+     "cuePoints": [
+      "Where and how you met each other",
+      "What you often did together",
+      "Who this person is",
+      "Why you think the business is successful"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "How important is childhood friendship to children?",
+     "textZh": "童年友谊对孩子有多重要？"
+    },
+    {
+     "text": "What do you think of communicating via social media?",
+     "textZh": "你怎么看待通过社交媒体交流？"
+    },
+    {
+     "text": "Do you think online communication through social media will replace face-to-face communication?",
+     "textZh": "你认为社交媒体上的网络交流会取代面对面的交流吗？"
+    },
+    {
+     "text": "Can't be there in personWhat's the difference between having younger friends and older friends?",
+     "textZh": "拥有年轻朋友和年长朋友有什么区别？"
+    }
+   ]
+  },
+  {
+   "key": "p2-bf43c9e6",
+   "name": "想从事医疗行业的人",
+   "nameZh": "想从事医疗行业的人",
+   "type": "retained",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a person you know who would like to choose a career in the medical field (e.g. a doctor, a nurse)",
+     "cuePoints": []
+    }
+   ],
+   "part3": [
+    {
+     "text": "Do you think being a doctor is easy or difficult?",
+     "textZh": "你认为当医生容易还是困难？"
+    },
+    {
+     "text": "Do you think learning biology is interesting for children?",
+     "textZh": "你认为孩子学生物有趣吗？"
+    },
+    {
+     "text": "Why do some children want to become doctors?",
+     "textZh": "为什么有些孩子想成为医生？"
+    },
+    {
+     "text": "Do you think governments should put a large amount of money into medical research?",
+     "textZh": "你认为政府应该在医学研究上投入大量资金吗？"
+    }
+   ]
+  },
+  {
+   "key": "p2-37346d11",
+   "name": "拥有成功商业的人",
+   "nameZh": "拥有成功商业的人",
+   "type": "retained",
+   "category": "part23",
+   "examinees": null,
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a person you know who has a successful business",
+     "cuePoints": [
+      "Why you think the business is successful"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Why do some people start their own business?",
+     "textZh": "为什么有些人选择自己创业？"
+    },
+    {
+     "text": "Should governments provide financial support to start-ups?",
+     "textZh": "政府应该为初创企业提供财政支持吗？"
+    },
+    {
+     "text": "Do most people prefer shopping at big stores or small stores?",
+     "textZh": "大多数人更喜欢在大商店还是小商店购物？"
+    },
+    {
+     "text": "Is it easy to set up a new business in your country?",
+     "textZh": "在你们国家创业容易吗？"
     }
    ]
   }

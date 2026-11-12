@@ -11,7 +11,7 @@ Browser (Next.js client)
 ```
 - **状态权威在服务端**：`exam_sessions.current_step` 和每个步骤的 `status`。客户端只是执行者；刷新页面后按服务端状态恢复（这是对目标产品"只存 sessionStorage、刷新丢音频"的改进）。
 - **LLM 不控制流程**：`decideAdvance()` 决定 next / follow_up / finish；`full` 模考禁用追问、严格走题库脚本，追问仅在练习模式，LLM 措辞经 `sanitizeFollowUp()` 过滤。
-- **题库权威**：`question_sets.is_active` + `season` 决定唯一启用题库，`createSession()` 只从该库按主题抽题（Part 1 = 1 万年保留 + 2 当季，主题下随机），`configSnapshot` 记录 `bankSeason/bankRegion`。`/admin` 提供导入、切换与内容浏览。
+- **题库权威**：`question_sets.is_active` + `season` 决定唯一启用题库，`createSession()` 只从该库按主题抽题（Part 1 = 1 万年保留 + 2 当季，主题下随机）。**Part 3 严格延续 Part 2**：题卡选定后，Part 3 只从该题卡同 `topic_key` 的题集里抽样并按 `order_index` 还原顺序，不跨话题借题；带 Part 3 的考试也只会选择有配套 Part 3 素材的题卡。`configSnapshot` 记录 `bankSeason/bankRegion`。`/admin` 提供导入、切换与内容浏览。
 - **评分可缺省**：未配置 AI 评分时 `runScoring()` 直接落 `unscored`，不产生任何 band；四项各 25%，缺项时无正式总分。
 
 ## 2. 考试状态机（`src/lib/speaking/exam-machine.ts`）

@@ -73,13 +73,29 @@ export async function createSession(user: User, mode: SpeakingMode) {
 
   const p1 = pool.filter((q) => q.part === 1);
   if (config.part1.enabled && p1.length) {
-    const evergreen = freshKeys([...new Set(p1.filter((q) => q.questionType === "evergreen").map((q) => q.topicKey))], pool, used);
-    const seasonal = freshKeys([...new Set(p1.filter((q) => q.questionType !== "evergreen").map((q) => q.topicKey))], pool, used);
+    const byTopic = new Map<string, QuestionRow[]>();
+    for (const q of p1) {
+      const arr = byTopic.get(q.topicKey) ?? [];
+      arr.push(q);
+      byTopic.set(q.topicKey, arr);
+    }
+    const isEvergreen = (q: QuestionRow) => q.questionType === "evergreen";
+    // A topic can only give as many questions as it holds, so topics that can
+    // fill their quota are chosen before the short ones. Otherwise a 3-question
+    // topic would silently shrink the exam below the 10–11 mark.
+    const ordered = (need: number, want: (q: QuestionRow) => boolean) => {
+      const keys = [...byTopic.keys()].filter((k) => want(byTopic.get(k)![0]));
+      const enough = keys.filter((k) => (byTopic.get(k)?.length ?? 0) >= need);
+      const short = keys.filter((k) => (byTopic.get(k)?.length ?? 0) < need);
+      return [...freshKeys(enough, pool, used), ...freshKeys(short, pool, used)];
+    };
+    const evergreen = ordered(config.part1.evergreenQuestions, isEvergreen);
+    const seasonal = ordered(config.part1.questionsPerTopic, (q) => !isEvergreen(q));
     const chosen: { key: string; count: number }[] = [];
     if (evergreen[0]) chosen.push({ key: evergreen[0], count: config.part1.evergreenQuestions });
     for (const k of seasonal.slice(0, config.part1.seasonalTopics)) chosen.push({ key: k, count: config.part1.questionsPerTopic });
     // Fall back to any remaining topics so a bank with few topics still builds a valid plan.
-    for (const k of [...new Set(p1.map((q) => q.topicKey))]) {
+    for (const k of [...evergreen.slice(1), ...seasonal]) {
       if (chosen.length >= 1 + config.part1.seasonalTopics) break;
       if (!chosen.some((c) => c.key === k)) chosen.push({ key: k, count: config.part1.questionsPerTopic });
     }
@@ -92,11 +108,28 @@ export async function createSession(user: User, mode: SpeakingMode) {
         steps.push({ part: 1, kind: "question", questionId: q.id, topic: q.topic, examinerLead: lead.trim(), promptText: q.text, generator: "bank", answerSeconds: config.part1.answerSeconds });
       });
     });
+    // Last resort: top up from untouched Part 1 questions so the plan still
+    // reaches the exam's question count instead of ending early.
+    const target = config.part1.evergreenQuestions + config.part1.seasonalTopics * config.part1.questionsPerTopic;
+    if (steps.length < target) {
+      const asked = new Set(steps.map((s) => s.questionId));
+      for (const q of shuffle(p1.filter((x) => !asked.has(x.id)))) {
+        if (steps.length >= target) break;
+        steps.push({ part: 1, kind: "question", questionId: q.id, topic: q.topic, examinerLead: "", promptText: q.text, generator: "bank", answerSeconds: config.part1.answerSeconds });
+      }
+    }
   }
 
   const cards = pool.filter((q) => q.part === 2);
-  const cardKeys = freshKeys([...new Set(cards.map((q) => q.topicKey))], pool, used);
-  const card = cards.find((q) => q.topicKey === cardKeys[0]) ?? shuffle(cards)[0];
+  // Part 3 is the discussion that belongs to the Part 2 cue card, so when Part 3
+  // is being examined the card must be one that actually carries its own
+  // discussion set. Falling back to a card without Part 3 would force the
+  // examiner to change topic mid-test, which never happens in the real test.
+  const p3Keys = new Set(pool.filter((q) => q.part === 3).map((q) => q.topicKey));
+  const eligibleCards = config.part3.enabled ? cards.filter((c) => p3Keys.has(c.topicKey)) : cards;
+  const cardPool = eligibleCards.length ? eligibleCards : cards;
+  const cardKeys = freshKeys([...new Set(cardPool.map((q) => q.topicKey))], pool, used);
+  const card = cardPool.find((q) => q.topicKey === cardKeys[0]) ?? shuffle(cardPool)[0];
   const p23Key = card?.topicKey;
   if (config.part2.enabled && card) {
     steps.push({
@@ -107,9 +140,15 @@ export async function createSession(user: User, mode: SpeakingMode) {
     });
   }
   if (config.part3.enabled) {
-    const same = shuffle(pool.filter((q) => q.part === 3 && q.topicKey === p23Key));
-    const rest = shuffle(pool.filter((q) => q.part === 3 && q.topicKey !== p23Key));
-    const qs = [...same, ...rest].slice(0, config.part3.questions);
+    // Only the chosen card's own Part 3 questions — never another card's.
+    const own = pool
+      .filter((q) => q.part === 3 && q.topicKey === p23Key)
+      .sort((a, b) => a.orderIndex - b.orderIndex);
+    // Draw the requested number, then restore the bank's own order so the
+    // discussion still moves from concrete to abstract as the real test does.
+    const qs = shuffle(own)
+      .slice(0, Math.min(config.part3.questions, own.length))
+      .sort((a, b) => a.orderIndex - b.orderIndex);
     qs.forEach((q, i) => {
       const lead = i === 0 ? (mode === "full" ? LINES.part3Intro(q.topic) : LINES.part3Practice(q.topic)) : "";
       steps.push({ part: 3, kind: "question", questionId: q.id, topic: q.topic, examinerLead: lead, promptText: q.text, generator: "bank", answerSeconds: config.part3.answerSeconds });

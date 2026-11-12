@@ -69,6 +69,8 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
   const [cd, setCd] = useState({ left: 0, total: 0 });
   const [canEarly, setCanEarly] = useState(false);
   const [level, setLevel] = useState(0);
+  /** Rolling input envelope (oldest → newest) so the bars move like a real meter. */
+  const [bars, setBars] = useState<number[]>(() => new Array(32).fill(0));
   const [progress, setProgress] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [blocked, setBlocked] = useState<{ title: string; message: string; action: string } | null>(null);
@@ -209,7 +211,18 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
       const rec = new DualRecorder();
       for (;;) {
         try {
-          rec.onLevel = (l) => { const now = performance.now(); if (now - levelTs.current > 80) { levelTs.current = now; setLevel(l); } };
+          rec.onLevel = (l) => {
+            const now = performance.now();
+            if (now - levelTs.current < 70) return;
+            levelTs.current = now;
+            setLevel(l);
+            // Fast attack, slow release — the classic behaviour of a recording meter.
+            setBars((prev) => {
+              const next = prev.slice(1);
+              next.push(Math.max(l, (prev[prev.length - 1] ?? 0) * 0.55));
+              return next;
+            });
+          };
           rec.onError = () => cdResolve.current?.("device");
           await rec.start(deviceId || undefined);
           break;
@@ -239,6 +252,7 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
       recRef.current = null;
       const transcript = tr ? await tr.stop() : "";
       setLevel(0);
+      setBars(new Array(32).fill(0));
       if (r === "aborted") return null;
       if (r === "repeat") {
         try {
@@ -399,6 +413,14 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
   const answered = steps.filter((s) => s.status === "answered").length;
   const pct = cd.total ? cd.left / cd.total : 0;
   const mmss = (n: number) => `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}`;
+  // The ring is the timer: preparation fills it clockwise, answering drains it
+  // anticlockwise, so the direction itself tells you which phase you are in.
+  const RING_C = 2 * Math.PI * 45;
+  const isPrep = phase === "prep";
+  const ringFrac = cd.total ? (isPrep ? 1 - pct : pct) : 0;
+  const urgent = cd.total > 0 && cd.left <= 10;
+  const critical = cd.total > 0 && cd.left <= 5;
+  const hearing = phase === "recording" && level > 0.05;
   const step = current;
   const repeatsLeft = step && cfg ? cfg.maxRepeatsPerQuestion - step.repeatCount : 0;
 
@@ -509,21 +531,46 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
             <section className="mt-6 flex flex-col items-center">
               {(phase === "recording" || phase === "prep") && (
                 <>
-                  <div className="relative grid h-36 w-36 place-items-center">
+                  <div className="relative grid h-40 w-40 place-items-center">
+                    {/* Live input halo: breathes with the candidate's voice. */}
+                    <div
+                      className="pointer-events-none absolute inset-0 rounded-full transition-all duration-150"
+                      style={{ boxShadow: hearing ? `0 0 0 ${5 + level * 16}px rgba(220,38,38,0.10)` : "0 0 0 0 rgba(220,38,38,0)" }}
+                      aria-hidden
+                    />
                     <svg viewBox="0 0 100 100" className="absolute inset-0 -rotate-90">
                       <circle cx="50" cy="50" r="45" fill="none" stroke="#e4e4e7" strokeWidth="5" />
-                      <circle cx="50" cy="50" r="45" fill="none" stroke={phase === "recording" ? "#dc2626" : "#18181b"} strokeWidth="5" strokeLinecap="round" strokeDasharray={`${pct * 283} 283`} />
+                      <circle
+                        cx="50" cy="50" r="45" fill="none"
+                        stroke={isPrep ? "#18181b" : critical ? "#dc2626" : urgent ? "#f59e0b" : "#dc2626"}
+                        strokeWidth="5" strokeLinecap="round"
+                        strokeDasharray={`${Math.max(0.001, ringFrac) * RING_C} ${RING_C}`}
+                        style={{
+                          transform: `scale(${isPrep ? 1 : -1}, 1)`,
+                          transformOrigin: "50px 50px",
+                          transition: "stroke-dasharray 220ms linear, stroke 300ms ease",
+                        }}
+                      />
                     </svg>
                     <div className="text-center">
-                      <div className="text-3xl font-semibold tabular-nums">{mmss(cd.left)}</div>
-                      <div className="text-xs text-zinc-400">{phase === "recording" ? "Recording" : "Preparation"}</div>
+                      <div className={`text-4xl font-semibold tabular-nums ${critical ? "animate-pulse text-red-600" : urgent ? "text-amber-600" : "text-zinc-900"}`}>{mmss(cd.left)}</div>
+                      <div className="mt-1 text-[11px] uppercase tracking-wide text-zinc-400">
+                        {phase === "recording" ? (hearing ? "Hearing you" : "Listening") : "Preparation"}
+                      </div>
                     </div>
                   </div>
                   {phase === "recording" && (
-                    <div className="mt-4 flex h-8 items-end gap-1" aria-label="Input level">
-                      {Array.from({ length: 16 }).map((_, i) => (
-                        <span key={i} className="w-1.5 rounded-full bg-red-500 transition-all" style={{ height: `${Math.max(4, Math.min(32, level * 32 * (0.6 + 0.4 * Math.sin(i * 1.7 + level * 10))))}px`, opacity: level > i / 20 ? 1 : 0.25 }} />
-                      ))}
+                    <div className="mt-5 flex flex-col items-center">
+                      <div className="flex h-10 items-center gap-[3px]" aria-label="Microphone input level" role="img">
+                        {bars.map((v, i) => (
+                          <span
+                            key={i}
+                            className={`w-[3px] rounded-full transition-[height,background-color] duration-75 ${hearing ? "bg-red-500" : "bg-zinc-300"}`}
+                            style={{ height: `${Math.max(3, Math.min(40, v * 46))}px`, opacity: 0.35 + Math.min(0.65, v * 2.2) }}
+                          />
+                        ))}
+                      </div>
+                      <p className="mt-2 text-[11px] text-zinc-400">{hearing ? "Your voice is being recorded" : "Speak now — the meter follows your voice"}</p>
                     </div>
                   )}
                   {phase === "recording" && browserAsr && cfg?.showTranscriptLive && liveText && <p className="mt-3 max-w-xl text-center text-xs text-zinc-400">{liveText}</p>}
