@@ -134,7 +134,7 @@
    "examinees": 1106,
    "part1": [
     {
-     "text": "How often?",
+     "text": "Do you like buying shoes?",
      "textZh": "你喜欢买鞋子吗？"
     },
     {
@@ -359,7 +359,11 @@
     },
     {
      "text": "Do u prefer to study in the mornings or in the afternoon?",
-     "textZh": "你更喜欢在早上还是下午学习 How much time do u spend on your studies each week? 你每周花多少时间在学习上？"
+     "textZh": "你更喜欢在早上还是下午学习？"
+    },
+    {
+     "text": "How much time do u spend on your studies each week?",
+     "textZh": "你每周花多少时间在学习上？"
     },
     {
      "text": "What technology do u use when u study?",
@@ -738,7 +742,7 @@
    "examinees": 406,
    "part1": [
     {
-     "text": "How often?",
+     "text": "Do you like looking in the mirror?",
      "textZh": "你喜欢照镜子吗？"
     },
     {
@@ -808,10 +812,6 @@
     {
      "text": "Do you like shopping?",
      "textZh": "你喜欢购物吗？"
-    },
-    {
-     "text": "Does this time work for you?",
-     "textZh": "这个时间适合你吗 • 反义词：doesn't fit/suit 不合适 / misfit 不适合 / doesn't match 不搭配 Do you like shopping? 你喜欢购物吗？"
     }
    ],
    "part2": [],
