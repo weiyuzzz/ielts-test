@@ -24,11 +24,21 @@ if (!url) {
 const SCHEMA = "migrate_check";
 const dir = path.join(process.cwd(), "drizzle");
 
-/** Strip type casts and whitespace so `'[]'::jsonb` and `'[]'` compare equal. */
+/**
+ * Strip type casts, schema qualification and whitespace so equivalent defaults
+ * compare equal:
+ *   '[]'::jsonb                    → '[]'
+ *   nextval('public.x_id_seq')     → nextval('x_id_seq')
+ *   nextval('migrate_check.x_id_seq') → nextval('x_id_seq')
+ *
+ * The schema qualifier differs only because we replay the migrations into a
+ * throwaway schema; it is not real drift.
+ */
 function normDefault(v) {
   if (v == null) return "";
   return String(v)
     .replace(/::[a-z_ ]+( with(out)? time zone)?/gi, "")
+    .replace(/nextval\('([a-z0-9_]+)\./gi, "nextval('")
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
