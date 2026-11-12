@@ -3,10 +3,26 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, Badge, Band, modeLabel, statusTone, fmtDate } from "@/components/ui";
 import { DIMENSION_LABELS, type Dimension } from "@/lib/speaking/bands";
-import { CRITERIA } from "@/lib/speaking/band-descriptors";
+import { CRITERIA, DESCRIPTOR_SOURCE, findDescriptor } from "@/lib/speaking/band-descriptors";
 
-interface Dim { dimension: Dimension; band: number | null; status: string; source: string; rationale: string }
-interface FindingRow { id: string; dimension: string; answerId: string | null; kind: string; category: string; originalText: string; suggestion: string | null; explanation: string; possibleAsrError: boolean }
+interface Dim { dimension: Dimension; band: number | null; status: string; source: string; rationale: string; descriptorRefs?: string[] }
+interface FindingRow { id: string; dimension: string; answerId: string | null; kind: string; category: string; originalText: string; suggestion: string | null; explanation: string; possibleAsrError: boolean; descriptorRefs?: string[] }
+
+/** Small, reusable rubric citation. Unknown ids are simply not rendered. */
+function DescriptorChips({ ids, tone = "zinc" }: { ids?: string[]; tone?: "zinc" | "indigo" }) {
+  const valid = (ids ?? []).map((id) => findDescriptor(id)).filter((d): d is NonNullable<typeof d> => !!d);
+  if (!valid.length) return null;
+  return (
+    <ul className="mt-2 space-y-1">
+      {valid.map((d) => (
+        <li key={d.id} className="text-[11px] leading-4 text-zinc-500">
+          <code className={`mr-1 rounded px-1 py-0.5 ${tone === "indigo" ? "bg-indigo-50 text-indigo-700" : "bg-zinc-100 text-zinc-600"}`}>{d.id}</code>
+          <span className="text-zinc-400">B{d.band} · {d.focus}</span> {d.text}
+        </li>
+      ))}
+    </ul>
+  );
+}
 interface ReportData {
   assessment: { id: string; status: string; stage: string | null; overallBand: number | null; isComplete: boolean; scorer: string | null; llmProvider: string | null; llmModel: string | null; promptVersion: string | null; asrProvider: string | null; pronunciationProvider: string | null; metrics: Record<string, unknown> | null; notes: string[] | null; error: string | null; startedAt: string; completedAt: string | null };
   dimensions: Dim[];
@@ -148,6 +164,10 @@ export function ReportView({ sessionId }: { sessionId: string }) {
                     </div>
                     <div className="mt-1"><Badge tone={dim?.status === "scored" ? (dim.source === "llm" || dim.source === "audio-model" ? "green" : "indigo") : "zinc"}>{dim?.status === "scored" ? dim.source : "not assessed"}</Badge></div>
                     <p className="mt-3 text-xs leading-5 text-zinc-600">{dim?.rationale}</p>
+                    <DescriptorChips ids={dim?.descriptorRefs} />
+                    {dim?.status === "scored" && !(dim.descriptorRefs?.length) && dim.source === "heuristic" && (
+                      <p className="mt-2 text-[11px] leading-4 text-zinc-400">Heuristic scoring cannot cite rubric descriptors.</p>
+                    )}
                   </Card>
                 );
               })}
@@ -176,6 +196,7 @@ export function ReportView({ sessionId }: { sessionId: string }) {
                           <div className={f.kind === "error" ? "text-red-700 line-through decoration-red-300" : "text-zinc-800"}>“{f.originalText}”</div>
                           {f.suggestion && <div className="mt-1 text-emerald-700">→ {f.suggestion}</div>}
                           <div className="mt-1 text-xs leading-5 text-zinc-500">{f.explanation}</div>
+                          <DescriptorChips ids={f.descriptorRefs} tone="indigo" />
                         </li>
                       ))}
                     </ul>
@@ -194,11 +215,19 @@ export function ReportView({ sessionId }: { sessionId: string }) {
                 <ul className="space-y-1">
                   <li>Language scorer: <b>{a.scorer === "llm" ? `${a.llmProvider} · ${a.llmModel}` : "heuristic"}</b></li>
                   <li>Prompt/rules version: <b>{a.promptVersion}</b></li>
+                  <li>Rubric revision: <b>{DESCRIPTOR_SOURCE.revision}</b></li>
                   <li>ASR: <b>{a.asrProvider ?? "–"}</b></li>
                   <li>Pronunciation: <b>{a.pronunciationProvider ?? "not assessed"}</b></li>
                 </ul>
                 {a.notes && a.notes.length > 0 && <ul className="mt-3 list-disc space-y-1 pl-4 text-amber-800">{a.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
-                <p className="mt-3">This is AI practice feedback, not an official IELTS score.</p>
+                <p className="mt-3">
+                  Band descriptors are a structured <b>paraphrase</b> of the IELTS Speaking public version
+                  (not the official wording). This is AI practice feedback, not an official IELTS score and
+                  not a guarantee of any band in a real test.
+                </p>
+                <p className="mt-1">
+                  Reference: <a className="underline" href={DESCRIPTOR_SOURCE.url} target="_blank" rel="noreferrer noopener">{DESCRIPTOR_SOURCE.publisher}</a>
+                </p>
               </Card>
             </div>
           </div>

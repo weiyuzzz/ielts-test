@@ -1,0 +1,155 @@
+name: CI
+
+# Every check here must pass from a clean checkout with no local caches and no
+# private API keys. Nothing in this workflow calls a paid model provider.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Fast feedback: types, lint, all offline unit suites, production build.
+  # No database service is required: `src/db/index.ts` only needs DATABASE_URL
+  # to be defined, and every DB-touching page is `force-dynamic`, so a build
+  # opens no connection. The value below is a build-time placeholder only.
+  # ---------------------------------------------------------------------------
+  static:
+    name: Static / Unit / Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # RouteContext / PageProps are generated globals; without this, tsc reports
+      # false errors and the build's type check can fail on a clean checkout.
+      - name: Generate Next.js route types
+        run: npx next typegen
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests (state machine, bands, metrics, scoring)
+        run: npx tsx --test tests/unit.test.ts
+
+      - name: Audio performance tests
+        run: npx tsx --test tests/audio-perf.test.ts
+
+      - name: Scoring rubric tests
+        run: npx tsx --test tests/scoring-rubric.test.ts
+
+      - name: Production build
+        env:
+          DATABASE_URL: postgresql://build:build@127.0.0.1:5432/build
+        run: npm run build
+
+  # ---------------------------------------------------------------------------
+  # Full stack: real PostgreSQL 16, schema push, production server, E2E script.
+  # ---------------------------------------------------------------------------
+  integration:
+    name: Integration (PostgreSQL 16)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ielts_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d ielts_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ielts_test
+      AUDIO_STORAGE_DIR: ${{ github.workspace }}/storage/audio
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Generate Next.js route types
+        run: npx next typegen
+
+      # Passing --url makes drizzle-kit ignore drizzle.config.json, so --dialect
+      # and --schema must be supplied explicitly. This overrides the hardcoded
+      # local credentials in the config without modifying shared project config.
+      # (drizzle-kit rejects --config together with --url.)
+      - name: Push schema to the test database
+        run: >-
+          npx drizzle-kit push
+          --dialect postgresql
+          --schema ./src/db/schema.ts
+          --url="$DATABASE_URL"
+          --force
+
+      - name: Production build
+        run: npm run build
+
+      - name: Start server
+        run: |
+          mkdir -p storage/audio
+          npx next start -p 3100 > next-server.log 2>&1 &
+          echo $! > next-server.pid
+
+      - name: Wait for /api/health
+        run: |
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3100/api/health || true)
+            if [ "$code" = "200" ]; then
+              echo "server healthy after ${i} attempts"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::server did not become healthy within 120s"
+          tail -n 200 next-server.log || true
+          exit 1
+
+      - name: Integration tests
+        run: node tests/integration.mjs http://localhost:3100
+
+      - name: Server logs
+        if: always() && hashFiles('next-server.log') != ''
+        run: tail -n 300 next-server.log || true
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -f next-server.pid ]; then kill "$(cat next-server.pid)" 2>/dev/null || true; fi

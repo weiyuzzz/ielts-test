@@ -7,9 +7,12 @@
 import { toHalfBand, clampBand } from "./bands";
 import type { AggregateMetrics, AnswerInput } from "./metrics";
 import { splitSentences } from "./metrics";
-import { criteriaBrief } from "./band-descriptors";
+import {
+  descriptorBrief, findDescriptor, allowedBandsFor,
+  DESCRIPTOR_SOURCE, type CriterionKey,
+} from "./band-descriptors";
 
-export const SCORING_PROMPT_VERSION = "speaking-language-v2.0-criteria";
+export const SCORING_PROMPT_VERSION = "speaking-language-v3.0-rubric";
 export const HEURISTIC_VERSION = "heuristic-v1.1";
 
 export type LangDim = "FC" | "LR" | "GRA";
@@ -23,10 +26,19 @@ export interface Finding {
   suggestion?: string | null;
   explanation: string;
   possibleAsrError?: boolean;
+  /** Rubric ids this finding is evidence for (subset of the finding's dimension). */
+  descriptorRefs?: string[];
+}
+
+export interface DimensionScore {
+  band: number;
+  rationale: string;
+  /** Rubric ids justifying this band. Empty only for legacy/heuristic output. */
+  descriptorRefs: string[];
 }
 
 export interface LanguageScore {
-  dimensions: Record<LangDim, { band: number; rationale: string }>;
+  dimensions: Record<LangDim, DimensionScore>;
   findings: Finding[];
   summary: string;
   nextSteps: string[];
@@ -129,10 +141,12 @@ export function heuristicScore(answers: AnswerInput[], m: AggregateMetrics): Lan
 
   // floor of 2: any intelligible speech is above band 1 (band 0/1 are for no attempt / no communication)
   const r = (n: number) => toHalfBand(clampBand(Math.max(2, n)));
+  // The heuristic scorer cannot cite rubric descriptors (it has no semantic judgement),
+  // so descriptorRefs stay empty and the report says so explicitly.
   const dims = {
-    FC: { band: r(fc), rationale: `Heuristic: ${avgWordsPerAnswer.toFixed(0)} words/answer, ${m.wpm ?? "n/a"} wpm, filler rate ${m.fillerRate.toFixed(1)}/100 words, ${m.connectiveVariety} distinct linking expressions${m.longPausesPerMin !== null ? `, ${m.longPausesPerMin.toFixed(1)} long pauses/min` : ""}. Coherence of ideas is not judged without an LLM.` },
-    LR: { band: r(lr), rationale: `Heuristic: lexical diversity (MATTR) ${m.mattr.toFixed(2)}, less-common word ratio ${(m.advancedWordRatio * 100).toFixed(1)}%. Collocation and idiom accuracy are not judged without an LLM.` },
-    GRA: { band: r(gra), rationale: `Heuristic: ${m.complexPer100.toFixed(1)} complex-structure markers/100 words, avg sentence length ${m.avgSentenceLength.toFixed(1)} words, ${ruleFindings.length} rule-detected errors. Only a small set of high-precision error patterns is checked.` },
+    FC: { band: r(fc), descriptorRefs: [] as string[], rationale: `Heuristic: ${avgWordsPerAnswer.toFixed(0)} words/answer, ${m.wpm ?? "n/a"} wpm, filler rate ${m.fillerRate.toFixed(1)}/100 words, ${m.connectiveVariety} distinct linking expressions${m.longPausesPerMin !== null ? `, ${m.longPausesPerMin.toFixed(1)} long pauses/min` : ""}. Coherence of ideas is not judged without an LLM.` },
+    LR: { band: r(lr), descriptorRefs: [] as string[], rationale: `Heuristic: lexical diversity (MATTR) ${m.mattr.toFixed(2)}, less-common word ratio ${(m.advancedWordRatio * 100).toFixed(1)}%. Collocation and idiom accuracy are not judged without an LLM.` },
+    GRA: { band: r(gra), descriptorRefs: [] as string[], rationale: `Heuristic: ${m.complexPer100.toFixed(1)} complex-structure markers/100 words, avg sentence length ${m.avgSentenceLength.toFixed(1)} words, ${ruleFindings.length} rule-detected errors. Only a small set of high-precision error patterns is checked.` },
   };
   const weakest = (Object.entries(dims) as [LangDim, { band: number }][]).sort((a, b) => a[1].band - b[1].band)[0][0];
   const tips: Record<LangDim, string> = {
@@ -151,19 +165,26 @@ export function heuristicScore(answers: AnswerInput[], m: AggregateMetrics): Lan
 // ---------------------------------------------------------------- LLM prompt + validation
 export function buildScoringMessages(answers: (AnswerInput & { index: number })[]) {
   const system = [
-    "You are a certified IELTS Speaking examiner producing a diagnostic report.",
-    `Apply these criteria strictly when judging the candidate:\n${criteriaBrief()}`,
-    "Score ONLY Fluency & Coherence (FC), Lexical Resource (LR) and Grammatical Range & Accuracy (GRA) (0–9, half bands allowed).",
-    "Judge each answer against the expectations for ITS PART. A short, direct Part 1 answer is correct and must not lose fluency marks; a long Part 3 answer is expected. Never use word count alone as a proxy for fluency.",
-    "For each dimension, the rationale must name the concrete key indicators you used (e.g. speech continuity, cohesive devices, collocation, paraphrase, error density).",
-    "Set `category` to that concrete key indicator, not a vague label like 'grammar'.",
-    "Do NOT score pronunciation — you only see ASR transcripts.",
-    "Transcripts come from automatic speech recognition and may contain recognition errors. If a likely error could be an ASR artifact (homophones, dropped short words, odd single words), set possibleAsrError=true and do not penalise it heavily.",
-    "Every finding MUST quote text that appears verbatim in the candidate's transcripts (field `quote`) and reference the answer index.",
-    "Be specific, avoid generic repeated comments, do not invent content the candidate did not say.",
+    "You are a certified IELTS Speaking examiner producing a diagnostic practice report.",
+    `Rubric under test (${DESCRIPTOR_SOURCE.revision}, paraphrased from the IELTS public band descriptors):\n${descriptorBrief()}`,
+    "How to score each criterion (FC, LR, GRA):",
+    "1. Read every answer, then choose the SINGLE best-fit integer band for each criterion by matching the evidence against the descriptors above.",
+    "2. If the performance sits between two integer bands, choose the closer band. A half band is a best-fit judgement; it is never an official descriptor level.",
+    "3. `descriptorRefs` must list 2–4 ids copied EXACTLY from the rubric that justify the band — ids from the chosen band, or from an adjacent band when the performance straddles two. Never invent, alter or abbreviate an id.",
+    "4. The rationale must cite the concrete evidence (what the candidate actually did), not restate the descriptor wording.",
+    "Scoring discipline — hard rules:",
+    "- Do NOT infer a band from word count, answer length, or how many complex sentences were produced. Length is not quality.",
+    "- Do NOT equate the number of connectives with coherence. Overused or misused linkers can lower Fluency & Coherence.",
+    "- Part 1 answers are supposed to be short: brevity alone must never lower any criterion, and verbosity must never raise it.",
+    "- Do NOT score pronunciation (P). You only see ASR transcripts; P is assessed from audio separately and must never be inferred from spelling or vocabulary.",
+    "Evidence rules:",
+    "- Every finding MUST quote text that appears verbatim in the candidate's transcripts (field `quote`) and reference the answer index.",
+    "- Each finding should cite 1–2 rubric ids from its own dimension that the quoted evidence demonstrates.",
+    "- Transcripts come from automatic speech recognition and may contain recognition errors. If an apparent error could be an ASR artifact (homophones, dropped short words, odd isolated words), set possibleAsrError=true and do not penalise it heavily.",
+    "- Be specific, avoid generic repeated comments, and never invent content the candidate did not say.",
     "Return ONLY JSON matching this TypeScript type:",
-    `{"dimensions":{"FC":{"band":number,"rationale":string},"LR":{"band":number,"rationale":string},"GRA":{"band":number,"rationale":string}},
-"findings":[{"dimension":"FC"|"LR"|"GRA","answer":number,"kind":"error"|"strength"|"issue","category":string,"quote":string,"suggestion":string|null,"explanation":string,"possibleAsrError":boolean}],
+    `{"dimensions":{"FC":{"band":number,"rationale":string,"descriptorRefs":string[]},"LR":{"band":number,"rationale":string,"descriptorRefs":string[]},"GRA":{"band":number,"rationale":string,"descriptorRefs":string[]}},
+"findings":[{"dimension":"FC"|"LR"|"GRA","answer":number,"kind":"error"|"strength"|"issue","category":string,"quote":string,"suggestion":string|null,"explanation":string,"possibleAsrError":boolean,"descriptorRefs":string[]}],
 "summary":string,"nextSteps":string[]}`,
     "Include 4–12 findings: typical errors with corrected rewrites, more natural alternatives, and at least two strengths (good expressions) if present.",
   ].join("\n");
@@ -171,6 +192,41 @@ export function buildScoringMessages(answers: (AnswerInput & { index: number })[
     .map((a) => `#${a.index} [Part ${a.part}] Q: ${a.prompt}\nDuration: ${(a.durationMs / 1000).toFixed(0)}s\nA: ${a.noResponse || !a.text.trim() ? "(no response)" : a.text}`)
     .join("\n\n");
   return { system, user };
+}
+
+export interface DescriptorRefCheck {
+  /** Whether the model supplied the field at all (legacy outputs do not). */
+  present: boolean;
+  valid: string[];
+  rejected: number;
+}
+
+/**
+ * Validate model-supplied rubric ids against the real rubric.
+ *
+ * - unknown id / wrong dimension / non-string  → rejected
+ * - a band more than one step away from the score → rejected
+ * - duplicates are collapsed
+ *
+ * Rejected ids are NEVER surfaced, so a fabricated id can never reach the DB or UI.
+ */
+export function checkDescriptorRefs(raw: unknown, dimension: CriterionKey, band: number): DescriptorRefCheck {
+  if (!Array.isArray(raw)) return { present: false, valid: [], rejected: 0 };
+  const lo = Math.floor(band) - 1;
+  const hi = Math.ceil(band) + 1;
+  const seen = new Set<string>();
+  const valid: string[] = [];
+  let rejected = 0;
+  for (const item of raw) {
+    if (typeof item !== "string") { rejected++; continue; }
+    const id = item.trim();
+    const d = findDescriptor(id);
+    if (!d || d.dimension !== dimension || d.band < lo || d.band > hi) { rejected++; continue; }
+    if (seen.has(id)) continue;
+    seen.add(id);
+    valid.push(id);
+  }
+  return { present: true, valid, rejected };
 }
 
 export class ScoringValidationError extends Error {}
@@ -196,18 +252,34 @@ export function extractJson(raw: string): unknown {
  * Validate LLM output. Throws if any FC/LR/GRA dimension is missing/invalid.
  * Findings whose quote cannot be found in the transcripts are dropped (anti-hallucination).
  */
-export function validateLanguageScore(raw: unknown, answers: (AnswerInput & { index: number })[]): { score: LanguageScore; dropped: number } {
+export function validateLanguageScore(
+  raw: unknown,
+  answers: (AnswerInput & { index: number })[],
+): { score: LanguageScore; dropped: number; rejectedRefs: number } {
   if (!raw || typeof raw !== "object") throw new ScoringValidationError("output is not an object");
   const o = raw as Record<string, unknown>;
-  const dimsIn = o.dimensions as Record<string, { band?: unknown; rationale?: unknown }> | undefined;
+  const dimsIn = o.dimensions as Record<string, { band?: unknown; rationale?: unknown; descriptorRefs?: unknown }> | undefined;
   if (!dimsIn) throw new ScoringValidationError("missing dimensions");
   const dims = {} as LanguageScore["dimensions"];
+  let rejectedRefs = 0;
   for (const d of ["FC", "LR", "GRA"] as LangDim[]) {
     const v = dimsIn[d];
     if (!v || !isBand(v.band) || typeof v.rationale !== "string" || !v.rationale.trim()) {
       throw new ScoringValidationError(`dimension ${d} missing or invalid`);
     }
-    dims[d] = { band: toHalfBand(v.band), rationale: v.rationale.trim() };
+    const band = toHalfBand(v.band);
+    const check = checkDescriptorRefs(v.descriptorRefs, d, band);
+    rejectedRefs += check.rejected;
+    // If the model cited rubric ids, at least one must be valid AND from the
+    // band(s) it actually assigned — otherwise the citation does not support
+    // the score. Absent refs are tolerated for legacy outputs.
+    if (check.present) {
+      const own = new Set(allowedBandsFor(band));
+      const supportsBand = check.valid.some((id) => own.has(findDescriptor(id)!.band));
+      if (!check.valid.length) throw new ScoringValidationError(`dimension ${d} cited no valid descriptor id`);
+      if (!supportsBand) throw new ScoringValidationError(`dimension ${d} cited no descriptor from its assigned band`);
+    }
+    dims[d] = { band, rationale: v.rationale.trim(), descriptorRefs: check.valid };
   }
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9' ]+/g, " ").replace(/\s+/g, " ").trim();
   const byIndex = new Map(answers.map((a) => [a.index, a]));
@@ -229,8 +301,11 @@ export function validateLanguageScore(raw: unknown, answers: (AnswerInput & { in
       continue;
     }
     seen.add(norm(quote) + dim);
+    const dimKey = dim as LangDim;
+    const refCheck = checkDescriptorRefs(f.descriptorRefs, dimKey, dims[dimKey].band);
+    rejectedRefs += refCheck.rejected;
     findings.push({
-      dimension: dim as LangDim,
+      dimension: dimKey,
       answerId: a?.answerId ?? null,
       kind: (["error", "strength", "issue"].includes(f.kind as string) ? f.kind : "issue") as Finding["kind"],
       category: typeof f.category === "string" ? f.category : "general",
@@ -238,6 +313,7 @@ export function validateLanguageScore(raw: unknown, answers: (AnswerInput & { in
       suggestion: typeof f.suggestion === "string" ? f.suggestion : null,
       explanation: f.explanation,
       possibleAsrError: f.possibleAsrError === true,
+      descriptorRefs: refCheck.valid,
     });
   }
   return {
@@ -248,5 +324,6 @@ export function validateLanguageScore(raw: unknown, answers: (AnswerInput & { in
       nextSteps: Array.isArray(o.nextSteps) ? (o.nextSteps as unknown[]).filter((x): x is string => typeof x === "string").slice(0, 6) : [],
     },
     dropped,
+    rejectedRefs,
   };
 }
