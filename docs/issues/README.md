@@ -19,7 +19,7 @@ GitHub 上原本只有 1 个 issue（Phase 1 音频改造跟踪），它把「�
 | 11 | [Content/Voice] 考官音频资源缺口：0/508 | voice, content, help wanted | open（需授权/录制） | Phase 3 衍生 |
 | 12 | [Content] 学习素材生产缺口：502 题无答案、0 条审核 | content, help wanted | open（需人工写作+审核） | Phase 3 衍生 |
 
-PR：#9（`feat/phase3-question-learning`，学习素材 + Shadowing）、#8（`feat/phase3-scoring-ci`，分档判据 + CI）。两者均**未合并 main**。
+PR：#9（`feat/phase3-question-learning`，学习素材 + Shadowing）**已 squash 合并进 main（`d8a2bfe`）**，分支已删除；#8（`feat/phase3-scoring-ci`，分档判据 + CI）仍未合并。
 
 草稿文件：`new-01`…`new-06` → #2–#7（其中 #2 / #5 已关闭），`new-07` → #11，`new-08` → #12。草稿标题与线上标题保持一致，`sync-issues.mjs` 才能按标题幂等跳过。
 
