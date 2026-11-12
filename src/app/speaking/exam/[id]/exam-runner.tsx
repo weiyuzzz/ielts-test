@@ -178,6 +178,8 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
   const [readiness, setReadiness] = useState<{ ready: number; total: number } | null>(null);
   /** Session acquired during setup, handed to the mic check before the exam starts. */
   const [micSession, setMicSession] = useState<RecordingSession | null>(null);
+  /** True while the opening audio is being warmed after the start click. */
+  const [preparing, setPreparing] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
   const recSessionRef = useRef<RecordingSession | null>(null);
@@ -703,8 +705,11 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
 
   async function startFromSetup() {
     try {
+      setPreparing(true);
       const plan = planRef.current;
-      // Warm the opening line + first question while the candidate checks the mic.
+      // Warm the opening line + first question (synthesis takes seconds on a
+      // local engine — the progress bar below is why the click seems to "hang"
+      // without feedback).
       await preloaderRef.current?.ensureOpeningAndFirst(
         plan?.firstLines ?? [],
         plan?.firstQuestionAudioUrl ?? null,
@@ -718,6 +723,8 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
     } catch (e) {
       setDevices(await listInputDevices().catch(() => []));
       setNotice((e as Error).message);
+    } finally {
+      setPreparing(false);
     }
   }
 
@@ -818,10 +825,30 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
             </ul>
             {!asrAvailable && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">No speech recognition is configured. Your answers will be recorded, but they cannot be transcribed or scored.</p>}
             {browserAsr && !browserAsrSupported() && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">This browser does not support built-in speech recognition. Use Chrome, Edge or Safari, or ask the administrator to configure server ASR. Recordings will still be saved.</p>}
-            <p className="mt-6 text-xs text-zinc-400">On the next step the browser asks for microphone permission, and you can test your mic and pick a device before the exam starts.</p>
-            <button disabled={phase === "loading"} onClick={startFromSetup} className="mt-3 w-full rounded-xl bg-zinc-900 py-3 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50">
-              {phase === "loading" ? "Loading…" : answered > 0 ? "Allow microphone & resume" : "Allow microphone & begin"}
+            <p className="mt-6 text-xs text-zinc-400">On the next step the browser asks for microphone permission, and you can test your mic and pick a device before the exam starts. The exam itself starts only after you pass the microphone check.</p>
+            <button
+              disabled={phase === "loading" || preparing}
+              onClick={startFromSetup}
+              className="mt-3 w-full rounded-xl bg-zinc-900 py-3 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-60"
+            >
+              {phase === "loading"
+                ? "Loading…"
+                : preparing
+                  ? "Preparing examiner voice…"
+                  : answered > 0
+                    ? "Continue to microphone check"
+                    : "Continue to microphone check"}
             </button>
+            {preparing && readiness && readiness.total > 0 && (
+              <div className="mt-3" aria-label="Examiner voice preparation progress">
+                <div className="h-1.5 overflow-hidden rounded-full bg-zinc-200">
+                  <div className="h-1.5 rounded-full bg-zinc-900 transition-all" style={{ width: `${Math.round((readiness.ready / readiness.total) * 100)}%` }} />
+                </div>
+                <p className="mt-1.5 text-center text-xs text-zinc-400">
+                  Synthesising examiner audio — {readiness.ready}/{readiness.total} lines ready. The microphone check opens when the opening lines are done.
+                </p>
+              </div>
+            )}
           </div>
         )}
 
