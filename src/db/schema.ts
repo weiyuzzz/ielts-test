@@ -32,9 +32,16 @@ export const questionSets = pgTable("question_sets", {
   id: serial("id").primaryKey(),
   module: text("module").notNull().default("speaking"),
   name: text("name").notNull(),
+  /** Season key, e.g. "2026-09-12". Uniqueness is enforced by the import service. */
   season: text("season").notNull(),
+  /** "大陆地区" | "非大陆地区" | "global" — only banks of the chosen region are used. */
+  region: text("region").notNull().default("大陆地区"),
+  label: text("label"),
+  source: text("source"),
   description: text("description"),
-  isActive: boolean("is_active").notNull().default(true),
+  /** Exactly one bank per module is active: exams strictly draw from it. */
+  isActive: boolean("is_active").notNull().default(false),
+  importedAt: timestamp("imported_at", { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -48,8 +55,17 @@ export const questions = pgTable(
     topic: text("topic").notNull(),
     /** Topics shared between Part 2 and Part 3 use the same topicKey. */
     topicKey: text("topic_key").notNull(),
+    topicZh: text("topic_zh"),
     text: text("text").notNull(),
+    textZh: text("text_zh"),
+    /** evergreen (Part 1 万年保留题) | new (当季新题) | retained (当季保留题) */
+    questionType: text("question_type").notNull().default("retained"),
+    /** part1 | part23 | part3 — the bank's own grouping */
+    category: text("category").notNull().default("part1"),
     cuePoints: jsonb("cue_points").$type<string[]>(),
+    examinees: integer("examinees"),
+    /** Optional pre-recorded examiner audio; TTS is used when absent. */
+    questionAudioUrl: text("question_audio_url"),
     orderIndex: integer("order_index").notNull().default(0),
   },
   (t) => [index("questions_part_topic_idx").on(t.module, t.part, t.topicKey)],

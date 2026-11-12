@@ -10,6 +10,7 @@ import { getASR, getLLM, TIMEOUTS } from "@/lib/ai/registry";
 import { withTimeout } from "@/lib/ai/types";
 import { saveAudio, extForMime, readAudio } from "./storage";
 import { ensureSeed } from "./seed";
+import { activeBank } from "./bank-service";
 import { HttpError } from "./user";
 import { runScoring } from "./report-service";
 
@@ -38,34 +39,52 @@ function shuffle<T>(a: T[]): T[] {
   return r;
 }
 
-/** Prefer topics the user has not practised yet (pattern observed in the reverse-engineered product). */
-async function pickTopics(userId: string, part: number, count: number, pool: QuestionRow[]): Promise<string[]> {
-  const keys = [...new Set(pool.filter((q) => q.part === part).map((q) => q.topicKey))];
+/** Topics already practised by this user (prefer fresh ones, as the real product does). */
+async function usedTopics(userId: string): Promise<Set<string>> {
   const used = await db
     .selectDistinct({ topic: examQuestions.topic })
     .from(examQuestions)
     .innerJoin(examSessions, eq(examSessions.id, examQuestions.sessionId))
-    .where(and(eq(examSessions.userId, userId), eq(examQuestions.part, part)));
-  const usedTopics = new Set(used.map((u) => u.topic));
-  const topicOf = (k: string) => pool.find((q) => q.topicKey === k)!.topic;
-  const fresh = shuffle(keys.filter((k) => !usedTopics.has(topicOf(k))));
-  const old = shuffle(keys.filter((k) => usedTopics.has(topicOf(k))));
-  return [...fresh, ...old].slice(0, count);
+    .where(eq(examSessions.userId, userId));
+  return new Set(used.map((u) => u.topic));
 }
 
+function freshKeys(keys: string[], pool: QuestionRow[], used: Set<string>): string[] {
+  const topicOf = (k: string) => pool.find((q) => q.topicKey === k)?.topic ?? k;
+  return [...shuffle(keys.filter((k) => !used.has(topicOf(k)))), ...shuffle(keys.filter((k) => used.has(topicOf(k))))];
+}
+
+/**
+ * Build an exam strictly from the ACTIVE seasonal bank. No question is invented:
+ * Part 1 = one evergreen topic (2–3 questions) + two seasonal topics (4 each),
+ * Part 2 = one cue card, Part 3 = questions from the same card's topic first.
+ */
 export async function createSession(user: User, mode: SpeakingMode) {
   await ensureSeed();
   const config = resolveConfig(mode);
-  const pool = await db.select().from(questions).where(eq(questions.module, "speaking"));
+  const bank = await activeBank();
+  if (!bank) throw new HttpError(500, "No active question bank. Import one in /admin.", "no_active_bank");
+  const pool = await db.select().from(questions).where(eq(questions.setId, bank.id));
+  const used = await usedTopics(user.id);
   const examinerName = EXAMINER_NAMES[Math.floor(Math.random() * EXAMINER_NAMES.length)];
   type StepDraft = Omit<typeof examQuestions.$inferInsert, "sessionId" | "stepIndex">;
   const steps: StepDraft[] = [];
-  const opening = mode === "full" ? LINES.opening(examinerName) + " " : "";
+  const opening = mode === "full" ? `${LINES.openingFull(examinerName, LINES.greetingPeriod())} ${LINES.idComplete} ` : "";
 
-  if (config.part1.enabled) {
-    const topics = await pickTopics(user.id, 1, config.part1.topics, pool);
-    topics.forEach((key, ti) => {
-      const qs = pool.filter((q) => q.part === 1 && q.topicKey === key).sort((a, b) => a.orderIndex - b.orderIndex).slice(0, config.part1.questionsPerTopic);
+  const p1 = pool.filter((q) => q.part === 1);
+  if (config.part1.enabled && p1.length) {
+    const evergreen = freshKeys([...new Set(p1.filter((q) => q.questionType === "evergreen").map((q) => q.topicKey))], pool, used);
+    const seasonal = freshKeys([...new Set(p1.filter((q) => q.questionType !== "evergreen").map((q) => q.topicKey))], pool, used);
+    const chosen: { key: string; count: number }[] = [];
+    if (evergreen[0]) chosen.push({ key: evergreen[0], count: config.part1.evergreenQuestions });
+    for (const k of seasonal.slice(0, config.part1.seasonalTopics)) chosen.push({ key: k, count: config.part1.questionsPerTopic });
+    // Fall back to any remaining topics so a bank with few topics still builds a valid plan.
+    for (const k of [...new Set(p1.map((q) => q.topicKey))]) {
+      if (chosen.length >= 1 + config.part1.seasonalTopics) break;
+      if (!chosen.some((c) => c.key === k)) chosen.push({ key: k, count: config.part1.questionsPerTopic });
+    }
+    chosen.forEach((sel, ti) => {
+      const qs = shuffle(p1.filter((q) => q.topicKey === sel.key)).slice(0, sel.count);
       qs.forEach((q, qi) => {
         let lead = "";
         if (ti === 0 && qi === 0) lead = `${opening}${LINES.part1Intro} ${LINES.part1Topic(q.topic)}`;
@@ -74,13 +93,12 @@ export async function createSession(user: User, mode: SpeakingMode) {
       });
     });
   }
-  let p23Key: string | undefined;
-  if (config.part2.enabled || config.part3.enabled) {
-    const candidates = await pickTopics(user.id, config.part2.enabled ? 2 : 3, 1, pool);
-    p23Key = candidates[0];
-  }
-  if (config.part2.enabled && p23Key) {
-    const card = pool.find((q) => q.part === 2 && q.topicKey === p23Key)!;
+
+  const cards = pool.filter((q) => q.part === 2);
+  const cardKeys = freshKeys([...new Set(cards.map((q) => q.topicKey))], pool, used);
+  const card = cards.find((q) => q.topicKey === cardKeys[0]) ?? shuffle(cards)[0];
+  const p23Key = card?.topicKey;
+  if (config.part2.enabled && card) {
     steps.push({
       part: 2, kind: "cue_card", questionId: card.id, topic: card.topic,
       examinerLead: `${steps.length === 0 ? opening : ""}${LINES.part2Intro}`.trim(),
@@ -88,8 +106,10 @@ export async function createSession(user: User, mode: SpeakingMode) {
       prepSeconds: config.part2.prepSeconds, answerSeconds: config.part2.answerSeconds,
     });
   }
-  if (config.part3.enabled && p23Key) {
-    const qs = shuffle(pool.filter((q) => q.part === 3 && q.topicKey === p23Key)).slice(0, config.part3.questions);
+  if (config.part3.enabled) {
+    const same = shuffle(pool.filter((q) => q.part === 3 && q.topicKey === p23Key));
+    const rest = shuffle(pool.filter((q) => q.part === 3 && q.topicKey !== p23Key));
+    const qs = [...same, ...rest].slice(0, config.part3.questions);
     qs.forEach((q, i) => {
       const lead = i === 0 ? (mode === "full" ? LINES.part3Intro(q.topic) : LINES.part3Practice(q.topic)) : "";
       steps.push({ part: 3, kind: "question", questionId: q.id, topic: q.topic, examinerLead: lead, promptText: q.text, generator: "bank", answerSeconds: config.part3.answerSeconds });
@@ -100,7 +120,7 @@ export async function createSession(user: User, mode: SpeakingMode) {
   return db.transaction(async (tx) => {
     const [s] = await tx
       .insert(examSessions)
-      .values({ userId: user.id, module: "speaking", mode, examinerName, configSnapshot: config as unknown as Record<string, unknown>, totalSteps: steps.length })
+      .values({ userId: user.id, module: "speaking", mode, examinerName, configSnapshot: { ...config, bankSeason: bank.season, bankRegion: bank.region } as unknown as Record<string, unknown>, totalSteps: steps.length })
       .returning();
     await tx.insert(examQuestions).values(steps.map((st, i) => ({ ...st, sessionId: s.id, stepIndex: i })));
     return s;
@@ -130,6 +150,9 @@ async function machineState(s: typeof examSessions.$inferSelect): Promise<{ stat
 export async function getSessionView(user: User, id: string) {
   const s = await loadOwned(user, id);
   const { steps } = await machineState(s);
+  const qIds = steps.map((x) => x.questionId).filter((v): v is number => typeof v === "number");
+  const qRows = qIds.length ? await db.select({ id: questions.id, audioUrl: questions.questionAudioUrl }).from(questions).where(inArray(questions.id, qIds)) : [];
+  const audioByQuestion = new Map(qRows.map((q) => [q.id, q.audioUrl]));
   const answers = await db.select().from(answerRecords).where(and(eq(answerRecords.sessionId, s.id), eq(answerRecords.isCurrent, true)));
   const ts = answers.length ? await db.select().from(transcripts).where(inArray(transcripts.answerId, answers.map((a) => a.id))).orderBy(desc(transcripts.createdAt)) : [];
   const [assessment] = await db.select({ id: assessments.id, status: assessments.status }).from(assessments).where(eq(assessments.sessionId, s.id)).orderBy(desc(assessments.startedAt)).limit(1);
@@ -141,6 +164,7 @@ export async function getSessionView(user: User, id: string) {
       return {
         id: st.id, stepIndex: st.stepIndex, part: st.part, kind: st.kind, topic: st.topic, examinerLead: st.examinerLead, promptText: st.promptText,
         cuePoints: st.cuePoints ?? [], generator: st.generator, prepSeconds: st.prepSeconds, answerSeconds: st.answerSeconds, status: st.status, repeatCount: st.repeatCount,
+        questionAudioUrl: st.questionId ? audioByQuestion.get(st.questionId) ?? null : null,
         answer: a ? { id: a.id, attempt: a.attempt, status: a.status, durationMs: a.durationMs, audioAssetId: a.audioAssetId, transcript: t ? { status: t.status, text: t.text, provider: t.provider } : null } : null,
       };
     }),
@@ -245,7 +269,8 @@ export async function advance(user: User, id: string, fromStep: number) {
   const step = steps.find((x) => x.stepIndex === s.currentStep);
   const summary = step ? await currentAnswerSummary(step.id) : null;
   const llm = getLLM();
-  const d = decideAdvance(state, fromStep, summary, { llmAvailable: !!llm });
+  const allowFollowUps = s.mode !== "full";
+  const d = decideAdvance(state, fromStep, summary, { llmAvailable: allowFollowUps && !!llm, allowFollowUps });
   if (!d.ok) machineFail(d.error);
   const decision = d.value;
 

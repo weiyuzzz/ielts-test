@@ -11,6 +11,7 @@ import type { SpeakingExamConfig } from "@/lib/speaking/config";
 interface StepView {
   id: string; stepIndex: number; part: number; kind: string; topic: string; examinerLead: string; promptText: string; cuePoints: string[];
   generator: string; prepSeconds: number; answerSeconds: number; status: string; repeatCount: number;
+  questionAudioUrl: string | null;
   answer: { id: string; status: string } | null;
 }
 interface SessionView {
@@ -166,11 +167,36 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
     });
   }
 
-  async function say(text: string, signal: AbortSignal) {
+  /** Pre-recorded examiner audio from the bank takes priority over TTS. */
+  function playPresetAudio(url: string, signal: AbortSignal): Promise<boolean> {
+    const audio = new Audio(url);
+    audio.preload = "auto";
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (ok: boolean) => {
+        if (done) return;
+        done = true;
+        audio.pause();
+        signal.removeEventListener("abort", onAbort);
+        resolve(ok);
+      };
+      const onAbort = () => finish(false);
+      audio.onended = () => finish(true);
+      audio.onerror = () => finish(false);
+      signal.addEventListener("abort", onAbort, { once: true });
+      void audio.play().catch(() => finish(false));
+    });
+  }
+
+  async function say(text: string, signal: AbortSignal, audioUrl?: string | null) {
     if (signal.aborted) return;
     setSubtitle(text);
     setSpeaking(true);
     setPhase("examiner");
+    if (audioUrl && (await playPresetAudio(audioUrl, signal))) {
+      setSpeaking(false);
+      return;
+    }
     const r = await speak(text, { serverTts, voice, signal });
     setSpeaking(false);
     if (!r.ok && !signal.aborted) setNotice("The examiner voice is unavailable in this browser. Read the question on screen instead.");
@@ -294,13 +320,13 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
           const line = examinerLine(step, { first, noResponse: prevNoResponse.current });
           first = false;
           if (step.kind === "cue_card") {
-            await say(line, signal);
+            await say(line, signal, step.questionAudioUrl);
             setPhase("prep");
             await countdown(step.prepSeconds, 10, signal);
             if (signal.aborted) return;
             await say(LINES.part2Start, signal);
           } else {
-            await say(line, signal);
+            await say(line, signal, step.questionAudioUrl);
           }
           if (signal.aborted) return;
           // While the user records this answer, synthesise the next question in the
@@ -314,6 +340,8 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
           }
           const data = await record(step, signal, cfg);
           if (!data) return;
+          // The examiner stops the candidate at 2 minutes, as in the real test.
+          if (step.kind === "cue_card" && !signal.aborted) await say(LINES.part2TimeUp, signal);
           if (!(await submit(step, data, signal, cfg))) return;
         }
         setPhase("advancing");
@@ -417,6 +445,7 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
             <ul className="mt-4 space-y-2 text-sm text-zinc-600">
               <li>• Find a quiet place and use headphones if possible.</li>
               <li>• The examiner speaks each question aloud. Answer as soon as the recording starts.</li>
+              <li>• Full mock: 11–14 minutes — Part 1 4–5 min (3 topics, 10–11 short questions), Part 2 3–4 min (1 min notes + 2 min talk), Part 3 4–5 min.</li>
               {cfg?.part2.enabled && <li>• Part 2: you get {cfg.part2.prepSeconds}s to prepare (keep paper ready), then speak for up to {cfg.part2.answerSeconds / 60} minutes.</li>}
               <li>• {cfg?.allowRerecord ? "Practice mode: you can listen back and re-record each answer." : "Mock mode: one attempt per question, as in the real test."}</li>
               {answered > 0 && <li className="font-medium text-zinc-900">• {answered} answers are already saved. You will continue from question {(view?.session.currentStep ?? 0) + 1}.</li>}

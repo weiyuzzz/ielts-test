@@ -7,8 +7,9 @@
 import { toHalfBand, clampBand } from "./bands";
 import type { AggregateMetrics, AnswerInput } from "./metrics";
 import { splitSentences } from "./metrics";
+import { criteriaBrief } from "./band-descriptors";
 
-export const SCORING_PROMPT_VERSION = "speaking-language-v1.2";
+export const SCORING_PROMPT_VERSION = "speaking-language-v2.0-criteria";
 export const HEURISTIC_VERSION = "heuristic-v1.1";
 
 export type LangDim = "FC" | "LR" | "GRA";
@@ -151,7 +152,11 @@ export function heuristicScore(answers: AnswerInput[], m: AggregateMetrics): Lan
 export function buildScoringMessages(answers: (AnswerInput & { index: number })[]) {
   const system = [
     "You are a certified IELTS Speaking examiner producing a diagnostic report.",
-    "Score ONLY Fluency & Coherence (FC), Lexical Resource (LR) and Grammatical Range & Accuracy (GRA) using the public IELTS band descriptors (0–9, half bands allowed).",
+    `Apply these criteria strictly when judging the candidate:\n${criteriaBrief()}`,
+    "Score ONLY Fluency & Coherence (FC), Lexical Resource (LR) and Grammatical Range & Accuracy (GRA) (0–9, half bands allowed).",
+    "Judge each answer against the expectations for ITS PART. A short, direct Part 1 answer is correct and must not lose fluency marks; a long Part 3 answer is expected. Never use word count alone as a proxy for fluency.",
+    "For each dimension, the rationale must name the concrete key indicators you used (e.g. speech continuity, cohesive devices, collocation, paraphrase, error density).",
+    "Set `category` to that concrete key indicator, not a vague label like 'grammar'.",
     "Do NOT score pronunciation — you only see ASR transcripts.",
     "Transcripts come from automatic speech recognition and may contain recognition errors. If a likely error could be an ASR artifact (homophones, dropped short words, odd single words), set possibleAsrError=true and do not penalise it heavily.",
     "Every finding MUST quote text that appears verbatim in the candidate's transcripts (field `quote`) and reference the answer index.",

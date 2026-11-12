@@ -1,0 +1,2281 @@
+{
+ "season": "2026-09-12",
+ "region": "大陆地区",
+ "label": "2026 年 9–12 月（大陆）",
+ "source": "腾讯文档《雅思口语9-12月题库【Part123】》",
+ "importedAt": "2026-11-12",
+ "topics": [
+  {
+   "key": "paper",
+   "name": "Paper",
+   "nameZh": "纸张",
+   "type": "new",
+   "category": "part1",
+   "examinees": 1701,
+   "part1": [
+    {
+     "text": "Have you made any crafts with paper?",
+     "textZh": "你有用纸做过什么手工艺品吗？"
+    },
+    {
+     "text": "Do you still write physical letters?",
+     "textZh": "你还会写纸质信件吗？"
+    },
+    {
+     "text": "Do people still keep handwritten letters today?",
+     "textZh": "现在人们还会保留手写信件吗？"
+    },
+    {
+     "text": "Do you carry paper and pens with you when you go out?",
+     "textZh": "你出门的时候会带纸和笔吗？"
+    },
+    {
+     "text": "What did you like to do with paper as a child?",
+     "textZh": "你小时候喜欢用纸做什么？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "fruit-and-vegetables",
+   "name": "Fruit and vegetables",
+   "nameZh": "水果和蔬菜",
+   "type": "new",
+   "category": "part1",
+   "examinees": 1736,
+   "part1": [
+    {
+     "text": "How often do you eat fruit and vegetables?",
+     "textZh": "你多久吃一次水果和蔬菜？"
+    },
+    {
+     "text": "Where do you usually buy fruit and vegetables?",
+     "textZh": "你通常在哪里买水果和蔬菜？"
+    },
+    {
+     "text": "What kind of fruits and vegetables do you dislike?",
+     "textZh": "你不喜欢哪种水果和蔬菜？"
+    },
+    {
+     "text": "Were there any kind of fruits and vegetables you disliked as a child?",
+     "textZh": "你小时候有讨厌过什么水果或蔬菜吗？"
+    },
+    {
+     "text": "Do people in your country like planting vegetables?",
+     "textZh": "你们国家的人喜欢种蔬菜吗？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "politeness",
+   "name": "Politeness",
+   "nameZh": "礼貌",
+   "type": "new",
+   "category": "part1",
+   "examinees": 1400,
+   "part1": [
+    {
+     "text": "How did you learn to be polite as a child?",
+     "textZh": "你小时候是怎么学会礼貌的？"
+    },
+    {
+     "text": "Do you think being polite is very important?",
+     "textZh": "你觉得有礼貌很重要吗？"
+    },
+    {
+     "text": "On what occasions should we be polite?",
+     "textZh": "在什么场合我们应该讲礼貌？"
+    },
+    {
+     "text": "What did you do to show your politeness as a child?",
+     "textZh": "你小时候做过什么来表现自己的礼貌？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "scondary-school",
+   "name": "Scondary school",
+   "nameZh": "中学",
+   "type": "new",
+   "category": "part1",
+   "examinees": 1253,
+   "part1": [
+    {
+     "text": "Do you remember your first day at secondary school?",
+     "textZh": "你还记得你上中学的第一天吗？"
+    },
+    {
+     "text": "Were there any subjects that you found difficult at secondary school?",
+     "textZh": "你在中学的时候有没有觉得哪门科目很难？"
+    },
+    {
+     "text": "What was your favourite subject at secondary school?",
+     "textZh": "你中学时最喜欢的科目是什么？"
+    },
+    {
+     "text": "Is there anything you miss about your secondary school?",
+     "textZh": "你有没有什么想念的中学时光？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "shoes",
+   "name": "Shoes",
+   "nameZh": "鞋子",
+   "type": "new",
+   "category": "part1",
+   "examinees": 1106,
+   "part1": [
+    {
+     "text": "How often?",
+     "textZh": "你喜欢买鞋子吗？"
+    },
+    {
+     "text": "Have you ever bought shoes online?",
+     "textZh": "你有在网上买过鞋子吗？"
+    },
+    {
+     "text": "How much money do you usually spend on shoes?",
+     "textZh": "你通常在鞋子上花多少钱？"
+    },
+    {
+     "text": "Which do you prefer, fashionable shoes or comfortable shoes?",
+     "textZh": "你更喜欢时尚的鞋子还是舒适的鞋子？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "opportunities",
+   "name": "Opportunities",
+   "nameZh": "机会",
+   "type": "new",
+   "category": "part1",
+   "examinees": 1603,
+   "part1": [
+    {
+     "text": "Did you have any opportunities to take part in new activities as a child?",
+     "textZh": "你小时候有机会参加新的活动吗？"
+    },
+    {
+     "text": "Should people try as many different things as they can?",
+     "textZh": "人们应该尽可能多地尝试不同的事情吗？"
+    },
+    {
+     "text": "Do you like taking on new opportunities?",
+     "textZh": "你喜欢抓住新的机会吗？"
+    },
+    {
+     "text": "Do you often get new opportunities?",
+     "textZh": "你经常获得新的机会吗？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "rubbish-and-recycling",
+   "name": "Rubbish and recycling",
+   "nameZh": "垃圾回收",
+   "type": "new",
+   "category": "part1",
+   "examinees": 924,
+   "part1": [
+    {
+     "text": "What do you do when you see rubbish on the street?",
+     "textZh": "你在街上看到垃圾时会怎么做？"
+    },
+    {
+     "text": "How do you recycle things like paper and plastic?",
+     "textZh": "你是如何回收纸张和塑料这类东西的？"
+    },
+    {
+     "text": "Is waste sorting common in your country?",
+     "textZh": "垃圾分类在你们国家常见吗？"
+    },
+    {
+     "text": "Did you recycle when you were a kid?",
+     "textZh": "你小时候会做垃圾回收吗？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "name",
+   "name": "Name",
+   "nameZh": "姓名",
+   "type": "new",
+   "category": "part1",
+   "examinees": 917,
+   "part1": [
+    {
+     "text": "Is it easy for you to remember people's name?",
+     "textZh": "你容易记住别人的名字吗？"
+    },
+    {
+     "text": "How do you remember people's name?",
+     "textZh": "你是怎么记住别人的名字的？"
+    },
+    {
+     "text": "How do you feel when people can't remember your name?",
+     "textZh": "当别人记不住你的名字时，你感觉如何？"
+    },
+    {
+     "text": "Do you often forget people's names?",
+     "textZh": "你经常忘记别人的名字吗？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "advertisement",
+   "name": "Advertisement",
+   "nameZh": "广告",
+   "type": "new",
+   "category": "part1",
+   "examinees": 721,
+   "part1": [
+    {
+     "text": "Do you often see advertisements when you are on your phone or computer?",
+     "textZh": "你用手机或电脑的时候经常看到广告吗？"
+    },
+    {
+     "text": "Is there an advertisement that made an impression on you when you were a child?",
+     "textZh": "有没有一个广告让你小时候印象深刻？"
+    },
+    {
+     "text": "Do you see a lot of advertising on trains or other transport?",
+     "textZh": "你在火车或其他交通工具上经常看到广告吗？"
+    },
+    {
+     "text": "Do you like advertisements?",
+     "textZh": "你喜欢广告吗？"
+    },
+    {
+     "text": "What kind of advertising do you like?",
+     "textZh": "你喜欢什么类型的广告？"
+    },
+    {
+     "text": "Have you ever bought something because of an advertisement?",
+     "textZh": "你有没有因为一则广告而买过什么东西？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "tiredness",
+   "name": "Tiredness",
+   "nameZh": "疲惫",
+   "type": "new",
+   "category": "part1",
+   "examinees": 721,
+   "part1": [
+    {
+     "text": "Do you often feel tired?",
+     "textZh": "你经常感到疲惫吗？"
+    },
+    {
+     "text": "When would you feel tired?",
+     "textZh": "你什么时候会感到疲惫？"
+    },
+    {
+     "text": "What do you do when you feel tired?",
+     "textZh": "你感到疲惫的时候会做什么？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "travelling",
+   "name": "Travelling",
+   "nameZh": "旅行",
+   "type": "new",
+   "category": "part1",
+   "examinees": 749,
+   "part1": [
+    {
+     "text": "Do you prefer to sit by the window when travelling?",
+     "textZh": "你旅行时更喜欢坐在窗边吗？"
+    },
+    {
+     "text": "Did you have a long journey with your family as a child?",
+     "textZh": "你小时候和家人一起有过长途旅行吗？"
+    },
+    {
+     "text": "Do you often ride a bicycle?",
+     "textZh": "你经常骑自行车吗？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "work-or-studies",
+   "name": "Work or studies",
+   "nameZh": "工作/学习",
+   "type": "evergreen",
+   "category": "part1",
+   "examinees": 3073,
+   "part1": [
+    {
+     "text": "What subjecs are u studying?",
+     "textZh": "你正在学习哪些科目？"
+    },
+    {
+     "text": "Do u like your subject?",
+     "textZh": "你喜欢你所学的科目吗？"
+    },
+    {
+     "text": "Why did u choose to study that subject?",
+     "textZh": "你为什么选择学习这个科目？"
+    },
+    {
+     "text": "Do u think your subject is popular in your country?",
+     "textZh": "你认为这个科目在你国家是否受欢迎？"
+    },
+    {
+     "text": "Do u want to change your major?",
+     "textZh": "你想换专业吗？"
+    },
+    {
+     "text": "Do u have any plans for your studies in the next five years?",
+     "textZh": "你对未来五年的学业有什么计划？"
+    },
+    {
+     "text": "What are the benefits of being your age?",
+     "textZh": "你这个年龄段有什么优势？"
+    },
+    {
+     "text": "Do u prefer to study in the mornings or in the afternoon?",
+     "textZh": "你更喜欢在早上还是下午学习 How much time do u spend on your studies each week? 你每周花多少时间在学习上？"
+    },
+    {
+     "text": "What technology do u use when u study?",
+     "textZh": "你学习时使用什么技术？"
+    },
+    {
+     "text": "Are u looking forward to working?",
+     "textZh": "你期待工作吗？"
+    },
+    {
+     "text": "What changes would u like to see in your school?",
+     "textZh": "你希望学校有什么变化？"
+    },
+    {
+     "text": "What work do u do?",
+     "textZh": "你从事什么工作？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "the-area-you-live-in",
+   "name": "The area you live in",
+   "nameZh": "居住地",
+   "type": "evergreen",
+   "category": "part1",
+   "examinees": 1841,
+   "part1": [
+    {
+     "text": "Do u live in a noisy or a quiet area?",
+     "textZh": "你住在嘈杂的地区还是安静的地区？"
+    },
+    {
+     "text": "Do u like the area that u live in?",
+     "textZh": "你喜欢你居住的地区吗？"
+    },
+    {
+     "text": "Where do u like to go in that area?",
+     "textZh": "你喜欢去那个地区的哪些地方？"
+    },
+    {
+     "text": "Do u know any of your neighbours?",
+     "textZh": "你知道你的邻居吗？"
+    },
+    {
+     "text": "Are the people in your neighborhood nice and friendly?",
+     "textZh": "你邻居是否友好和善？"
+    },
+    {
+     "text": "Do u know any famous people in your area?",
+     "textZh": "你知道你所在地区有名的人吗？"
+    },
+    {
+     "text": "What are some changes in the area recently?",
+     "textZh": "你所在地区最近有哪些变化？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "hometown",
+   "name": "Hometown",
+   "nameZh": "家乡",
+   "type": "evergreen",
+   "category": "part1",
+   "examinees": 973,
+   "part1": [
+    {
+     "text": "Where is your hometown?",
+     "textZh": "你的家乡在哪里？"
+    },
+    {
+     "text": "Is that a big city or a small place?",
+     "textZh": "那是一个大城市还是一个小地方？"
+    },
+    {
+     "text": "Please describe your hometown a little?",
+     "textZh": "请简单描述一下你的家乡？"
+    },
+    {
+     "text": "What's your hometown famous for?",
+     "textZh": "你的家乡以什么闻名？"
+    },
+    {
+     "text": "Do u like your hometown?",
+     "textZh": "你喜欢你的家乡吗？"
+    },
+    {
+     "text": "What do u like most about your hometown?",
+     "textZh": "你最喜欢家乡的什么地方？"
+    },
+    {
+     "text": "Do u like living there?",
+     "textZh": "你喜欢住在那儿吗？"
+    },
+    {
+     "text": "Is there anything you dislike about it?",
+     "textZh": "有没有什么地方你不喜欢？"
+    },
+    {
+     "text": "How long have u been living there?",
+     "textZh": "你在那儿住了多久？"
+    },
+    {
+     "text": "Do u think u will continue living there for a long time?",
+     "textZh": "你认为你会在那儿住很长时间吗？"
+    },
+    {
+     "text": "Are there many young peole in your hometown?",
+     "textZh": "你家乡有很多年轻人吗？"
+    },
+    {
+     "text": "Is your hometown a good place for young people to pursue their careers?",
+     "textZh": "你家乡是年轻人追求事业的好地方吗？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "home-accommodation",
+   "name": "Home & Accommodation",
+   "nameZh": "家&居住",
+   "type": "evergreen",
+   "category": "part1",
+   "examinees": 728,
+   "part1": [
+    {
+     "text": "Who do u live with?",
+     "textZh": "你和谁住在一起？"
+    },
+    {
+     "text": "Do u live in an apartment or a house?",
+     "textZh": "你住的是公寓还是房子？"
+    },
+    {
+     "text": "What kinds of accommodation do u live in?",
+     "textZh": "你住什么类型的住房？"
+    },
+    {
+     "text": "Can u describe the place where u live?",
+     "textZh": "描述你的居住地？"
+    },
+    {
+     "text": "Are the transport facilities to your home very good?",
+     "textZh": "你家附近的交通设施好吗？"
+    },
+    {
+     "text": "Do u prefer living a house or an apartment?",
+     "textZh": "你更喜住公寓还是房子？"
+    },
+    {
+     "text": "How long have u lived here?",
+     "textZh": "你在这里住了多久？"
+    },
+    {
+     "text": "Do u plan to live there for a long time?",
+     "textZh": "你计划在这里住很长时间吗？"
+    },
+    {
+     "text": "What's your favourite room in your apartment or house?",
+     "textZh": "你最喜欢的房间是公寓或房子里的哪个房间？"
+    },
+    {
+     "text": "What part of your home do u like the most?",
+     "textZh": "你最喜欢家里哪个部分？"
+    },
+    {
+     "text": "What room does your family spend most of the time in?",
+     "textZh": "你家人大部分时间都待在哪个房间？"
+    },
+    {
+     "text": "What do u usually do in your apartment?",
+     "textZh": "你在公寓经常做什么？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "the-city-you-live-in",
+   "name": "The city you live in",
+   "nameZh": "居住的城市",
+   "type": "evergreen",
+   "category": "part1",
+   "examinees": 602,
+   "part1": [
+    {
+     "text": "What city do u live in?",
+     "textZh": "你住在哪个城市？"
+    },
+    {
+     "text": "How long have u lived in this city?",
+     "textZh": "你住多久了？"
+    },
+    {
+     "text": "What's the weather like where u live?",
+     "textZh": "天气怎样？"
+    },
+    {
+     "text": "Are there big change in this city?",
+     "textZh": "城市有大的变化吗？"
+    },
+    {
+     "text": "Is this city your permanent residence?",
+     "textZh": "这是永久的居住地吗？"
+    },
+    {
+     "text": "Would u recommend your city to others?",
+     "textZh": "会推荐给别人吗？"
+    },
+    {
+     "text": "Are there people of different ages living in this city?",
+     "textZh": "这座城市里是否居住着不同年龄段的人？"
+    },
+    {
+     "text": "Are the people friendly in the city?",
+     "textZh": "这座城市的人们是否友善？"
+    },
+    {
+     "text": "Is the city friendly to children and old people?",
+     "textZh": "这座城市是否对儿童和老年人友好？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "watch",
+   "name": "Watch",
+   "nameZh": "表",
+   "type": "retained",
+   "category": "part1",
+   "examinees": 1701,
+   "part1": [
+    {
+     "text": "Do you wear a watch?",
+     "textZh": "你戴手表吗？"
+    },
+    {
+     "text": "Have you ever got a watch as a gift?",
+     "textZh": "你曾经收到过手表作为礼物吗？"
+    },
+    {
+     "text": "Why do some people wear expensive watches?",
+     "textZh": "为什么有些人戴昂贵的手表？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "cars",
+   "name": "Cars",
+   "nameZh": "汽车",
+   "type": "retained",
+   "category": "part1",
+   "examinees": 756,
+   "part1": [
+    {
+     "text": "Will you buy an expensive car in the future?",
+     "textZh": "你将来会买一辆昂贵的汽车吗？"
+    },
+    {
+     "text": "Do you think car colours are important?",
+     "textZh": "你认为汽车颜色重要吗？"
+    },
+    {
+     "text": "Did you enjoy traveling by car when you were a kid?",
+     "textZh": "你小时候喜欢坐车旅行吗？"
+    },
+    {
+     "text": "What types of cars do you like?",
+     "textZh": "你喜欢什么类型的汽车？"
+    },
+    {
+     "text": "Do you prefer to be a driver or a passenger?",
+     "textZh": "你更喜欢当司机还是乘客？"
+    },
+    {
+     "text": "What do you usually do when there is a traffic jam?",
+     "textZh": "当遇到交通堵塞时，你通常做什么？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "teachers",
+   "name": "Teachers",
+   "nameZh": "老师",
+   "type": "retained",
+   "category": "part1",
+   "examinees": 588,
+   "part1": [
+    {
+     "text": "Do you have a favourite teacher?",
+     "textZh": "你有最喜欢的老师吗？"
+    },
+    {
+     "text": "In what way has your favourite teacher helped you?",
+     "textZh": "你的最喜欢的老师是如何帮助你的？"
+    },
+    {
+     "text": "Are you still in touch with your primary school teachers?",
+     "textZh": "你还在和你的小学老师联系吗？"
+    },
+    {
+     "text": "Do you have a teacher from your past that you still remember?",
+     "textZh": "你有还记得的过去某位老师吗？"
+    },
+    {
+     "text": "Do you want to be a teacher in the future?",
+     "textZh": "你将来想当老师吗？"
+    },
+    {
+     "text": "Do you like your primary school teachers more than your high school teachers?",
+     "textZh": "你更喜欢你的小学老师，还是中学（高中）老师？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "public-gardens-and-parks",
+   "name": "Public gardens and parks",
+   "nameZh": "公共花园或公园",
+   "type": "retained",
+   "category": "part1",
+   "examinees": 490,
+   "part1": [
+    {
+     "text": "Did you like going to parks as a child?",
+     "textZh": "你小时候喜欢去公园吗？"
+    },
+    {
+     "text": "Do you still like going to parks now?",
+     "textZh": "你现在依然喜欢去公园吗 ？"
+    },
+    {
+     "text": "Would you like to see more parks in your city?",
+     "textZh": "你希望在你的城市看到更多公园吗？"
+    },
+    {
+     "text": "Are there any parks you want to go to in the future?",
+     "textZh": "未来有你想去的公园吗？"
+    },
+    {
+     "text": "Would you prefer to play in a personal garden or public garden?",
+     "textZh": "你更喜欢在私人花园还是公共花园里玩耍？"
+    },
+    {
+     "text": "How are the parks today different from those you visited as a kid?",
+     "textZh": "今天的公园和你们小时候去过的那些有什么不同？"
+    },
+    {
+     "text": "What do you like to do when visiting a park?",
+     "textZh": "你参观公园时喜欢做什么？"
+    },
+    {
+     "text": "Would you like to play in a public garden or park?",
+     "textZh": "你愿意在公共花园或公园里玩吗？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "mirrors",
+   "name": "Mirrors",
+   "nameZh": "镜子",
+   "type": "retained",
+   "category": "part1",
+   "examinees": 406,
+   "part1": [
+    {
+     "text": "How often?",
+     "textZh": "你喜欢照镜子吗？"
+    },
+    {
+     "text": "Have you ever bought mirrors?",
+     "textZh": "你买过镜子吗？"
+    },
+    {
+     "text": "Do you usually take a mirror with you?",
+     "textZh": "你通常随身带镜子吗？"
+    },
+    {
+     "text": "Would you use mirrors to decorate your room?",
+     "textZh": "你会用镜子来装饰你的房间吗？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "music",
+   "name": "Music",
+   "nameZh": "音乐",
+   "type": "retained",
+   "category": "part1",
+   "examinees": 847,
+   "part1": [
+    {
+     "text": "Do you prefer sad or happy music?",
+     "textZh": "你更喜欢悲伤的音乐还是快乐的音乐？"
+    },
+    {
+     "text": "Does happy music made you feel more excited?",
+     "textZh": "快乐的音乐让你感觉更兴奋吗？"
+    },
+    {
+     "text": "Have you taken any music classes?",
+     "textZh": "你上过任何音乐课程吗？"
+    },
+    {
+     "text": "Do you listen to music while doing other things?",
+     "textZh": "你做其他事的时候听音乐吗？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "shopping",
+   "name": "Shopping",
+   "nameZh": "购物",
+   "type": "retained",
+   "category": "part1",
+   "examinees": 406,
+   "part1": [
+    {
+     "text": "How often do you go shopping?",
+     "textZh": "你多久逛街一次？"
+    },
+    {
+     "text": "Do you prefer online shopping or in-store shopping?",
+     "textZh": "你更喜欢网购还是实体店购物？"
+    },
+    {
+     "text": "Have you ever returned anything you bought online?",
+     "textZh": "你退过网购的东西吗？"
+    },
+    {
+     "text": "Do you like shopping?",
+     "textZh": "你喜欢购物吗？"
+    },
+    {
+     "text": "Does this time work for you?",
+     "textZh": "这个时间适合你吗 • 反义词：doesn't fit/suit 不合适 / misfit 不适合 / doesn't match 不搭配 Do you like shopping? 你喜欢购物吗？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "clothing",
+   "name": "Clothing",
+   "nameZh": "衣服",
+   "type": "retained",
+   "category": "part1",
+   "examinees": 406,
+   "part1": [
+    {
+     "text": "Do you wear different styles of clothes on weekdays and weekends?",
+     "textZh": "你在工作日和周末穿不同风格的衣服吗？"
+    },
+    {
+     "text": "What color clothes do you like?",
+     "textZh": "你喜欢什么颜色的衣服？"
+    },
+    {
+     "text": "What kind of clothes do you like to wear?",
+     "textZh": "你喜欢穿什么样的衣服？"
+    },
+    {
+     "text": "Do you prefer to wear comfortable and casual clothes or smart clothes?",
+     "textZh": "你更喜欢穿舒适休闲的衣服还是还是正式/考究的衣服？"
+    },
+    {
+     "text": "Do you like wearing T-shirts?",
+     "textZh": "你喜欢穿T恤吗？"
+    },
+    {
+     "text": "Do you spend a lot of time choosing clothes?",
+     "textZh": "你花很多时间选衣服吗？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "tidiness",
+   "name": "Tidiness",
+   "nameZh": "整洁",
+   "type": "retained",
+   "category": "part1",
+   "examinees": 448,
+   "part1": [
+    {
+     "text": "Do you like to keep things tidy?",
+     "textZh": "你喜欢保持整洁吗？"
+    },
+    {
+     "text": "Did you use to keep your room tidy as a child?",
+     "textZh": "你小时候经常保持房间整洁吗？"
+    },
+    {
+     "text": "How do you keep your work or study space tidy?",
+     "textZh": "你是如何保持你的工作或学习空间整洁的？"
+    },
+    {
+     "text": "Do you think that it is necessary to be tidy?",
+     "textZh": "你认为整洁是必要的吗？"
+    },
+    {
+     "text": "Do you think there are people who can always stay tidy?",
+     "textZh": "你认为有些人能够一直保持整洁吗？"
+    },
+    {
+     "text": "What do you think of the people who are not very tidy?",
+     "textZh": "你怎么看待那些不太爱整洁的人？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "headphones",
+   "name": "Headphones",
+   "nameZh": "耳机",
+   "type": "retained",
+   "category": "part1",
+   "examinees": 364,
+   "part1": [
+    {
+     "text": "Is wearing headphones comfortable?",
+     "textZh": "戴耳机舒服吗？"
+    },
+    {
+     "text": "Do you use headphones?",
+     "textZh": "你使用耳机吗？"
+    },
+    {
+     "text": "In what conditions would you not use headphones?",
+     "textZh": "在什么情况下你不会用耳机？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "social-media",
+   "name": "Social media",
+   "nameZh": "社交媒体",
+   "type": "retained",
+   "category": "part1",
+   "examinees": 371,
+   "part1": [
+    {
+     "text": "Have you ever posted anything on social media?",
+     "textZh": "你曾经在社交媒体上发布过任何内容吗？"
+    },
+    {
+     "text": "When did you start using social media?",
+     "textZh": "你什么时候开始使用社交媒体的？"
+    },
+    {
+     "text": "Do you think you spend too much time on social media?",
+     "textZh": "你认为你在社交媒体上花费的时间太多吗？"
+    },
+    {
+     "text": "Do your friends use social media?",
+     "textZh": "你的朋友们使用社交媒体吗？"
+    },
+    {
+     "text": "What do people often do on social media?",
+     "textZh": "人们在社交媒体上通常做什么？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "singing",
+   "name": "Singing",
+   "nameZh": "唱歌",
+   "type": "retained",
+   "category": "part1",
+   "examinees": 399,
+   "part1": [
+    {
+     "text": "Do you like listening to others singing?",
+     "textZh": "你喜欢听别人唱歌吗？"
+    },
+    {
+     "text": "Have you ever learnt how to sing?",
+     "textZh": "你曾经学过唱歌吗？"
+    },
+    {
+     "text": "Have you ever taken a singing class?",
+     "textZh": "你曾经上过唱歌课吗？"
+    },
+    {
+     "text": "Who do you want to sing for?",
+     "textZh": "你想为谁唱歌？"
+    },
+    {
+     "text": "Do you think singing can bring happiness to people?",
+     "textZh": "你认为唱歌能带给人们快乐吗？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "outer-space-and-stars",
+   "name": "Outer space and stars",
+   "nameZh": "外星球",
+   "type": "retained",
+   "category": "part1",
+   "examinees": 357,
+   "part1": [
+    {
+     "text": "Have u ever learnt about outer space and stars?",
+     "textZh": "你是否曾经了解过外太空和星星？"
+    },
+    {
+     "text": "Do u want to know more about outer space?",
+     "textZh": "你想了解更多关于外太空的信息吗？"
+    },
+    {
+     "text": "Do u want to go into outer space in the future?",
+     "textZh": "你将来想去太空吗？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "jokes-comedies",
+   "name": "Jokes & Comedies",
+   "nameZh": "笑话和喜剧",
+   "type": "retained",
+   "category": "part1",
+   "examinees": 364,
+   "part1": [
+    {
+     "text": "Are comedy shows popular in your country?",
+     "textZh": "喜剧节目在你的国家受欢迎吗？"
+    },
+    {
+     "text": "Are you good at telling jokes?",
+     "textZh": "你擅长讲笑话吗？"
+    },
+    {
+     "text": "Do your friends like to tell jokes?",
+     "textZh": "你的朋友们喜欢讲笑话吗？"
+    },
+    {
+     "text": "Do you like to watch comedies?",
+     "textZh": "你喜欢看喜剧吗？"
+    },
+    {
+     "text": "Have you ever watched a live show?",
+     "textZh": "你曾经看过现场表演吗？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "morning-time",
+   "name": "Morning time",
+   "nameZh": "早晨时光",
+   "type": "retained",
+   "category": "part1",
+   "examinees": 371,
+   "part1": [
+    {
+     "text": "Do you like getting up early in the morning?",
+     "textZh": "你喜欢早上起床吗？"
+    },
+    {
+     "text": "What do you ususally do in the morning?",
+     "textZh": "你通常早上做什么？"
+    },
+    {
+     "text": "Are there any differences between what you do in the morninng now and what you did in the past?",
+     "textZh": "你现在的早晨做的事情和过去有什么不同？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "p2-9b2a70",
+   "name": "想颁布的新法律",
+   "nameZh": "想颁布的新法律",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a new law you would like to introduce in your country",
+     "cuePoints": [
+      "What law it is",
+      "What changes this law brings",
+      "Whether this new law will be popular",
+      "How you came up with the new law",
+      "And explain how you feel about this new law"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-ca1f69",
+   "name": "想要颁布的环保法律",
+   "nameZh": "想要颁布的环保法律",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe an environmental law you would like your country to introduce",
+     "cuePoints": [
+      "What the law should be",
+      "Why people shouled follow the law",
+      "Whether the law will be popular",
+      "How you feel about this law"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-69bfe8",
+   "name": "包含动物的故事或书",
+   "nameZh": "包含动物的故事或书",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a story/book with animals in it",
+     "cuePoints": [
+      "What animals are in it"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-8e0aaf",
+   "name": "保护环境的法律",
+   "nameZh": "保护环境的法律",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a law on environmental protection",
+     "cuePoints": [
+      "What it is",
+      "How you first learned about it",
+      "Who benefits from it",
+      "How you feel about this law"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "How can people consider others' feelings when chatting in public?",
+     "textZh": "在公共场合聊天时，人们如何考虑他人的感受？"
+    },
+    {
+     "text": "Do you think it is a good trend to have more big cities?",
+     "textZh": "你认为出现更多大城市是一个好趋势吗？"
+    },
+    {
+     "text": "Which is more important, protecting the environment or developing the economy?",
+     "textZh": "保护环境和发展经济，哪个更重要？"
+    },
+    {
+     "text": "Where do people in your country often go for holidays?",
+     "textZh": "你们国家的人通常去哪里度假？"
+    },
+    {
+     "text": "Why do most children think education is boring?",
+     "textZh": "为什么大多数孩子觉得教育很无聊？"
+    },
+    {
+     "text": "Do Chinese people like to visit others’ homes?",
+     "textZh": "中国人喜欢拜访别人家吗？"
+    }
+   ]
+  },
+  {
+   "key": "p2-141eb9",
+   "name": "嘈杂地",
+   "nameZh": "嘈杂地",
+   "type": "new",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a noisy place you have been to",
+     "cuePoints": [
+      "Where it is",
+      "When you went there",
+      "What you did there",
+      "And explain why you feel it’s a noisy place"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-0e1129",
+   "name": "拥挤地方",
+   "nameZh": "拥挤地方",
+   "type": "new",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a crowded place you went to",
+     "cuePoints": [
+      "Where it was",
+      "When you went there",
+      "Who you went there with",
+      "What you did there"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-99e11a",
+   "name": "不喜欢的短途旅行",
+   "nameZh": "不喜欢的短途旅行",
+   "type": "new",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a short trip you often take but do not like",
+     "cuePoints": [
+      "Where you go",
+      "When you go there",
+      "Why you go there",
+      "Why you do not like the trip"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-46e3e5",
+   "name": "去过的无聊地方",
+   "nameZh": "去过的无聊地方",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a boring place",
+     "cuePoints": [
+      "Where it is",
+      "Who you went there with",
+      "What you did there",
+      "Why you think it is a boring place"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-72c7c9",
+   "name": "当地新闻",
+   "nameZh": "当地新闻",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a piece of local news that people are interested in",
+     "cuePoints": [
+      "What it was about",
+      "Who has involved",
+      "Why people were interested in it"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-81529b",
+   "name": "早起经历",
+   "nameZh": "早起经历",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a time when you got up early",
+     "cuePoints": [
+      "When it was",
+      "What you did",
+      "Why you got up early",
+      "How you felt about it"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-28a825",
+   "name": "在团队中工作",
+   "nameZh": "在团队中工作",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a time when you worked in a group",
+     "cuePoints": [
+      "What you did",
+      "Who you worked with",
+      "What problems you faced",
+      "Why you worked in the group"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-5e2d10",
+   "name": "喜欢的现场体育赛事",
+   "nameZh": "喜欢的现场体育赛事",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a live sports event you watched and liked",
+     "cuePoints": [
+      "What it was",
+      "When and where you watched it",
+      "Who you watched it with",
+      "And explain why you liked it"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-79bd8b",
+   "name": "名人出演的广告",
+   "nameZh": "名人出演的广告",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe an advertisement with a famous person in it",
+     "cuePoints": [
+      "Who the person is",
+      "Where you can see it",
+      "What the advertisement is about",
+      "How you feel about the advertisement"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-6ec00b",
+   "name": "有趣视频",
+   "nameZh": "有趣视频",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe an interesting video",
+     "cuePoints": [
+      "When and where you watched it",
+      "What it is about",
+      "Why you watched it",
+      "How you feel about it"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-9e9e3b",
+   "name": "特别场合的食物",
+   "nameZh": "特别场合的食物",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a food that people eat on special occasions/events",
+     "cuePoints": [
+      "What it is"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-60c432",
+   "name": "好的购物服务",
+   "nameZh": "好的购物服务",
+   "type": "new",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a time when you received good service in a shop/store",
+     "cuePoints": [
+      "Where the shop is",
+      "When you went to the shop",
+      "What service you received from the staff",
+      "And explain how you felt about the service"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-3836a1",
+   "name": "推荐旅行过的地方",
+   "nameZh": "推荐旅行过的地方",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a place you have travelled to that you would like to recommend to others",
+     "cuePoints": [
+      "What it is",
+      "Where it is",
+      "What you saw and did there",
+      "Why you would like to recommend it to others"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-6e264e",
+   "name": "Describe a bicycle",
+   "nameZh": "Describe a bicycle",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a bicycle/motorcycle/car trip you would like to go",
+     "cuePoints": [
+      "Who you would like to go with",
+      "Where you would like to go",
+      "When you would like to go"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-5c9842",
+   "name": "喜欢的城市自然之地",
+   "nameZh": "喜欢的城市自然之地",
+   "type": "new",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a natural place in your city that you enjoy visiting",
+     "cuePoints": [
+      "Where it is",
+      "What it is like",
+      "How often you go there",
+      "Who you often go there with",
+      "And explain why you enjoy visiting there"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-75b820",
+   "name": "喜欢拜访但不想住的家",
+   "nameZh": "喜欢拜访但不想住的家",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a home that you like to visit but do not want to live in",
+     "cuePoints": [
+      "Where it is",
+      "What it is like",
+      "What it is like",
+      "Why you like to visit it",
+      "And explain why you would not like to live there"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-3df917",
+   "name": "喜欢拜访但不想住的家",
+   "nameZh": "喜欢拜访但不想住的家",
+   "type": "new",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a pubilc building you enjoy visiting(e.g. a library, a shopping mall,etc)",
+     "cuePoints": [
+      "Where it is",
+      "How you knew it",
+      "What it looks like",
+      "Why you enjoy visiting it"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-0995dd",
+   "name": "喜欢或不喜欢的高建筑",
+   "nameZh": "喜欢或不喜欢的高建筑",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a tall building you like or dislike",
+     "cuePoints": [
+      "What it is used for",
+      "Where it is",
+      "What it looks like"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-0aaa13",
+   "name": "不会用的科技产品",
+   "nameZh": "不会用的科技产品",
+   "type": "new",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a piece of technology that you didn't know how to use(e.g. a computer,a smartphone,etc.)",
+     "cuePoints": [
+      "What it was",
+      "Why you didn't know how to use it",
+      "Whether you learned to use it at last",
+      "How you felt about it"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-d0c436",
+   "name": "遇到的科技问题",
+   "nameZh": "遇到的科技问题",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a challenging technological problem you faced",
+     "cuePoints": [
+      "What the problem was",
+      "When and where you faced it",
+      "How challenging it was",
+      "And explain how you solved it"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-170a39",
+   "name": "很久没收到回复的信息",
+   "nameZh": "很久没收到回复的信息",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a time when you sent a message or an email to someone but received no reply for a long time",
+     "cuePoints": [
+      "Who you sent it to",
+      "Whether you finally received the reply",
+      "How you felt about the experience"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-8c72ad",
+   "name": "读起来开心的书",
+   "nameZh": "读起来开心的书",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a book you read that made you happy",
+     "cuePoints": [
+      "What kind of book it was",
+      "What it was about",
+      "Why you read it",
+      "Why it made you happy"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-51e494",
+   "name": "帮别人提升健康",
+   "nameZh": "帮别人提升健康",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a person whose health and fitness you have helped to improve",
+     "cuePoints": [
+      "Who this person was",
+      "And explain whether it was easy or difficult"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-63c7e9",
+   "name": "帮助他人",
+   "nameZh": "帮助他人",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a time when you helped someone",
+     "cuePoints": [
+      "Why you helped",
+      "How you helped",
+      "How you felt about it"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-f094e6",
+   "name": "不喜欢的电影",
+   "nameZh": "不喜欢的电影",
+   "type": "new",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a movie/film you don't like",
+     "cuePoints": [
+      "When you watched it",
+      "Where you watched it",
+      "What it was about",
+      "Why it's your least favourite movie"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-ecb68d",
+   "name": "听不感兴趣的话",
+   "nameZh": "听不感兴趣的话",
+   "type": "new",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a time when someone talked about something you were not interested in but you kept listening",
+     "cuePoints": [
+      "Who the person was",
+      "Why you kept listening",
+      "And explain how you felt about the experience"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-a50a61",
+   "name": "发小",
+   "nameZh": "发小",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a friend from your childhood",
+     "cuePoints": [
+      "Where and how you met each other",
+      "What you often did together",
+      "Who this person is"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-cf23f8",
+   "name": "拥有成功商业的人",
+   "nameZh": "拥有成功商业的人",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a person you know who has a successful business",
+     "cuePoints": [
+      "Why you think the business is successful"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-326da4",
+   "name": "想从事医疗行业的人",
+   "nameZh": "想从事医疗行业的人",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a person you know who would like to choose a career in the medical field (e.g. a doctor, a nurse)",
+     "cuePoints": []
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-ccdb48",
+   "name": "快乐人士",
+   "nameZh": "快乐人士",
+   "type": "new",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a happy person you know",
+     "cuePoints": [
+      "Who this person is"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-0af8ec",
+   "name": "有条理的人",
+   "nameZh": "有条理的人",
+   "type": "new",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a person you know who is very organized",
+     "cuePoints": [
+      "Who this person is",
+      "What this person usually does to stay organized"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-d45e15",
+   "name": "说很重要有健康习惯和作息的人",
+   "nameZh": "说很重要有健康习惯和作息的人",
+   "type": "new",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a person you know who has healthy habits and a healthy daily routine",
+     "cuePoints": [
+      "Who this person is",
+      "How you got to know each other"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-ddce54",
+   "name": "喜欢在家/花园种植物的人",
+   "nameZh": "喜欢在家/花园种植物的人",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a person who loves to grow plants (e.g. vegetables, flowers) at home or in the garden",
+     "cuePoints": [
+      "Who this person is"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-54e721",
+   "name": "对结果开心的重要决定",
+   "nameZh": "对结果开心的重要决定",
+   "type": "new",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a time you made an important decision and were happy with the result",
+     "cuePoints": [
+      "What the decision was",
+      "Why you made the decision",
+      "How easy it was for you to make the decision",
+      "And explain why you were happy with the result"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-d3ef13",
+   "name": "重要决定",
+   "nameZh": "重要决定",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe an important decision that you made",
+     "cuePoints": [
+      "What the decision was",
+      "How you made the decision",
+      "What the result of the decision were",
+      "Why it was important"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-655341",
+   "name": "长久目标/抱负",
+   "nameZh": "长久目标/抱负",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a long-term goal/ambition you would like to achieve",
+     "cuePoints": [
+      "What it is",
+      "How you will achieve it",
+      "Why you set it"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-2e0c99",
+   "name": "擅长学习和说语言的人",
+   "nameZh": "擅长学习和说语言的人",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a person who is good at learning and speaking new languages",
+     "cuePoints": []
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-ebdddc",
+   "name": "喜欢拍照的人",
+   "nameZh": "喜欢拍照的人",
+   "type": "new",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a person you know who really likes taking photos",
+     "cuePoints": [
+      "Who the person is"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-1f17ed",
+   "name": "攒钱买想要物品",
+   "nameZh": "攒钱买想要物品",
+   "type": "new",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a time when you saved money to buy something you wanted",
+     "cuePoints": [
+      "What you wanted to buy",
+      "Why you wanted to buy it",
+      "How you saved money for it",
+      "And explain how you felt after buying it"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-24d099",
+   "name": "Describe a gift yo",
+   "nameZh": "Describe a gift yo",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a gift you would like to buy for your friend",
+     "cuePoints": [
+      "How you knew your frined",
+      "How long you have known her"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-b97da8",
+   "name": "教你新技能的人",
+   "nameZh": "教你新技能的人",
+   "type": "new",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a person who taught you a new skill",
+     "cuePoints": [
+      "Who this person was",
+      "What the skill was",
+      "How you learned it",
+      "How you felt about this person"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-350f5c",
+   "name": "擅长做手工的人",
+   "nameZh": "擅长做手工的人",
+   "type": "new",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a person who is good at making things by hand",
+     "cuePoints": [
+      "Who this person is",
+      "Why you think this person is good at making things by hand"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-c741e9",
+   "name": "小时候学到的新技能",
+   "nameZh": "小时候学到的新技能",
+   "type": "new",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a new skill you learned when you were a child",
+     "cuePoints": [
+      "What the skill was",
+      "Who taught you this skill",
+      "How you learned it",
+      "How you felt about learning the skill"
+     ]
+    }
+   ],
+   "part3": [
+    {
+     "text": "Is it important for everyone to have a specialized skill?",
+     "textZh": "每个人拥有一项专业技能重要吗？"
+    },
+    {
+     "text": "Why do people need friends?",
+     "textZh": "人们为什么需要朋友？"
+    },
+    {
+     "text": "Do you think all old buildings should be demolished?",
+     "textZh": "你认为所有老建筑都应该被拆除吗？"
+    },
+    {
+     "text": "Do people’s movie preferences change as they get older?",
+     "textZh": "人们对电影的偏好会随着年龄增长而改变吗？"
+    },
+    {
+     "text": "What kind of books useful to everyone?",
+     "textZh": "什么样的书对每个人都有用？"
+    },
+    {
+     "text": "What are the advantages and disadvantages of advertisements?",
+     "textZh": "广告有哪些优缺点？"
+    },
+    {
+     "text": "What kind of videos do people in your country like to watch?",
+     "textZh": "你们国家的人喜欢看什么类型的视频？"
+    },
+    {
+     "text": "Why are there special foods on special occasions or events?",
+     "textZh": "为什么特殊场合或活动上会有特别的食物？"
+    }
+   ]
+  },
+  {
+   "key": "p2-9350c1",
+   "name": "钦佩的运动员",
+   "nameZh": "钦佩的运动员",
+   "type": "new",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a sucessful sports person you admire",
+     "cuePoints": []
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-5283df",
+   "name": "看过的名人采访",
+   "nameZh": "看过的名人采访",
+   "type": "new",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a time you watched a famous person being interviewed",
+     "cuePoints": [
+      "Who the famous person was",
+      "What the interview was about",
+      "When and where you watched the interview",
+      "How you felt about the interview"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-60acfb",
+   "name": "做困难事情并成功的人",
+   "nameZh": "做困难事情并成功的人",
+   "type": "new",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a person you know who did something difficult and was successful",
+     "cuePoints": [
+      "Who this person is",
+      "What difficult thing this person did",
+      "Why this person was successful",
+      "And explain how you feel about this person"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-63ef09",
+   "name": "尊敬的比你年长的人",
+   "nameZh": "尊敬的比你年长的人",
+   "type": "new",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe someone who is older than you that you admire",
+     "cuePoints": [
+      "Who this person is",
+      "How you knew this person",
+      "What kinds of things you like to do together",
+      "And explain how you feel about this person"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-8d2d76",
+   "name": "学习并喜欢历史的人",
+   "nameZh": "学习并喜欢历史的人",
+   "type": "new",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a person who learns history and loves history",
+     "cuePoints": [
+      "Who this person is"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-5e1445",
+   "name": "受欢迎的人",
+   "nameZh": "受欢迎的人",
+   "type": "new",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a popular person",
+     "cuePoints": [
+      "Who this person is",
+      "What kind of person he or she is",
+      "Why you think this person is popular"
+     ]
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p2-e0d3b7",
+   "name": "Describe a person ",
+   "nameZh": "Describe a person ",
+   "type": "retained",
+   "category": "part23",
+   "part1": [],
+   "part2": [
+    {
+     "text": "Describe a person you only met once recently and want to know more about",
+     "cuePoints": []
+    }
+   ],
+   "part3": []
+  },
+  {
+   "key": "p3-general",
+   "name": "General discussion",
+   "nameZh": "通用讨论",
+   "type": "retained",
+   "category": "part3",
+   "part1": [],
+   "part2": [],
+   "part3": [
+    {
+     "text": "What do old people usually do in their daily life?",
+     "textZh": "老年人日常生活通常会做些什么？"
+    },
+    {
+     "text": "In which sectors are companies more likely to succeed in China?",
+     "textZh": "在中国，哪些行业的公司更容易成功？"
+    },
+    {
+     "text": "Besides big historical events, what else is important when learning history?",
+     "textZh": "除了重大历史事件，学习历史时还有什么重要的？"
+    },
+    {
+     "text": "Why do people want to be popular?",
+     "textZh": "人们为什么想要受欢迎？"
+    },
+    {
+     "text": "When do you think people are happiest?",
+     "textZh": "人们什么时候最快乐？"
+    },
+    {
+     "text": "Do you think it is important for managers to be well organized?",
+     "textZh": "你认为经理做事有条理很重要吗？"
+    },
+    {
+     "text": "Some people don't mind others walking into their shot when they're taking photos.What do you think?",
+     "textZh": "有些人不介意别人走进他们的拍照画面。你怎么看？"
+    },
+    {
+     "text": "Does art, like music or theater, have an impact on society?",
+     "textZh": "音乐或戏剧这样的艺术对社会有影响吗？"
+    },
+    {
+     "text": "Why is self-discipline important when learning a new skill?",
+     "textZh": "学习新技能时为什么自律很重要？"
+    },
+    {
+     "text": "Why are there so few top athletes?",
+     "textZh": "为什么顶尖运动员这么少？"
+    },
+    {
+     "text": "Why do some people start their own business?",
+     "textZh": "为什么有些人选择自己创业？"
+    },
+    {
+     "text": "Do you think being a doctor is easy or difficult?",
+     "textZh": "你认为当医生容易还是困难？"
+    },
+    {
+     "text": "What are the advantages of growing vegetables or flowers at home?",
+     "textZh": "在家种蔬菜或花卉有什么好处？"
+    },
+    {
+     "text": "Are there many people who can speak foreign languages in your country?",
+     "textZh": "你们国家有很多人会说外语吗？"
+    },
+    {
+     "text": "What should people wear to a job interview?",
+     "textZh": "人们参加工作面试应该穿什么？"
+    },
+    {
+     "text": "Can consumption drive economic growth?",
+     "textZh": "消费能推动经济增长吗？"
+    },
+    {
+     "text": "What kind of things do people usually save money for?",
+     "textZh": "人们通常会为什么东西存钱？"
+    },
+    {
+     "text": "What special events are celebrated in your country?",
+     "textZh": "你们国家会庆祝哪些特殊节日？"
+    },
+    {
+     "text": "Which is better, to make a decision quickly or slowly?",
+     "textZh": "快速做决定好还是慢慢做决定好？"
+    },
+    {
+     "text": "What problems does it cause for transportation when everyone commutes at the same time?",
+     "textZh": "当所有人同时通勤时，会给交通带来什么问题？"
+    },
+    {
+     "text": "How can we tell if a listener is listening carefully?",
+     "textZh": "我们如何判断一个听众是否在认真听？"
+    },
+    {
+     "text": "Which group pays more attention to health , young people or old people?",
+     "textZh": "哪个群体更关注健康，年轻人还是老年人？"
+    },
+    {
+     "text": "Should people be very kind when they help others?",
+     "textZh": "人们帮助别人时，应该表现得非常友善吗？"
+    },
+    {
+     "text": "Why do some people refuse to abide by rules?",
+     "textZh": "为什么有些人拒绝遵守规则？"
+    },
+    {
+     "text": "Do people read the newspaper where you live?",
+     "textZh": "你居住的地方的人们读报纸吗？"
+    },
+    {
+     "text": "In what situations do people spend a long time responding to others messages?",
+     "textZh": "在什么情况下人们会花很长时间回复别人的消息？"
+    },
+    {
+     "text": "What are the advantages and disadvantages of AI?",
+     "textZh": "人工智能的优缺点是什么？"
+    },
+    {
+     "text": "Why do some people prefer to work by themselves?",
+     "textZh": "为什么有些人更喜欢独自工作？"
+    },
+    {
+     "text": "Is it good to arrive early in any situation?",
+     "textZh": "在任何情况下提前到达都好吗？"
+    },
+    {
+     "text": "When do most children begin to have their own opinions?",
+     "textZh": "大多数孩子什么时候开始有自己的想法？"
+    },
+    {
+     "text": "Do you think it is good to change one’s daily routine?",
+     "textZh": "你认为改变日常习惯好吗？"
+    },
+    {
+     "text": "Why do some people like to watch sports events?",
+     "textZh": "为什么有些人喜欢观看体育赛事？"
+    }
+   ]
+  }
+ ]
+}

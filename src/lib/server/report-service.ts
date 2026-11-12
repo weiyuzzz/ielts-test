@@ -6,7 +6,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { getASR, getLLM, getPronunciation, TIMEOUTS } from "@/lib/ai/registry";
 import { withTimeout } from "@/lib/ai/types";
 import { aggregate, type AnswerInput } from "@/lib/speaking/metrics";
-import { heuristicScore, buildScoringMessages, extractJson, validateLanguageScore, SCORING_PROMPT_VERSION, HEURISTIC_VERSION, type LanguageScore, type Finding } from "@/lib/speaking/scoring";
+import { buildScoringMessages, extractJson, validateLanguageScore, SCORING_PROMPT_VERSION, type LanguageScore, type Finding } from "@/lib/speaking/scoring";
 import { overallBand, score100ToBand, DIMENSION_LABELS } from "@/lib/speaking/bands";
 import { readAudio } from "./storage";
 
@@ -59,6 +59,21 @@ export async function runScoring(assessmentId: string): Promise<void> {
     if (asrProviders.includes("browser-web-speech")) notes.push("Transcripts come from the browser's built-in speech recognition (Web Speech API); accuracy varies by browser and may introduce recognition errors.");
 
     const metrics = aggregate(inputs);
+    const llm = getLLM();
+
+    // No AI scoring provider configured: complete the mock exam WITHOUT a score.
+    // Recordings and transcripts are still kept; we never fabricate a band.
+    if (!llm) {
+      await db.update(assessments).set({
+        status: "unscored", stage: "done", scorer: null, overallBand: null, isComplete: false,
+        promptVersion: null, llmProvider: null, llmModel: null,
+        metrics: metrics as unknown as Record<string, unknown>,
+        notes: [...notes, "未接入 AI 评分（未配置 LLM_PROVIDER / OPENAI_API_KEY / ANTHROPIC_API_KEY）。本次只完成模考流程，不生成任何分数。"],
+        asrProvider: asrProviders.join(",") || null, completedAt: new Date(),
+      }).where(eq(assessments.id, a.id));
+      return;
+    }
+
     if (metrics.totalWords < 10) {
       await db.update(assessments).set({
         status: "failed", stage: "done", error: "Not enough recognised speech to assess (fewer than 10 words). Check your microphone and transcription settings, then retake the test.",
@@ -88,26 +103,29 @@ export async function runScoring(assessmentId: string): Promise<void> {
     // ---------------- Language (FC / LR / GRA)
     await setStage(a.id, "scoring");
     const scorable = inputs.filter((i) => i.text || i.noResponse);
-    const llm = getLLM();
     let lang: LanguageScore | null = null;
-    let scorer: "llm" | "heuristic" = "heuristic";
-    if (llm) {
+    const scorer = "llm" as const;
+    {
       const { system, user } = buildScoringMessages(scorable);
       for (let attempt = 1; attempt <= 2 && !lang; attempt++) {
         try {
           const raw = await withTimeout(llm.id, TIMEOUTS.llmMs, (signal) => llm.complete([{ role: "system", content: system }, { role: "user", content: user }], { json: true, signal }));
           const v = validateLanguageScore(extractJson(raw), scorable);
           lang = v.score;
-          scorer = "llm";
           if (v.dropped) notes.push(`${v.dropped} model findings were discarded because they did not quote the candidate's actual words.`);
         } catch (e) {
-          notes.push(`LLM scoring attempt ${attempt} failed: ${(e as Error).message.slice(0, 160)}`);
+          notes.push(`AI scoring attempt ${attempt} failed: ${(e as Error).message.slice(0, 160)}`);
         }
       }
     }
+    // AI scoring is the only source of bands. If it fails, the exam stays unscored —
+    // no heuristic band is substituted.
     if (!lang) {
-      lang = heuristicScore(scorable, metrics);
-      notes.push(llm ? "LLM scoring failed; FC/LR/GRA fall back to the deterministic heuristic scorer." : "No LLM configured; FC/LR/GRA use the deterministic heuristic scorer (rough estimate, not examiner judgement).");
+      await db.update(assessments).set({
+        status: "failed", stage: "done", error: "AI scoring did not return a valid result. No band was produced; please retry after checking the AI provider.",
+        metrics: metrics as unknown as Record<string, unknown>, notes, completedAt: new Date(),
+      }).where(eq(assessments.id, a.id));
+      return;
     }
 
     // ---------------- Pronunciation dimension
@@ -139,8 +157,10 @@ export async function runScoring(assessmentId: string): Promise<void> {
       { dimension: "GRA", band: lang.dimensions.GRA.band, rationale: lang.dimensions.GRA.rationale, source: scorer },
       { dimension: "P", band: pBand, rationale: pRationale, source: pBand !== null ? "audio-model" : "none" },
     ];
-    const overall = overallBand(dims.map((d) => d.band));
     const isComplete = dims.every((d) => d.band !== null);
+    // Four criteria each count 25%: with any criterion missing there is no valid
+    // overall band, so we store null rather than averaging three of four.
+    const overall = isComplete ? overallBand(dims.map((d) => d.band)) : null;
     const findings = [...lang.findings, ...pFindings];
 
     await db.transaction(async (tx) => {
@@ -148,14 +168,14 @@ export async function runScoring(assessmentId: string): Promise<void> {
       if (findings.length)
         await tx.insert(assessmentFindings).values(findings.map((f) => ({ assessmentId: a.id, dimension: f.dimension, answerId: f.answerId, kind: f.kind, category: f.category, originalText: f.originalText, suggestion: f.suggestion ?? null, explanation: f.explanation, possibleAsrError: !!f.possibleAsrError })));
       const weakest = dims.filter((d) => d.band !== null).sort((x, y) => (x.band as number) - (y.band as number))[0];
-      const summary = lang!.summary || `Estimated band ${overall}. Weakest area: ${DIMENSION_LABELS[weakest.dimension as "FC"]}.`;
+      const summary = lang.summary || (overall !== null ? `Estimated band ${overall}. Weakest area: ${DIMENSION_LABELS[weakest.dimension as "FC"]}.` : `Language criteria assessed. Weakest area: ${DIMENSION_LABELS[weakest.dimension as "FC"]}. Pronunciation was not assessed, so no overall band is shown.`);
       await tx.delete(examReports).where(eq(examReports.sessionId, a.sessionId));
       await tx.insert(examReports).values({ sessionId: a.sessionId, assessmentId: a.id, summary, nextSteps: lang!.nextSteps.length ? lang!.nextSteps : ["Keep practising full mock tests and compare reports over time."] });
       await tx.update(assessments).set({
         status: isComplete && scorer === "llm" ? "completed" : "partial",
         stage: "done", overallBand: overall, isComplete, scorer,
         llmProvider: scorer === "llm" ? llm!.id : null, llmModel: scorer === "llm" ? llm!.model ?? null : null,
-        promptVersion: scorer === "llm" ? SCORING_PROMPT_VERSION : HEURISTIC_VERSION,
+        promptVersion: SCORING_PROMPT_VERSION,
         asrProvider: asrProviders.join(",") || null, pronunciationProvider: pronRows.length ? pron!.id : null,
         metrics: metrics as unknown as Record<string, unknown>, notes, completedAt: new Date(),
       }).where(eq(assessments.id, a.id));

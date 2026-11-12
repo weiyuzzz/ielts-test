@@ -20,5 +20,10 @@
 | GET | /api/tts?text=&voice= | – | audio/* (progressive stream) | 逐句流式返回；`X-TTS-Cache: miss-stream \| hit` 标识是否命中服务端缓存 |
 | POST | /api/tts | `{text, voice?}` | audio/* | 完整缓冲（兼容旧调用）；501 表示使用浏览器 TTS |
 | PUT | /api/settings | `{displayName?, targetBand?, examDate?, examinerVoice?, showSubtitles?}` | `{ok,user}` | |
+| GET | /api/admin/banks | `?id=` 可选 | `{banks[], protected}` / `{set, topics[]}` | 列出季度题库；带 `id` 时返回可浏览的题库内容 |
+| POST | /api/admin/banks | `{bank: {...}, activate?: boolean}` | 201 `{id, season, counts}` | 导入/覆盖同一 season 的题库；写操作在设置 ADMIN_TOKEN 后需 `x-admin-token` |
+| PUT | /api/admin/banks | `{id}` | `{id, active}` | 切换启用题库，考试只从启用题库抽题 |
+
+评分状态新增 `unscored`：未配置 AI 评分时流程照常完成但不产生分数（`overallBand: null`、`dimensions: []`）；AI 失败为 `failed`，均不回退启发式分数。接入 AI 后若四项未全部评估，`overallBand` 仍为 `null`。
 
 `/api/tts` 两个方法共享服务端内存 LRU 缓存（按引擎/音色/文本/格式/语速/韵律生成 key），同一句的并发请求只合成一次。文本上限 1500 字符，需携带 `ielts_uid` cookie。

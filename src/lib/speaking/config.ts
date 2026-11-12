@@ -7,19 +7,31 @@ export type SpeakingMode = "full" | "part1" | "part2" | "part3";
 
 export interface SpeakingExamConfig {
   mode: SpeakingMode;
-  part1: { enabled: boolean; topics: number; questionsPerTopic: number; answerSeconds: number };
+  /** IELTS Speaking: Part 1 = 3 topics (1 evergreen + 2 seasonal), 10–11 short questions. */
+  part1: {
+    enabled: boolean;
+    /** Number of seasonal topics drawn from the active bank (plus one evergreen topic). */
+    seasonalTopics: number;
+    evergreenQuestions: number;
+    questionsPerTopic: number;
+    answerSeconds: number;
+    budgetSeconds: number;
+  };
   part2: { enabled: boolean; prepSeconds: number; answerSeconds: number };
   part3: {
     enabled: boolean;
     questions: number;
     answerSeconds: number;
+    budgetSeconds: number;
     /** Max follow-ups for the whole Part 3 */
     maxFollowUps: number;
-    /** Answers with fewer words than this get a probing follow-up */
+    /** Answers with fewer words than this get a probing follow-up (practice mode only) */
     shortAnswerWords: number;
-    /** Allow the LLM to ask follow-ups on substantive answers too */
+    /** Allow the LLM to ask follow-ups on substantive answers too (practice mode only) */
     llmFollowUpsOnSubstantive: boolean;
   };
+  /** Whole test 11–14 minutes; used for the on-screen time budget. */
+  totalBudgetSeconds: number;
   /** Candidate may finish an answer early after this many seconds */
   minFinishSeconds: number;
   /** Answers shorter than this (ms) are treated as "no response" */
@@ -31,16 +43,20 @@ export interface SpeakingExamConfig {
 }
 
 const BASE: Omit<SpeakingExamConfig, "mode"> = {
-  part1: { enabled: true, topics: 2, questionsPerTopic: 3, answerSeconds: 30 },
+  // Simon / IELTS Speaking test format: Part 1 4–5 min (10–11 questions over 3
+  // topics), Part 2 3–4 min (1 min prep + 2 min talk), Part 3 4–5 min (3–6 questions).
+  part1: { enabled: true, seasonalTopics: 2, evergreenQuestions: 3, questionsPerTopic: 4, answerSeconds: 20, budgetSeconds: 300 },
   part2: { enabled: true, prepSeconds: 60, answerSeconds: 120 },
   part3: {
     enabled: true,
     questions: 4,
     answerSeconds: 60,
+    budgetSeconds: 300,
     maxFollowUps: 2,
     shortAnswerWords: 25,
     llmFollowUpsOnSubstantive: true,
   },
+  totalBudgetSeconds: 840,
   minFinishSeconds: 5,
   noResponseMs: 1500,
   maxRepeatsPerQuestion: 1,
@@ -58,7 +74,7 @@ export function resolveConfig(mode: SpeakingMode): SpeakingExamConfig {
     c.allowRerecord = true;
     c.maxRepeatsPerQuestion = 3;
     if (mode === "part1") {
-      c.part1.topics = 1;
+      c.part1.seasonalTopics = 1;
       c.part1.questionsPerTopic = 4;
     }
   }

@@ -48,6 +48,17 @@ await check("create full mock session", async () => {
   const r = await req("/api/speaking/sessions", json({ mode: "full" }));
   assert.equal(r.status, 201); fullId = r.body.id;
 });
+await check("admin: a mainland seasonal bank is imported and active", async () => {
+  const r = await req("/api/admin/banks");
+  assert.equal(r.status, 200);
+  const active = r.body.banks.find((b) => b.isActive);
+  assert.ok(active, "one active bank");
+  assert.equal(active.region, "大陆地区");
+  assert.ok(active.counts.part1 >= 100 && active.counts.part2 >= 40 && active.counts.part3 >= 40, JSON.stringify(active.counts));
+  const d = await req(`/api/admin/banks?id=${active.id}`);
+  assert.equal(d.status, 200);
+  assert.ok(d.body.topics.length >= 50, "bank content is browsable");
+});
 await check("reject invalid mode", async () => assert.equal((await req("/api/speaking/sessions", json({ mode: "x" }))).status, 400));
 
 let view = (await req(`/api/speaking/sessions/${fullId}`)).body;
@@ -99,13 +110,24 @@ await check("complete the rest of the exam (incl. silence, short Part 3 answer �
     if (adv.body.followUp) followUps++;
     if (adv.body.finished) break;
   }
-  assert.ok(followUps >= 1, "a follow-up was inserted");
+  assert.equal(followUps, 0, "a full mock follows the fixed bank script and invents no follow-ups");
 });
-await check("follow-up step is persisted with generator + parent", async () => {
+await check("full mock: 3 Part 1 topics / 11 questions, one cue card, bank questions only", async () => {
   view = (await req(`/api/speaking/sessions/${fullId}`)).body;
-  const f = view.steps.find((s) => s.kind === "follow_up");
-  assert.ok(f && ["template", "llm"].includes(f.generator));
-  assert.deepEqual(view.steps.map((s) => s.stepIndex), view.steps.map((_, i) => i), "step indexes contiguous after insertion");
+  const p1 = view.steps.filter((s) => s.part === 1);
+  assert.equal(p1.length, 11);
+  assert.equal(new Set(p1.map((s) => s.topic)).size, 3);
+  assert.equal(view.steps.filter((s) => s.part === 2).length, 1);
+  assert.equal(view.steps.filter((s) => s.part === 3).length, 4);
+  assert.ok(view.steps.every((s) => s.generator === "bank"), "every question comes from the active bank");
+  assert.deepEqual(view.steps.map((s) => s.stepIndex), view.steps.map((_, i) => i));
+});
+await check("practice mode may still generate a follow-up", async () => {
+  const id = (await req("/api/speaking/sessions", json({ mode: "part3" }))).body.id;
+  const v = (await req(`/api/speaking/sessions/${id}`)).body;
+  await answer(id, v.steps[0], { text: "Because it is hard.", seconds: 4 });
+  const adv = await req(`/api/speaking/sessions/${id}/advance`, json({ fromStep: 0 }));
+  assert.ok(adv.body.followUp || adv.body.finished, "practice either probes or finishes");
 });
 await check("finish + duplicate finish", async () => {
   const a = await req(`/api/speaking/sessions/${fullId}/finish`, { method: "POST" });
@@ -116,20 +138,31 @@ await check("finish + duplicate finish", async () => {
 await check("answers rejected after completion", async () => assert.equal((await answer(fullId, view.steps[0], { text: "late" })).status, 409));
 
 let report;
-await check("report generated with four dimensions and honest pronunciation status", async () => {
+await check("scoring: no AI provider → exam completes unscored, never fabricates a band", async () => {
   for (let i = 0; i < 60; i++) {
     const r = await req(`/api/speaking/sessions/${fullId}/report`);
-    if (r.status === 200 && ["completed", "partial", "failed"].includes(r.body.assessment.status)) { report = r.body; break; }
+    if (r.status === 200 && ["unscored", "completed", "partial", "failed"].includes(r.body.assessment.status)) { report = r.body; break; }
     await new Promise((r) => setTimeout(r, 1000));
   }
   assert.ok(report, "report ready");
-  assert.notEqual(report.assessment.status, "failed", report.assessment.error);
-  assert.equal(report.dimensions.length, 4);
-  const p = report.dimensions.find((d) => d.dimension === "P");
-  if (!cfg.pronunciation) { assert.equal(p.status, "not_assessed"); assert.equal(p.band, null); assert.equal(report.assessment.isComplete, false); }
-  assert.ok(report.assessment.promptVersion);
-  assert.ok(report.assessment.overallBand >= 1 && report.assessment.overallBand <= 9);
-  console.log("   overall", report.assessment.overallBand, report.dimensions.map((d) => `${d.dimension}=${d.band}`).join(" "), "scorer", report.assessment.scorer, "findings", report.findings.length);
+  if (!cfg.llm) {
+    assert.equal(report.assessment.status, "unscored");
+    assert.equal(report.assessment.overallBand, null);
+    assert.equal(report.assessment.scorer, null);
+    assert.equal(report.dimensions.length, 0, "no bands without AI scoring");
+    assert.ok((report.assessment.notes || []).some((n) => /AI|未接入/.test(n)));
+  } else {
+    assert.notEqual(report.assessment.status, "failed", report.assessment.error);
+    assert.equal(report.dimensions.length, 4);
+    assert.ok(report.assessment.promptVersion);
+    if (!cfg.pronunciation) {
+      const p = report.dimensions.find((d) => d.dimension === "P");
+      assert.equal(p.status, "not_assessed");
+      assert.equal(report.assessment.isComplete, false);
+      assert.equal(report.assessment.overallBand, null, "four criteria each 25%: no overall band when P is missing");
+    }
+  }
+  console.log("   scorer", report.assessment.scorer, "status", report.assessment.status, "overall", report.assessment.overallBand);
 });
 await check("audio playback with Range (Safari) returns 206", async () => {
   view = (await req(`/api/speaking/sessions/${fullId}`)).body;
@@ -155,7 +188,8 @@ await check("silent exam → scoring fails honestly (no fabricated band)", async
   await req(`/api/speaking/sessions/${id}/finish`, { method: "POST" });
   let r;
   for (let i = 0; i < 30; i++) { r = await req(`/api/speaking/sessions/${id}/report`); if (r.status === 200 && r.body.assessment.status !== "pending" && r.body.assessment.status !== "running") break; await new Promise((x) => setTimeout(x, 500)); }
-  assert.equal(r.body.assessment.status, "failed"); assert.equal(r.body.assessment.overallBand, null);
+  assert.equal(r.body.assessment.status, cfg.llm ? "failed" : "unscored");
+  assert.equal(r.body.assessment.overallBand, null);
 });
 await check("practice mode allows re-record (attempt 2 becomes current)", async () => {
   const id = (await req("/api/speaking/sessions", json({ mode: "part1" }))).body.id;

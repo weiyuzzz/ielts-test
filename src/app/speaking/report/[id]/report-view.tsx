@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, Badge, Band, modeLabel, statusTone, fmtDate } from "@/components/ui";
 import { DIMENSION_LABELS, type Dimension } from "@/lib/speaking/bands";
+import { CRITERIA } from "@/lib/speaking/band-descriptors";
 
 interface Dim { dimension: Dimension; band: number | null; status: string; source: string; rationale: string }
 interface FindingRow { id: string; dimension: string; answerId: string | null; kind: string; category: string; originalText: string; suggestion: string | null; explanation: string; possibleAsrError: boolean }
@@ -37,7 +38,7 @@ export function ReportView({ sessionId }: { sessionId: string }) {
       status = r.assessment.status;
     } else setRep(null);
     // keep polling while scoring runs (or while a completed exam has no assessment row yet)
-    return s.session.status === "completed" && !["completed", "partial", "failed"].includes(status ?? "");
+    return s.session.status === "completed" && !["completed", "partial", "failed", "unscored"].includes(status ?? "");
   }, [sessionId]);
 
   const [pollKey, setPollKey] = useState(0);
@@ -108,14 +109,27 @@ export function ReportView({ sessionId }: { sessionId: string }) {
         </Card>
       )}
 
-      {a && !running && a.status !== "failed" && rep && (
+      {a?.status === "unscored" && (
+        <Card className="mb-6 border-zinc-200 bg-zinc-50 p-6">
+          <h2 className="font-semibold">本次模考未评分</h2>
+          <p className="mt-2 text-sm leading-6 text-zinc-600">考试流程已按 IELTS 口语规范完整走完。当前没有接入 AI 评分服务，因此不生成任何分数也不会用启发式估算分数。</p>
+          <p className="mt-2 text-sm leading-6 text-zinc-600">你仍可在下方逐题查看题目、录音回放与转写文本。配置 <code className="rounded bg-white px-1">LLM_PROVIDER</code> / <code className="rounded bg-white px-1">OPENAI_API_KEY</code>（或 Anthropic）后，可对本次考试重新评分。</p>
+          {a.notes && a.notes.length > 0 && <p className="mt-3 text-xs text-zinc-500">{a.notes[a.notes.length - 1]}</p>}
+          <button onClick={retry} disabled={retrying} className="mt-4 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm disabled:opacity-50">{retrying ? "Re-checking…" : "重新评分"}</button>
+        </Card>
+      )}
+
+      {a && !running && a.status !== "failed" && a.status !== "unscored" && rep && (
         <>
           <div className="grid gap-4 lg:grid-cols-3">
             <Card className="p-6">
               <div className="text-xs font-medium uppercase tracking-wide text-zinc-400">Overall band (estimate)</div>
-              <div className="mt-2 flex items-baseline gap-3"><Band value={a.overallBand} size="lg" />{!a.isComplete && <Badge tone="amber">Provisional</Badge>}</div>
+              <div className="mt-2 flex items-baseline gap-3">
+                {a.isComplete ? <Band value={a.overallBand} size="lg" /> : <span className="text-2xl font-semibold text-zinc-400">—</span>}
+                {!a.isComplete && <Badge tone="amber">未出总分</Badge>}
+              </div>
               <p className="mt-3 text-sm leading-6 text-zinc-600">{rep.report?.summary}</p>
-              {!a.isComplete && <p className="mt-3 text-xs leading-5 text-amber-700">Not all four criteria were assessed, so this is the average of the available criteria only.</p>}
+              {!a.isComplete && <p className="mt-3 text-xs leading-5 text-amber-700">四个评分标准各占 25%。发音（P）未评估，因此不显示正式总分；下方仅展示已评估的维度。</p>}
               <dl className="mt-5 grid grid-cols-2 gap-3 text-xs">
                 <div><dt className="text-zinc-400">Words spoken</dt><dd className="font-medium tabular-nums">{m.totalWords ?? "–"}</dd></div>
                 <div><dt className="text-zinc-400">Speech rate</dt><dd className="font-medium tabular-nums">{m.wpm ? `${m.wpm} wpm` : "–"}</dd></div>
@@ -143,21 +157,23 @@ export function ReportView({ sessionId }: { sessionId: string }) {
           <div className="mt-6 grid gap-4 lg:grid-cols-3">
             <Card className="p-5 lg:col-span-2">
               <h2 className="mb-4 font-semibold">Detailed feedback</h2>
-              {(["error", "issue", "strength"] as const).map((kind) => {
-                const list = rep.findings.filter((f) => f.kind === kind);
+              {(["FC", "LR", "GRA", "P"] as Dimension[]).map((d) => {
+                const list = rep.findings.filter((f) => f.dimension === d);
                 if (!list.length) return null;
+                const crit = CRITERIA.find((c) => c.key === d);
                 return (
-                  <div key={kind} className="mb-6 last:mb-0">
-                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">{kind === "error" ? "Errors & corrections" : kind === "issue" ? "Things to improve" : "Good expressions"}</h3>
+                  <div key={d} className="mb-6 last:mb-0">
+                    <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-400">{DIMENSION_LABELS[d]} · {crit?.labelZh}</h3>
+                    <p className="mb-2 text-xs leading-5 text-zinc-400">评分依据：{crit?.indicators.join(" / ")}</p>
                     <ul className="space-y-3">
                       {list.map((f) => (
                         <li key={f.id} className="rounded-xl bg-zinc-50 p-3.5 text-sm">
                           <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-xs">
-                            <Badge tone="indigo">{f.dimension}</Badge><Badge>{f.category}</Badge>
+                            <Badge tone={f.kind === "strength" ? "green" : "indigo"}>{f.kind === "strength" ? "亮点" : f.kind === "error" ? "错误" : "待改进"}</Badge><Badge>{f.category}</Badge>
                             {f.answerId && answerIndex.has(f.answerId) && <span className="text-zinc-400">Answer #{answerIndex.get(f.answerId)}</span>}
                             {f.possibleAsrError && <Badge tone="amber">may be a recognition error</Badge>}
                           </div>
-                          <div className={kind === "error" ? "text-red-700 line-through decoration-red-300" : "text-zinc-800"}>“{f.originalText}”</div>
+                          <div className={f.kind === "error" ? "text-red-700 line-through decoration-red-300" : "text-zinc-800"}>“{f.originalText}”</div>
                           {f.suggestion && <div className="mt-1 text-emerald-700">→ {f.suggestion}</div>}
                           <div className="mt-1 text-xs leading-5 text-zinc-500">{f.explanation}</div>
                         </li>

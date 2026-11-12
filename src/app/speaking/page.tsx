@@ -29,9 +29,9 @@ export default async function SpeakingHome() {
                 <p className="mt-1.5 text-sm text-zinc-500">{m.description}</p>
                 {m.mode === "full" && (
                   <div className="mt-4 grid grid-cols-3 gap-3 text-xs text-zinc-500 sm:max-w-md">
-                    <div className="rounded-lg bg-zinc-50 p-3"><div className="font-semibold text-zinc-800">Part 1</div>{full.part1.topics * full.part1.questionsPerTopic} questions · {full.part1.answerSeconds}s each</div>
+                    <div className="rounded-lg bg-zinc-50 p-3"><div className="font-semibold text-zinc-800">Part 1</div>{full.part1.evergreenQuestions + full.part1.seasonalTopics * full.part1.questionsPerTopic} questions · 3 topics · {full.part1.answerSeconds}s each</div>
                     <div className="rounded-lg bg-zinc-50 p-3"><div className="font-semibold text-zinc-800">Part 2</div>{full.part2.prepSeconds}s prep · {full.part2.answerSeconds}s talk</div>
-                    <div className="rounded-lg bg-zinc-50 p-3"><div className="font-semibold text-zinc-800">Part 3</div>{full.part3.questions} questions + follow-ups</div>
+                    <div className="rounded-lg bg-zinc-50 p-3"><div className="font-semibold text-zinc-800">Part 3</div>{full.part3.questions} questions · fixed bank script</div>
                   </div>
                 )}
               </div>

@@ -9,11 +9,17 @@ export const EXAMINER_PROMPT_VERSION = "examiner-followup-v1";
 
 export const LINES = {
   opening: (name: string) => `Hello. My name is ${name}, and I'll be your examiner today. This is the IELTS Speaking test.`,
+  /** Full test-opening script: greeting → examiner name → ID check → test start. */
+  openingFull: (name: string, period: "morning" | "afternoon") =>
+    `Good ${period}. My name is ${name}. Could I see your identification, please? Thank you. What shall I call you? Thank you. This is the IELTS Speaking test.`,
+  greetingPeriod: (h = new Date().getHours()): "morning" | "afternoon" => (h < 12 ? "morning" : "afternoon"),
+  idComplete: "Thank you. That is the identification check complete.",
   part1Intro: "In this first part, I'd like to ask you some questions about yourself.",
   part1Topic: (t: string) => `Let's talk about ${t.toLowerCase()}.`,
   part1NextTopic: (t: string) => `Now let's move on to ${t.toLowerCase()}.`,
   part2Intro: "Now I'm going to give you a topic, and I'd like you to talk about it for one to two minutes. Before you talk, you'll have one minute to think about what you're going to say. You can make some notes if you wish.",
   part2Start: "All right? Remember, you have one to two minutes for this. I'll tell you when the time is up. Can you start speaking now, please?",
+  part2TimeUp: "Thank you. That is the end of your talk.",
   part3Intro: (t: string) => `We've been talking about ${t.toLowerCase()}, and I'd like to discuss with you one or two more general questions related to this.`,
   part3Practice: (t: string) => `Let's discuss some general questions related to ${t.toLowerCase()}.`,
   ack: ["Thank you.", "OK.", "Right.", "I see."],

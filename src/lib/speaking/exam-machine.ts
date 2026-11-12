@@ -80,7 +80,7 @@ export function decideAdvance(
   s: MachineState,
   fromStep: number,
   answer: AnswerSummary | null,
-  opts: { llmAvailable: boolean },
+  opts: { llmAvailable: boolean; allowFollowUps?: boolean },
 ): Result<AdvanceDecision> {
   if (s.status !== "in_progress") return { ok: false, error: "session_not_active" };
   if (fromStep !== s.currentStep) return { ok: false, error: "not_current_step" };
@@ -88,7 +88,8 @@ export function decideAdvance(
   if (!step) return { ok: false, error: "unknown_step" };
   if (step.status === "pending") return { ok: false, error: "step_not_answered" };
 
-  if (step.part === 3 && step.kind === "question" && answer && !answer.noResponse) {
+  // A full mock test follows the fixed bank script; only practice modes may probe.
+  if (step.part === 3 && step.kind === "question" && answer && !answer.noResponse && opts.allowFollowUps !== false) {
     const used = s.steps.filter((x) => x.kind === "follow_up").length;
     const p3 = s.config.part3;
     if (used < p3.maxFollowUps) {
