@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { AudioPlayer } from "@/components/audio-player";
+import { MicCheck } from "@/components/mic-check";
 import { RecorderError, listInputDevices, type Recording } from "@/lib/audio/recorder";
 import { RecordingSession } from "@/lib/audio/recording-session";
 import {
@@ -39,7 +41,7 @@ interface CompleteResponse {
   timings: { submitMs: number; advanceMs: number };
   view: SessionView;
 }
-type Phase = "loading" | "setup" | "examiner" | "prep" | "recording" | "review" | "uploading" | "advancing" | "finishing" | "blocked" | "error";
+type Phase = "loading" | "setup" | "miccheck" | "examiner" | "prep" | "recording" | "review" | "uploading" | "advancing" | "finishing" | "blocked" | "error";
 type CountdownResult = "timeout" | "early" | "repeat" | "device" | "aborted";
 
 interface Props {
@@ -161,6 +163,8 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
   const [current, setCurrent] = useState<StepView | null>(null);
   /** Dev-only: shows how many preloaded resources are ready (subscribable state). */
   const [readiness, setReadiness] = useState<{ ready: number; total: number } | null>(null);
+  /** Session acquired during setup, handed to the mic check before the exam starts. */
+  const [micSession, setMicSession] = useState<RecordingSession | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   const recSessionRef = useRef<RecordingSession | null>(null);
@@ -542,22 +546,17 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
   async function startFromSetup() {
     try {
       const plan = planRef.current;
-      // Readiness gate (opening + first question only) and mic acquisition are
-      // independent, so run them together instead of serialising two waits.
-      // getUserMedia + AudioContext are acquired ONCE for the whole session.
-      const rs = new RecordingSession({});
-      await Promise.all([
-        preloaderRef.current?.ensureOpeningAndFirst(
-          plan?.firstLines ?? [],
-          plan?.firstQuestionAudioUrl ?? null,
-          plan?.firstLines[0]?.act ?? "greeting",
-        ) ?? Promise.resolve(),
-        rs.acquire(deviceId || undefined),
-      ]);
-      recSessionRef.current = rs;
-      setDevices(await listInputDevices());
+      // Warm the opening line + first question while the candidate checks the mic.
+      await preloaderRef.current?.ensureOpeningAndFirst(
+        plan?.firstLines ?? [],
+        plan?.firstQuestionAudioUrl ?? null,
+        plan?.firstLines[0]?.act ?? "greeting",
+      );
+      setDevices(await listInputDevices().catch(() => []));
       setNotice(null);
-      run();
+      // The mic check acquires the microphone (getUserMedia + AudioContext once)
+      // and hands the session back when the candidate confirms.
+      setPhase("miccheck");
     } catch (e) {
       setDevices(await listInputDevices().catch(() => []));
       setNotice((e as Error).message);
@@ -659,6 +658,20 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
               {phase === "loading" ? "Loading…" : answered > 0 ? "Allow microphone & resume" : "Allow microphone & begin"}
             </button>
           </div>
+        )}
+
+        {phase === "miccheck" && (
+          <MicCheck
+            deviceId={deviceId}
+            onDeviceChange={(id) => { setDeviceId(id); localStorage.setItem("mic-device", id); }}
+            onConfirm={(rs) => {
+              recSessionRef.current = rs; // the exam now owns the microphone
+              setPhase("loading");
+              run();
+            }}
+            title="麦克风检查（考试前）"
+            hint="正式考试就用这条录音通道。对着麦克风说一句话，确认音量条跳动、并试录回放能听到自己的声音，再开始考试。"
+          />
         )}
 
         {phase === "blocked" && blocked && (
@@ -765,7 +778,7 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
               {phase === "review" && review && (
                 <div className="w-full rounded-2xl border border-zinc-200 bg-white p-5">
                   <div className="mb-2 text-sm font-medium">Listen back</div>
-                  <audio controls src={review.url} className="w-full" />
+                  <AudioPlayer src={review.url} className="w-full" />
                   {review.transcript && <p className="mt-3 text-sm text-zinc-600"><span className="text-xs uppercase tracking-wide text-zinc-400">Recognised: </span>{review.transcript}</p>}
                   <div className="mt-4 flex gap-3">
                     <button onClick={() => act("rerecord")} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm">Re-record</button>
