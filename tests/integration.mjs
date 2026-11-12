@@ -2,6 +2,7 @@
 // Uses synthetic WAV audio + supplied transcripts (simulating the browser ASR path).
 // These are TEST INPUTS — they exercise the real pipeline; they are not presented as user results.
 import assert from "node:assert/strict";
+import pg from "pg";
 
 const BASE = process.argv[2] || "http://localhost:3000";
 let cookie = "";
@@ -112,13 +113,22 @@ await check("complete the rest of the exam (incl. silence, short Part 3 answer �
   }
   assert.equal(followUps, 0, "a full mock follows the fixed bank script and invents no follow-ups");
 });
-await check("full mock: 3 Part 1 topics / 11 questions, one cue card, bank questions only", async () => {
+await check("full mock: 11 Part 1 across 3 topics, one cue card, Part 3 follows the card topic", async () => {
   view = (await req(`/api/speaking/sessions/${fullId}`)).body;
   const p1 = view.steps.filter((s) => s.part === 1);
+  const p2 = view.steps.filter((s) => s.part === 2);
+  const p3 = view.steps.filter((s) => s.part === 3);
   assert.equal(p1.length, 11);
   assert.equal(new Set(p1.map((s) => s.topic)).size, 3);
-  assert.equal(view.steps.filter((s) => s.part === 2).length, 1);
-  assert.equal(view.steps.filter((s) => s.part === 3).length, 4);
+  assert.equal(p2.length, 1, "exactly one cue card");
+  // PR #9 changed Part 3 to draw ONLY the chosen card's own topic questions
+  // (min(config.part3.questions, available)), and the bank has 1–7 Part 3
+  // questions per topic, so the LENGTH is data-dependent. The invariant that
+  // matters is that Part 3 stays on the Part 2 topic — assert that instead of
+  // the old fixed count of 4 (which used to be met by borrowing other topics).
+  assert.ok(p3.length >= 1 && p3.length <= 4, `Part 3 length ${p3.length} outside 1..4`);
+  assert.equal(new Set(p3.map((s) => s.topic)).size, 1, "Part 3 must not mix topics");
+  assert.equal(p3[0].topic, p2[0].topic, "Part 3 topic must equal the cue card topic");
   assert.ok(view.steps.every((s) => s.generator === "bank"), "every question comes from the active bank");
   assert.deepEqual(view.steps.map((s) => s.stepIndex), view.steps.map((_, i) => i));
 });
@@ -307,6 +317,58 @@ if (cfg.tts && cfg.tts.location === "server") {
   });
 } else {
   console.log("SKIP TTS checks (browser TTS active)");
+}
+
+// ------------------------------------------------- descriptorRefs persistence
+// Real PostgreSQL round trip (no mocks): write rubric ids, read them back with
+// SQL, then read them back again through the report API the UI consumes.
+if (process.env.DATABASE_URL) {
+  await check("descriptorRefs: rubric ids persist to PostgreSQL and are returned by the report API", async () => {
+    const id = (await req("/api/speaking/sessions", json({ mode: "part1" }))).body.id;
+    assert.ok(id, "session created");
+    const db = new pg.Client({ connectionString: process.env.DATABASE_URL });
+    await db.connect();
+    try {
+      const { rows: aRows } = await db.query(
+        `insert into assessments (session_id, status, stage, scorer, is_complete, prompt_version, completed_at)
+         values ($1,'completed','done','llm',true,'speaking-language-v3.0-rubric', now()) returning id`,
+        [id],
+      );
+      const assessmentId = aRows[0].id;
+      const refs = ["GRA-B6-02", "LR-B7-01"];
+      await db.query(
+        `insert into assessment_findings (assessment_id, dimension, kind, category, original_text, explanation, descriptor_refs)
+         values ($1,'GRA','error','conditionals',$2,$3,$4::jsonb)`,
+        [assessmentId, "if you can use a computer well you can find a better job", "Complex conditional used with an inconsistent tense sequence.", JSON.stringify(refs)],
+      );
+      // Legacy-style insert that omits the column entirely → must default to [].
+      await db.query(
+        `insert into assessment_findings (assessment_id, dimension, kind, category, original_text, explanation)
+         values ($1,'LR','strength','collocation',$2,$3)`,
+        [assessmentId, "frightened of the water", "Natural collocation."],
+      );
+
+      const { rows } = await db.query(`select descriptor_refs from assessment_findings where assessment_id=$1`, [assessmentId]);
+      assert.equal(rows.length, 2);
+      const stored = rows.find((r) => Array.isArray(r.descriptor_refs) && r.descriptor_refs.length);
+      assert.ok(stored, "descriptor_refs is a JSONB array, not a string");
+      assert.deepEqual(stored.descriptor_refs, refs, "array content survives the round trip");
+      const legacy = rows.find((r) => Array.isArray(r.descriptor_refs) && r.descriptor_refs.length === 0);
+      assert.ok(legacy, "a row written without descriptor_refs defaults to []");
+
+      const r = await req(`/api/speaking/sessions/${id}/report`);
+      assert.equal(r.status, 200);
+      assert.equal(r.body.findings.length, 2);
+      assert.ok(r.body.findings.every((f) => Array.isArray(f.descriptorRefs)), "report never returns undefined descriptorRefs");
+      const viaApi = r.body.findings.find((f) => f.descriptorRefs.length);
+      assert.deepEqual(viaApi.descriptorRefs, refs, "report API exposes the persisted ids");
+    } finally {
+      await db.query(`delete from exam_sessions where id=$1`, [id]).catch(() => {});
+      await db.end().catch(() => {});
+    }
+  });
+} else {
+  console.log("SKIP descriptorRefs persistence check (no DATABASE_URL)");
 }
 
 const failed = results.filter((r) => r[0] === "FAIL");

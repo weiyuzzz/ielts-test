@@ -48,7 +48,7 @@ stateDiagram-v2
 | pronunciation_results | 音频评测的逐词结果 |
 | assessments | 每次评分一行（重跑会保留历史，便于质量对比）；scorer、llm_model、prompt_version、asr/pron provider、metrics、notes |
 | assessment_dimensions | FC/LR/GRA/P 各占一行：band、status(scored/not_assessed)、source、rationale |
-| assessment_findings | 句子级证据：dimension、answer_id、kind、category、原句、改写、解释、possible_asr_error |
+| assessment_findings | 句子级证据：dimension、answer_id、kind、category、原句、改写、解释、possible_asr_error、`descriptor_refs`（JSONB，引用到的 0–9 判据 ID 数组，默认 `[]`） |
 | exam_reports | 总结与下一步建议 |
 
 ## 4. AI 适配器（`src/lib/ai/`）

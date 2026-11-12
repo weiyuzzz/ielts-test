@@ -244,6 +244,11 @@ export const assessmentFindings = pgTable("assessment_findings", {
   suggestion: text("suggestion"),
   explanation: text("explanation").notNull(),
   possibleAsrError: boolean("possible_asr_error").notNull().default(false),
+  /**
+   * Rubric descriptor ids this finding is evidence for, e.g. ["GRA-B6-02"].
+   * Ids are validated against the rubric before insert; older rows default to [].
+   */
+  descriptorRefs: jsonb("descriptor_refs").$type<string[]>().notNull().default([]),
 });
 
 export const examReports = pgTable("exam_reports", {
