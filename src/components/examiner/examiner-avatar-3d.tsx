@@ -178,7 +178,7 @@ export function ExaminerAvatar3D(props: Props) {
         // rotated down into an A-pose.
         const headBone = bones.Head;
         let headPos = new THREE.Vector3(0, 1.62, 0);
-        let frameScale = 0.85;
+        let frameScale = 0.95;
         if (headBone) {
           headBone.updateWorldMatrix(true, false);
           headBone.getWorldPosition(headPos);
@@ -190,7 +190,7 @@ export function ExaminerAvatar3D(props: Props) {
           frameScale = Math.max(0.45, size.y * 0.42);
         }
         camera.position.set(headPos.x, headPos.y + 0.02, frameScale);
-        camera.lookAt(headPos.x, headPos.y - 0.02, headPos.z);
+        camera.lookAt(headPos.x, headPos.y - 0.06, headPos.z);
 
         rig = { renderer, scene, camera, meshes, bones, baseRotations };
       } catch {
@@ -405,9 +405,6 @@ export function ExaminerAvatar3D(props: Props) {
   return (
     <div className={`relative select-none ${props.className ?? "h-40 w-40 sm:h-48 sm:w-48"}`} aria-label={`${props.name}, your examiner`} role="img">
       <canvas ref={canvasRef} className="h-full w-full" aria-hidden />
-      <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-zinc-500 ring-1 ring-zinc-200">
-        {props.speaking ? "Speaking" : props.listening ? "Listening" : props.preparing ? "Waiting" : "Ready"}
-      </span>
     </div>
   );
 }

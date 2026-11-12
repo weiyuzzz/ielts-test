@@ -20,6 +20,7 @@ import { budgetForPart, formatClock, OFFICIAL_RANGE, PART_TITLE, partProgress, p
 import { primeEnvelope } from "@/lib/audio/examiner-envelope";
 import { ExaminerAvatar3D } from "@/components/examiner/examiner-avatar-3d";
 import { normalizeGender, normalizeModelId, preloadExaminerModel, type ExaminerGender } from "@/lib/avatar/models";
+import { fetchVisemeTrack } from "@/lib/lipsync/controller";
 
 interface StepView {
   id: string; stepIndex: number; part: number; kind: string; topic: string; examinerLead: string; promptText: string; cuePoints: string[];
@@ -107,6 +108,16 @@ interface ScriptPlan {
   /** The first utterance, line by line — exactly what `say()` will speak. */
   firstLines: ScriptLine[];
   firstQuestionAudioUrl: string | null;
+}
+
+/** Kicks off the opening line's viseme-track fetch during the mic check, so
+ *  word one of the exam is already lip-synced when the examiner starts. */
+function MicWarmUp({ lines }: { lines: ScriptLine[] }) {
+  useEffect(() => {
+    const text = lineText(lines);
+    if (text.trim()) void fetchVisemeTrack(text);
+  }, [lines]);
+  return null;
 }
 
 /**
@@ -812,7 +823,15 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
 
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:py-10 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1">
-        {(phase === "loading" || phase === "setup") && (
+        {phase === "loading" && (
+          <div className="rounded-2xl border border-zinc-200 bg-white p-10 text-center">
+            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-zinc-200 border-t-zinc-900" aria-hidden />
+            <p className="mt-4 text-sm font-medium text-zinc-700">Preparing the exam…</p>
+            <p className="mt-1 text-xs text-zinc-400">The examiner is taking the floor — this only takes a moment.</p>
+          </div>
+        )}
+
+        {phase === "setup" && (
           <div className="rounded-2xl border border-zinc-200 bg-white p-6 sm:p-8">
             <h1 className="text-xl font-semibold">{answered > 0 ? "Resume your exam" : "Before you start"}</h1>
             <ul className="mt-4 space-y-2 text-sm text-zinc-600">
@@ -827,17 +846,11 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
             {browserAsr && !browserAsrSupported() && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">This browser does not support built-in speech recognition. Use Chrome, Edge or Safari, or ask the administrator to configure server ASR. Recordings will still be saved.</p>}
             <p className="mt-6 text-xs text-zinc-400">On the next step the browser asks for microphone permission, and you can test your mic and pick a device before the exam starts. The exam itself starts only after you pass the microphone check.</p>
             <button
-              disabled={phase === "loading" || preparing}
+              disabled={preparing}
               onClick={startFromSetup}
               className="mt-3 w-full rounded-xl bg-zinc-900 py-3 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-60"
             >
-              {phase === "loading"
-                ? "Loading…"
-                : preparing
-                  ? "Preparing examiner voice…"
-                  : answered > 0
-                    ? "Continue to microphone check"
-                    : "Continue to microphone check"}
+              {preparing ? "Preparing examiner voice…" : "Continue to microphone check"}
             </button>
             {preparing && readiness && readiness.total > 0 && (
               <div className="mt-3" aria-label="Examiner voice preparation progress">
@@ -865,6 +878,11 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
             hint="This is the exact recording path used in the exam. Say a sentence, watch the meter move, and play the recording back before you start."
           />
         )}
+        {/* Warm the opening line's viseme track while the candidate checks the
+            mic, so the first spoken sentence is lip-synced from word one. */}
+        {phase === "miccheck" && planRef.current?.firstLines.length ? (
+          <MicWarmUp lines={planRef.current.firstLines} />
+        ) : null}
 
         {phase === "blocked" && blocked && (
           <div className="rounded-2xl border border-amber-200 bg-white p-6">
@@ -884,26 +902,12 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
 
         {step && !["setup", "loading", "blocked"].includes(phase) && (
           <>
-            <div className="flex items-center gap-4">
-              <ExaminerAvatar3D
-                gender={examinerGender}
-                modelId={examinerModel}
-                speaking={speaking}
-                listening={phase === "recording"}
-                preparing={phase === "examiner" || phase === "prep"}
-                name={view?.session.examinerName ?? "Examiner"}
-              />
-              <div className="min-w-0">
-                <div className="text-sm font-medium">{view?.session.examinerName} · Examiner</div>
-                <div className="mt-0.5 text-xs text-zinc-400">{speaking ? "Speaking…" : phase === "recording" ? "Listening" : phase === "prep" ? "Waiting while you prepare" : phase === "uploading" || phase === "advancing" ? "Saving your answer…" : phase === "finishing" ? "Finishing the test" : ""}</div>
-                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400">
-                  <span className="rounded bg-zinc-100 px-1.5 py-0.5">Part {step.part}</span>
-                  <span className="max-w-[12rem] truncate rounded bg-zinc-100 px-1.5 py-0.5">{step.topic}</span>
-                  {activePart !== null && <span className="rounded bg-indigo-50 px-1.5 py-0.5 tabular-nums text-indigo-700">{formatClock(partLeft ?? 0)} left in this part</span>}
-                </div>
-              </div>
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400">
+              <span className="rounded bg-zinc-100 px-1.5 py-0.5">Part {step.part}</span>
+              <span className="max-w-[12rem] truncate rounded bg-zinc-100 px-1.5 py-0.5">{step.topic}</span>
+              {activePart !== null && <span className="rounded bg-indigo-50 px-1.5 py-0.5 tabular-nums text-indigo-700">{formatClock(partLeft ?? 0)} left in this part</span>}
             </div>
-            {showSubs && subtitle && <p className="mt-4 rounded-xl bg-white px-4 py-3 text-sm leading-6 text-zinc-600 ring-1 ring-zinc-200">{subtitle}</p>}
+            {showSubs && subtitle && <p className="mt-4 rounded-xl bg-white px-4 py-3 text-sm leading-6 text-zinc-600 ring-1 ring-zinc-200" />}
 
             <section className="mt-5 rounded-2xl border border-zinc-200 bg-white p-6 sm:p-8">
               <div className="mb-3 flex items-start justify-between gap-3">
@@ -1044,8 +1048,24 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
         )}
         </div>
 
-        {step && !["setup", "loading", "blocked"].includes(phase) && (
-          <aside className="w-full shrink-0 lg:sticky lg:top-6 lg:w-64" aria-label="Time limit for each part">
+        {view && ["miccheck", "examiner", "prep", "recording", "review", "uploading", "advancing", "finishing"].includes(phase) && (
+          <aside className="w-full shrink-0 space-y-4 lg:sticky lg:top-6 lg:w-72" aria-label="Examiner and time limits">
+            {/* Mounted from the mic check onward so the model never reloads
+                mid-exam (a reload would stall the first question and desync
+                the mouth). Sits under the part countdown, larger than before. */}
+            <div className="flex flex-col items-center rounded-2xl border border-zinc-200 bg-white p-4">
+              <ExaminerAvatar3D
+                gender={examinerGender}
+                modelId={examinerModel}
+                speaking={speaking}
+                listening={phase === "recording"}
+                preparing={phase === "examiner" || phase === "prep"}
+                name={view.session.examinerName ?? "Examiner"}
+                className="h-72 w-full"
+              />
+              <div className="text-sm font-medium">{view.session.examinerName}</div>
+              <div className="text-xs text-zinc-400">Your examiner today</div>
+            </div>
             <div className="rounded-2xl border border-zinc-200 bg-white p-4">
               <div className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Time limits</div>
               <p className="mt-1 text-[11px] leading-4 text-zinc-400">Official range per part — the examiner moves on at the upper bound.</p>
