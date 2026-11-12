@@ -23,7 +23,8 @@
  * row id: `importBank()` deletes and reinserts a season, so ids are not stable
  * across imports and would silently detach the content.
  */
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, unlink, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
 import path from "node:path";
 import {
   contentKey,
@@ -38,8 +39,111 @@ import {
 export const LEARNING_VERSION = 1;
 const DEFAULT_DIR = path.join(process.cwd(), "src", "data", "learning");
 
+export interface ContentDirInfo {
+  dir: string;
+  source: "env" | "default";
+  isDefault: boolean;
+  absolute: boolean;
+  /** Human-readable configuration problems, surfaced by /admin and the docs. */
+  warnings: string[];
+}
+
+/**
+ * Where the sidecar lives, and why that may be wrong in production.
+ *
+ * The default sits inside the application source tree. That is fine for local
+ * development, but on a read-only image / serverless runtime the write fails,
+ * and on redeploy the directory is replaced so content is lost. We cannot pick
+ * a deployment-specific volume for the operator, so we report it explicitly.
+ */
+export function contentDirInfo(): ContentDirInfo {
+  const raw = process.env.LEARNING_CONTENT_DIR?.trim();
+  const warnings: string[] = [];
+  if (raw) {
+    const absolute = path.isAbsolute(raw);
+    if (!absolute) {
+      warnings.push(`LEARNING_CONTENT_DIR="${raw}" is relative and is resolved against the working directory (${process.cwd()}). Use an absolute path in production.`);
+    }
+    return { dir: absolute ? raw : path.resolve(process.cwd(), raw), source: "env", isDefault: false, absolute: true, warnings };
+  }
+  warnings.push("Using the default learning directory inside the application source tree. Writes fail on a read-only filesystem and content is lost when the image or code is replaced. Set LEARNING_CONTENT_DIR to a persistent, writable volume in production.");
+  return { dir: DEFAULT_DIR, source: "default", isDefault: true, absolute: path.isAbsolute(DEFAULT_DIR), warnings };
+}
+
 export function contentDir(): string {
-  return process.env.LEARNING_CONTENT_DIR || DEFAULT_DIR;
+  return contentDirInfo().dir;
+}
+
+/** Turn a raw fs error into an actionable message (permissions, read-only, disk). */
+function writeError(e: unknown, target: string): Error {
+  const err = e as NodeJS.ErrnoException;
+  const base = `cannot write learning content to ${target}`;
+  switch (err.code) {
+    case "EACCES":
+    case "EPERM":
+      return new Error(`${base}: permission denied. Point LEARNING_CONTENT_DIR at a writable directory.`);
+    case "EROFS":
+      return new Error(`${base}: read-only filesystem. Point LEARNING_CONTENT_DIR at a writable persistent volume.`);
+    case "ENOSPC":
+      return new Error(`${base}: no space left on device.`);
+    case "ENOTDIR":
+    case "EEXIST":
+      return new Error(`${base}: path is not a usable directory.`);
+    default:
+      return new Error(`${base}: ${err.message ?? String(e)}`);
+  }
+}
+
+/**
+ * Atomic JSON write: write a sibling temp file, then rename over the target.
+ * A crash mid-write leaves the previous file intact instead of a truncated one.
+ * rename() is atomic within a filesystem on POSIX and replaces on Windows.
+ */
+async function writeJsonAtomic(file: string, payload: unknown): Promise<void> {
+  const dir = path.dirname(file);
+  const tmp = path.join(dir, `.${path.basename(file)}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`);
+  const body = `${JSON.stringify(payload, null, 2)}\n`;
+  try {
+    await mkdir(dir, { recursive: true });
+    await writeFile(tmp, body, "utf8");
+    await rename(tmp, file);
+  } catch (e) {
+    await unlink(tmp).catch(() => {});
+    throw writeError(e, file);
+  }
+}
+
+/**
+ * Serialise read-modify-write per season INSIDE this process.
+ *
+ * Two concurrent imports of the same season would otherwise both read the old
+ * file and the last writer would silently drop the other's entries.
+ *
+ * This is process-local only. It does NOT provide consistency across multiple
+ * processes or instances — that needs a shared store (object storage or the DB).
+ */
+const seasonChains = new Map<string, Promise<unknown>>();
+function withSeasonLock<T>(season: string, fn: () => Promise<T>): Promise<T> {
+  const prev = seasonChains.get(season) ?? Promise.resolve();
+  const run = prev.then(fn, fn);
+  const tail = run.then(() => undefined, () => undefined);
+  seasonChains.set(season, tail);
+  void tail.then(() => { if (seasonChains.get(season) === tail) seasonChains.delete(season); });
+  return run;
+}
+
+/** Probe the configured directory once (used by /admin and ops checks). */
+export async function probeContentDir(): Promise<{ ok: boolean; dir: string; writable: boolean; error?: string }> {
+  const { dir } = contentDirInfo();
+  const probe = path.join(dir, `.probe-${process.pid}-${Date.now()}.tmp`);
+  try {
+    await mkdir(dir, { recursive: true });
+    await writeFile(probe, "ok", "utf8");
+    await unlink(probe);
+    return { ok: true, dir, writable: true };
+  } catch (e) {
+    return { ok: false, dir, writable: false, error: writeError(e, dir).message };
+  }
 }
 
 export interface SeasonEntry {
@@ -183,20 +287,22 @@ export function computeCoverage(rows: Array<{ part: number; topicKey: string; te
  */
 export async function upsertSeasonEntries(season: string, region: string | undefined, entries: SeasonEntry[]): Promise<number> {
   if (!SEASON_RE.test(season)) throw new Error(`invalid season key: ${season}`);
-  const existing = await readSeasonFile(season);
-  const merged = new Map<string, SeasonEntry>();
-  for (const e of existing.file?.entries ?? []) merged.set(contentKey(e.part, e.topicKey, e.text), e);
-  for (const e of entries) merged.set(contentKey(e.part, e.topicKey, e.text), e);
-  const payload: SeasonFile = {
-    version: LEARNING_VERSION,
-    season,
-    region: region ?? existing.file?.region,
-    notes: existing.file?.notes,
-    entries: [...merged.values()].filter((e) => hasLearning(e.learning)),
-  };
-  await mkdir(contentDir(), { recursive: true });
-  await writeFile(path.join(contentDir(), `${season}.json`), `${JSON.stringify(payload, null, 2)}\n`, "utf8");
-  return payload.entries.length;
+  // Serialise read-modify-write for this season, then replace the file atomically.
+  return withSeasonLock(season, async () => {
+    const existing = await readSeasonFile(season);
+    const merged = new Map<string, SeasonEntry>();
+    for (const e of existing.file?.entries ?? []) merged.set(contentKey(e.part, e.topicKey, e.text), e);
+    for (const e of entries) merged.set(contentKey(e.part, e.topicKey, e.text), e);
+    const payload: SeasonFile = {
+      version: LEARNING_VERSION,
+      season,
+      region: region ?? existing.file?.region,
+      notes: existing.file?.notes,
+      entries: [...merged.values()].filter((e) => hasLearning(e.learning)),
+    };
+    await writeJsonAtomic(path.join(contentDir(), `${season}.json`), payload);
+    return payload.entries.length;
+  });
 }
 
 /** Seasons that already have a content file (used by the admin overview). */
