@@ -86,7 +86,12 @@ jobs:
       - name: Production build
         env:
           DATABASE_URL: postgresql://build:build@127.0.0.1:5432/build
-        run: npm run build
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee build.log
+      - name: Surface build errors as annotations
+        if: failure()
+        run: grep -iE "error|failed|cannot" build.log | tail -25 | while IFS= read -r line; do echo "::error::$line"; done
 
   # ---------------------------------------------------------------------------
   # Full stack: real PostgreSQL 16, schema push, production server, E2E script.
@@ -154,7 +159,12 @@ jobs:
         run: npx tsx --test tests/bank-learning.test.ts
 
       - name: Production build
-        run: npm run build
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee build.log
+      - name: Surface build errors as annotations
+        if: failure()
+        run: grep -iE "error|failed|cannot" build.log | tail -25 | while IFS= read -r line; do echo "::error::$line"; done
 
       - name: Start server
         run: |
