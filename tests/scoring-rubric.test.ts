@@ -23,9 +23,10 @@ import {
 } from "../src/lib/speaking/band-descriptors";
 import {
   buildScoringMessages, validateLanguageScore, checkDescriptorRefs,
-  SCORING_PROMPT_VERSION, heuristicScore, ScoringValidationError,
+  SCORING_PROMPT_VERSION, buildDiagnosticReport, ScoringValidationError,
 } from "../src/lib/speaking/scoring";
 import { aggregate, type AnswerInput } from "../src/lib/speaking/metrics";
+import type { WordTiming } from "../src/db/schema";
 
 const DIMS: CriterionKey[] = ["FC", "LR", "GRA", "P"];
 const ID_RE = /^(FC|LR|GRA|P)-B([0-9])-([0-9]{2})$/;
@@ -40,6 +41,22 @@ test("1. every criterion has at least one descriptor at every band 0–9", () =>
   }
   // 4 criteria × 10 bands is the minimum surface area of a complete rubric.
   assert.ok(BAND_DESCRIPTORS.length >= 40, `only ${BAND_DESCRIPTORS.length} descriptors`);
+});
+
+test("1b. transitional bands (3/5/7) carry explicit adjacent-band clarifiers", () => {
+  for (const dim of DIMS) {
+    for (const band of [3, 5, 7]) {
+      const items = descriptorsFor(dim, band);
+      assert.ok(
+        items.some((d) => d.focus === "transition" || /band [0-9]/i.test(d.text)),
+        `${dim} band ${band} lacks a transitional clarifier`,
+      );
+    }
+  }
+  // P keeps the official bridging formula at 3/5/7; the others use the appended clarifiers.
+  assert.ok(descriptorsFor("P", 7).every((d) => /band [0-9]/i.test(d.text)), "P band 7 must stay bridging");
+  assert.ok(BAND_DESCRIPTORS.some((d) => d.id === "FC-B7-04"), "appended descriptors keep stable generated ids");
+  assert.match(DESCRIPTOR_SOURCE.revision, /^rubric-2/, "rubric revision must be bumped with the calibration");
 });
 
 // ---------------------------------------------------------------- 2. uniqueness
@@ -99,7 +116,7 @@ test("5. scoring prompt injects all four criteria with citable descriptor ids", 
   assert.ok(system.includes("descriptorRefs"), "prompt must ask for descriptorRefs");
   // Every answer must be visible to the model with its index.
   for (const a of answers) assert.ok(user.includes(`#${a.index}`));
-  assert.match(SCORING_PROMPT_VERSION, /v4\./, "v4 injects acoustic evidence rules");
+  assert.match(SCORING_PROMPT_VERSION, /v5\./, "v5 injects multimodal evidence rules (audio + provider + part rules)");
   assert.notEqual(SCORING_PROMPT_VERSION, "speaking-language-v2.0-criteria", "prompt version must be bumped");
 });
 
@@ -264,17 +281,19 @@ const HIGH = [
   ans("h4", "Mornings have always been my most productive period. Even though I'm not naturally an early riser, I've trained myself to wake up before six, which gives me an uninterrupted hour to plan my priorities before the inevitable flood of emails begins.", 20),
 ];
 
-test("11. LOW / MID / HIGH keep a sane, monotonic band progression (synthetic samples)", () => {
+test("11. diagnostics separate synthetic quality levels and NEVER emit bands", () => {
   console.log(`  [samples] reviewed=${REFERENCE_SAMPLES.reviewed} source=${REFERENCE_SAMPLES.source}`);
-  const bands = (set: AnswerInput[]) => heuristicScore(set, aggregate(set)).dimensions;
-  const lo = bands(LOW), mi = bands(MID), hi = bands(HIGH);
-  for (const d of ["FC", "LR", "GRA"] as const) {
-    assert.ok(lo[d].band < mi[d].band, `${d}: LOW (${lo[d].band}) must be below MID (${mi[d].band})`);
-    assert.ok(mi[d].band <= hi[d].band, `${d}: MID (${mi[d].band}) must not exceed HIGH (${hi[d].band})`);
-    assert.ok(lo[d].band >= 2 && hi[d].band <= 9, `${d}: bands out of range`);
+  const diag = (set: AnswerInput[]) => buildDiagnosticReport(set, aggregate(set));
+  const lo = diag(LOW), mi = diag(MID), hi = diag(HIGH);
+  // Deterministic signals still order the quality levels…
+  const issues = (r: typeof lo) => r.findings.filter((f) => f.kind !== "strength").length;
+  assert.ok(issues(lo) > issues(hi), `LOW (${issues(lo)}) must exceed HIGH (${issues(hi)}) diagnostics`);
+  assert.ok(lo.metrics.totalWords < hi.metrics.totalWords);
+  // …but no band of any kind may exist in a diagnostic report.
+  for (const r of [lo, mi, hi]) {
+    assert.match(r.note, /Diagnostic|不是 IELTS Band/);
+    assert.ok(!/"band"\s*:/.test(JSON.stringify(r)), "diagnostic report must not contain band fields");
   }
-  // The heuristic cannot cite rubric ids — the report must not pretend it can.
-  assert.deepEqual(lo.FC.descriptorRefs, []);
 });
 
 test("11b. rubric itself is ordered and non-degenerate per criterion", () => {
@@ -290,4 +309,118 @@ test("11b. rubric itself is ordered and non-degenerate per criterion", () => {
   assert.equal(CRITERIA.length, 4);
   assert.deepEqual(CRITERIA.map((c) => c.key).sort(), ["FC", "GRA", "LR", "P"]);
   assert.ok(descriptorBrief().includes("[P] Pronunciation"));
+});
+
+// ---------------------------------------------------------- 12. structured evidence
+const wt = (word: string, start: number, end: number): WordTiming => ({ word, start, end });
+const indexed = (index: number, id: string, text: string, opts?: { durationMs?: number; words?: WordTiming[] }): AnswerInput & { index: number } => ({
+  answerId: id, part: 2, prompt: "Q", text, durationMs: opts?.durationMs ?? 4000, index, words: opts?.words ?? null,
+});
+
+test("12a. evidence: transcript quotes verified; unknown answers and unverifiable audio dropped", () => {
+  const list = [indexed(1, "a1", "I play badminton every weekend with my colleagues.")];
+  const out = modelOutput({
+    dimensions: {
+      FC: {
+        band: 6, rationale: "Keeps going.", descriptorRefs: ["FC-B6-01"],
+        confidence: 0.8, strengths: ["linking is natural"], weaknesses: ["some false starts"],
+        evidence: [
+          { answer: 1, evidenceType: "transcript", quote: "badminton every weekend", explanation: "sustained topic" },
+          { answer: 9, evidenceType: "transcript", quote: "badminton every weekend", explanation: "unknown answer" },
+          { answer: 1, evidenceType: "transcript", quote: "I never said this", explanation: "fabricated quote" },
+          { answer: 1, evidenceType: "audio", startMs: 500, endMs: 900, explanation: "no word timings on this answer" },
+          { answer: 1, evidenceType: "metric", explanation: "aggregate wpm reference" },
+        ],
+      },
+      LR: { band: 6, rationale: "Adequate.", descriptorRefs: ["LR-B6-01"], evidence: [] },
+      GRA: { band: 6, rationale: "Mixed.", descriptorRefs: ["GRA-B6-01"], evidence: [] },
+    },
+    findings: [],
+  });
+  const { score, droppedEvidence } = validateLanguageScore(out, list);
+  const ev = score.dimensions.FC.evidence ?? [];
+  assert.equal(ev.length, 2, "transcript + metric survive, others dropped");
+  assert.equal(droppedEvidence, 3);
+  assert.equal(score.dimensions.FC.confidence, 0.8);
+  assert.deepEqual(score.dimensions.FC.strengths, ["linking is natural"]);
+  assert.deepEqual(score.dimensions.FC.weaknesses, ["some false starts"]);
+});
+
+test("12b. audio evidence needs REAL word timings and in-range bounds", () => {
+  const list = [
+    indexed(1, "a1", "One two three four five.", { durationMs: 4000, words: [wt("one", 0.5, 0.8), wt("two", 1.0, 1.3)] }),
+    indexed(2, "a2", "No timings here.", { durationMs: 4000 }),
+  ];
+  const mk = (evidence: Record<string, unknown>[]) => modelOutput({
+    dimensions: {
+      FC: { band: 6, rationale: "r", descriptorRefs: ["FC-B6-01"], evidence },
+      LR: { band: 6, rationale: "r", descriptorRefs: ["LR-B6-01"] },
+      GRA: { band: 6, rationale: "r", descriptorRefs: ["GRA-B6-01"] },
+    },
+    findings: [],
+  });
+  const out = validateLanguageScore(mk([
+    { answer: 1, evidenceType: "audio", startMs: 1000, endMs: 2500, explanation: "located pause" },
+    { answer: 1, evidenceType: "audio", startMs: 6500, endMs: 7000, explanation: "beyond recording" },
+    { answer: 1, evidenceType: "audio", startMs: 2000, endMs: 1500, explanation: "inverted bounds" },
+    { answer: 2, evidenceType: "audio", startMs: 500, endMs: 900, explanation: "answer without word timings" },
+  ]), list);
+  assert.equal((out.score.dimensions.FC.evidence ?? []).length, 1, "only the word-timed, in-range clip survives");
+  assert.equal(out.droppedEvidence, 3);
+});
+
+test("12c. P is judgeable only from provider evidence, with P-rubric refs", () => {
+  const list = [indexed(1, "a1", "Some answer text.")];
+  const pDims = {
+    FC: { band: 6, rationale: "r", descriptorRefs: ["FC-B6-01"] },
+    LR: { band: 6, rationale: "r", descriptorRefs: ["LR-B6-01"] },
+    GRA: { band: 6, rationale: "r", descriptorRefs: ["GRA-B6-01"] },
+    P: { band: 6, rationale: "clarity reduced by mispronunciations", descriptorRefs: ["P-B6-01"] },
+  };
+  const withP = validateLanguageScore(modelOutput({ dimensions: pDims }), list, { allowPronunciation: true });
+  assert.equal(withP.score.pronunciation?.band, 6, "P accepted when provider evidence exists");
+  const withoutProvider = validateLanguageScore(modelOutput({ dimensions: pDims }), list);
+  assert.equal(withoutProvider.score.pronunciation ?? null, null, "P never inferred without provider evidence");
+  const badRefs = validateLanguageScore(
+    modelOutput({ dimensions: { ...pDims, P: { band: 6, rationale: "r", descriptorRefs: ["FC-B6-01"] } } }),
+    list, { allowPronunciation: true },
+  );
+  assert.equal(badRefs.score.pronunciation ?? null, null, "cross-dimension refs void the P judgement");
+  const pFinding = modelOutput({
+    dimensions: pDims,
+    findings: [{ dimension: "P", answer: 1, kind: "error", category: "stress", quote: "Some answer text.", suggestion: null, explanation: "word stress", possibleAsrError: false, descriptorRefs: ["P-B6-01"] }],
+  });
+  assert.equal(validateLanguageScore(pFinding, list, { allowPronunciation: true }).score.findings.length, 1);
+  assert.equal(validateLanguageScore(pFinding, list).score.findings.length, 0, "P findings dropped without provider evidence");
+});
+
+test("12d. confidence outside 0–1 and empty strings are sanitized", () => {
+  const list = [indexed(1, "a1", "text.")];
+  const out = validateLanguageScore(modelOutput({
+    dimensions: {
+      FC: { band: 6, rationale: "r", descriptorRefs: ["FC-B6-01"], confidence: 4.2, strengths: ["", "  ", "real strength"], weaknesses: [] },
+      LR: { band: 6, rationale: "r", descriptorRefs: ["LR-B6-01"] },
+      GRA: { band: 6, rationale: "r", descriptorRefs: ["GRA-B6-01"] },
+    },
+    limitations: ["", "no word timings for answer #2", "no word timings for answer #2"],
+  }), list);
+  assert.equal(out.score.dimensions.FC.confidence, null, "out-of-range confidence is not a number");
+  assert.deepEqual(out.score.dimensions.FC.strengths, ["real strength"]);
+  assert.deepEqual(out.score.limitations, ["no word timings for answer #2"], "limitations deduped and capped");
+});
+
+test("12e. prompt: P required only with pronunciation evidence; part rules always present", () => {
+  const noPron = buildScoringMessages(answers);
+  assert.match(noPron.system, /omit the P dimension/);
+  assert.doesNotMatch(noPron.system, /PRONUNCIATION EVIDENCE/);
+  assert.match(noPron.system, /Part 2/);
+  assert.match(noPron.system, /Part 3/);
+  const withPron = buildScoringMessages(answers, null, {
+    providerId: "azure-pronunciation-assessment",
+    perAnswer: [{ answer: 1, accuracy: 78, fluency: 80, prosody: 70, completeness: 90, overall: 76, worstWords: [{ word: "schedule", accuracy: 42, errorType: "Mispronunciation" }] }],
+  });
+  assert.match(withPron.system, /PRONUNCIATION EVIDENCE/);
+  assert.match(withPron.system, /"P":Criterion/);
+  assert.match(withPron.user, /azure-pronunciation-assessment/);
+  assert.match(withPron.user, /schedule=42/);
 });

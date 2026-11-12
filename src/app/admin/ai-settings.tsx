@@ -11,32 +11,42 @@ interface Prov {
   model?: string;
   voice?: string;
   region?: string;
+  /** Numeric sampling fields (LLM only); the draft carries them as strings. */
+  temperature?: number;
+  maxTokens?: number;
   hasKey: boolean;
   keyHint: string | null;
 }
+
+type NumericField = "temperature" | "maxTokens";
 interface Cfg {
   llm: Prov; tts: Prov; asr: Prov; pronunciation: Prov;
   path: string; fileExists: boolean; updatedAt: string | null; warnings: string[];
 }
 
-interface Draft extends Prov {
+interface Draft extends Omit<Prov, NumericField> {
   apiKey: string;
   clearKey: boolean;
+  /** Text inputs carry the numeric sampling fields as strings. */
+  temperature: string;
+  maxTokens: string;
 }
 type Drafts = Record<ProviderKey, Draft>;
 
-const PROVIDERS: Record<ProviderKey, { label: string; hint: string; options: { id: string; label: string }[]; fields: ("baseUrl" | "model" | "voice" | "region")[] }> = {
+const PROVIDERS: Record<ProviderKey, { label: string; hint: string; options: { id: string; label: string }[]; fields: ("baseUrl" | "model" | "voice" | "region" | "temperature" | "maxTokens")[] }> = {
   llm: {
-    label: "语言评分 LLM（FC / LR / GRA）",
-    hint: "关闭后考试仍可完成，但报告会是「未评分」，绝不伪造分数。",
+    label: "语言评分 LLM（FC / LR / GRA，发音维度需音频证据）",
+    hint: "关闭后考试仍可完成，但报告会是「未评分」，绝不伪造分数。所有 Provider 使用同一套评分标准与校验。",
     options: [
       { id: "auto", label: "自动（按环境变量）" },
-      { id: "deepseek", label: "DeepSeek（默认评分模型）" },
-      { id: "openai", label: "OpenAI 兼容 / Qwen / 本地 vLLM" },
+      { id: "deepseek", label: "DeepSeek" },
+      { id: "qwen", label: "Qwen / 通义千问（DashScope）" },
+      { id: "gemini", label: "Gemini（OpenAI 兼容端点）" },
+      { id: "openai", label: "OpenAI 兼容 / 本地 vLLM" },
       { id: "anthropic", label: "Anthropic" },
       { id: "none", label: "关闭（不评分）" },
     ],
-    fields: ["baseUrl", "model"],
+    fields: ["baseUrl", "model", "temperature", "maxTokens"],
   },
   tts: {
     label: "考官语音 TTS",
@@ -78,6 +88,8 @@ function toDrafts(c: Cfg): Drafts {
   const one = (p: Prov): Draft => ({
     enabled: p.enabled, provider: p.provider,
     baseUrl: p.baseUrl ?? "", model: p.model ?? "", voice: p.voice ?? "", region: p.region ?? "",
+    temperature: p.temperature !== undefined ? String(p.temperature) : "",
+    maxTokens: p.maxTokens !== undefined ? String(p.maxTokens) : "",
     hasKey: p.hasKey, keyHint: p.keyHint, apiKey: "", clearKey: false,
   });
   return { llm: one(c.llm), tts: one(c.tts), asr: one(c.asr), pronunciation: one(c.pronunciation) };
@@ -125,10 +137,14 @@ export function AiSettings() {
       const patch: Record<string, unknown> = {};
       for (const k of KEYS) {
         const d = draft[k];
+        const temp = Number(d.temperature);
+        const tokens = Number(d.maxTokens);
         patch[k] = {
           enabled: d.enabled,
           provider: d.provider,
           baseUrl: d.baseUrl, model: d.model, voice: d.voice, region: d.region,
+          ...(k === "llm" && d.temperature.trim() && Number.isFinite(temp) ? { temperature: temp } : {}),
+          ...(k === "llm" && d.maxTokens.trim() && Number.isFinite(tokens) ? { maxTokens: tokens } : {}),
           ...(d.apiKey.trim() ? { apiKey: d.apiKey.trim() } : {}),
           ...(d.clearKey ? { clearKey: true } : {}),
         };
@@ -194,11 +210,11 @@ export function AiSettings() {
               <div className="mt-2 grid grid-cols-2 gap-2">
                 {meta.fields.map((f) => (
                   <label key={f} className="block text-xs text-zinc-500">
-                    {f === "baseUrl" ? "Base URL" : f === "model" ? "Model" : f === "voice" ? "Voice" : "Region"}
+                    {f === "baseUrl" ? "Base URL" : f === "model" ? "Model" : f === "voice" ? "Voice" : f === "temperature" ? "Temperature (0–2)" : f === "maxTokens" ? "Max tokens" : "Region"}
                     <input
                       value={d[f] as string}
                       onChange={(e) => set(k, { [f]: e.target.value } as Partial<Draft>)}
-                      placeholder={f === "baseUrl" ? "https://api.openai.com/v1" : f === "model" ? "gpt-4o-mini" : f === "voice" ? "en-GB-SoniaNeural" : "eastus"}
+                      placeholder={f === "baseUrl" ? "https://api.openai.com/v1" : f === "model" ? "gpt-4o-mini" : f === "voice" ? "en-GB-SoniaNeural" : f === "temperature" ? "0.2" : f === "maxTokens" ? "2500" : "eastus"}
                       className="mt-1 w-full rounded-lg border border-zinc-200 px-2 py-1.5 text-sm"
                     />
                   </label>

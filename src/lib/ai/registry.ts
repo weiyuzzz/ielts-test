@@ -9,9 +9,10 @@
  */
 import type { ASRProvider, LLMProvider, TTSProvider, PronunciationProvider } from "./types";
 import { ProviderError } from "./types";
-import { openAIASR, openAILLM, deepseekLLM, anthropicLLM, openAITTS, azureTTS, azurePronunciation } from "./providers";
+import { openAIASR, openAILLM, deepseekLLM, qwenLLM, geminiLLM, anthropicLLM, openAITTS, azureTTS, azurePronunciation } from "./providers";
 import { SPEECH_ACT_LIST } from "@/lib/speaking/speech-act";
 import { readAiConfig, envOverridesFor, withEnvOverrides, type ProviderKey } from "@/lib/server/ai-config";
+
 import { DEFAULT_PROFILE_ID, VOICE_PRESETS, resolveVoiceProfile, type VoiceProviderId } from "@/lib/speaking/voice-profile";
 
 const hasOpenAI = () => !!(process.env.OPENAI_API_KEY || process.env.LLM_API_KEY || process.env.ASR_API_KEY);
@@ -53,12 +54,39 @@ export function getASR(): ASRProvider | null {
 
 export function getLLM(): LLMProvider | null {
   return withCfg("llm", () => {
-    const p = process.env.LLM_PROVIDER || (hasOpenAI() ? "openai" : process.env.ANTHROPIC_API_KEY ? "anthropic" : process.env.DEEPSEEK_API_KEY ? "deepseek" : "none");
+    const p = process.env.LLM_PROVIDER || (hasOpenAI() ? "openai" : process.env.ANTHROPIC_API_KEY ? "anthropic" : process.env.DEEPSEEK_API_KEY ? "deepseek" : process.env.DASHSCOPE_API_KEY ? "qwen" : process.env.GEMINI_API_KEY ? "gemini" : "none");
     if (p === "openai") return openAILLM();
     if (p === "deepseek") return deepseekLLM();
+    if (p === "qwen") return qwenLLM();
+    if (p === "gemini") return geminiLLM();
     if (p === "anthropic") return anthropicLLM();
     return null;
   });
+}
+
+/**
+ * Fallback scoring LLM, used ONLY when the primary provider fails. Configured
+ * via LLM_FALLBACK_PROVIDER (+ optional LLM_FALLBACK_MODEL / LLM_FALLBACK_API_KEY /
+ * LLM_FALLBACK_BASE_URL). Same rubric, same validator; every degradation is
+ * recorded on the assessment — never a silent switch.
+ */
+export function getLLMFallback(): LLMProvider | null {
+  const p = process.env.LLM_FALLBACK_PROVIDER;
+  if (!p || p === "none") return null;
+  const overrides: Record<string, string | undefined> = {
+    LLM_PROVIDER: p,
+    LLM_MODEL: process.env.LLM_FALLBACK_MODEL || process.env.LLM_MODEL,
+    LLM_BASE_URL: process.env.LLM_FALLBACK_BASE_URL || process.env.LLM_BASE_URL,
+  };
+  if (p === "anthropic") {
+    overrides.ANTHROPIC_API_KEY = process.env.LLM_FALLBACK_API_KEY || process.env.ANTHROPIC_API_KEY;
+  } else {
+    overrides.LLM_API_KEY = process.env.LLM_FALLBACK_API_KEY || process.env.LLM_API_KEY;
+    if (p === "deepseek") overrides.DEEPSEEK_API_KEY = process.env.LLM_FALLBACK_API_KEY || process.env.DEEPSEEK_API_KEY;
+    if (p === "qwen") overrides.DASHSCOPE_API_KEY = process.env.LLM_FALLBACK_API_KEY || process.env.DASHSCOPE_API_KEY;
+    if (p === "gemini") overrides.GEMINI_API_KEY = process.env.LLM_FALLBACK_API_KEY || process.env.GEMINI_API_KEY;
+  }
+  return withEnvOverrides(overrides, () => getLLM());
 }
 
 export function getTTS(): TTSProvider {

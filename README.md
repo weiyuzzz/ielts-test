@@ -116,22 +116,23 @@ Part 1 超时不会再问你 Part 1 的题，Part 3 超时直接收尾并进入�
 
 评分依据来自文档的「考试评分标准」：9 个等级，**四项独立分数各占 25%**——流利度与连贯性（FC）、词汇资源（LR）、语法范围与准确性（GRA）、发音（P）。`src/lib/speaking/band-descriptors.ts` 是唯一配置源，列出每项的关键指标（FC 的语速/连续性/连贯性、LR 的恰当性/搭配/paraphrase、GRA 的 range 与 accuracy 拆分、P 的 chunking/节奏/语调/可懂度）以及各 Part 的期望，并注入 AI 评分 prompt。明确规定：**Part 1 短答案是正确策略，不得因长度扣分；发音不是口音，任何口音都不扣分**。
 
-- **没有接入 AI 评分时不评分**：未配置 `LLM_PROVIDER` / `DEEPSEEK_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` 时，考试流程照常完成，评估状态为 `unscored`，不生成任何分数、不用启发式估算分数；报告页仍可逐题回放录音与查看转写。
-- 接入 AI 后才会评分；AI 调用失败时状态为 `failed`，同样不回退到启发式分数。
+- **没有接入 AI 评分时不评分**：未配置任何 LLM Provider（`LLM_PROVIDER` / `DEEPSEEK_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `DASHSCOPE_API_KEY` / `GEMINI_API_KEY`）时，考试流程照常完成，评估状态为 `unscored`，不生成任何分数；确定性统计一律标注为**学习诊断（Diagnostic Metrics）**，绝不冒充 Band。报告页仍可逐题回放录音与查看转写。
+- 接入 AI 后才会评分；主 Provider 失败可降级到 `LLM_FALLBACK_PROVIDER`（同一套 rubric 与校验，切换记录在报告 notes），全部失败则 `failed`——任何情况都不会回退到启发式分数。
 - 四项缺任一项（通常是未配置音频发音评测）时 `overallBand = null`，报告显示「未出总分」，四个维度卡片仍分别展示已评估项。
-- 详细反馈按四个 criterion 分组，每条标注对应的关键指标（category）。
-- 评分 prompt 版本 `speaking-language-v4.0-audio-evidence`，报告记录所用版本与 provider，便于重跑对比。
+- **多 Provider 同一标准**：DeepSeek / Qwen / Gemini / OpenAI 兼容 / Anthropic 走同一套结构化 Rubric、相同的 prompt 版本（`speaking-language-v5.0-multimodal-evidence`）与输出校验；`/admin` 面板或环境变量可切换 Provider / Model / Base URL / Temperature / Max Tokens。
+- 详细反馈按四个 criterion 分组，每条标注对应的关键指标（category）、证据类型，以及（存在词级时间戳时）可回放的音频证据片段。
 
 ## 多维口语评估（声学证据）
 
-评分不再只看转写文本。每场考试的完整录音（16 kHz WAV）、ASR 词级时间戳与**能量 VAD**共同产出一套诚实的声学证据，注入 DeepSeek 评分 prompt 作为 FC 的判断依据：
+评分不再只看转写文本。每场考试的完整录音（16 kHz WAV）、ASR 词级时间戳与**能量 VAD**共同产出一套诚实的声学证据，注入评分 prompt 作为 FC 的判断依据：
 
 - **数据流**：录音/词时间戳 → `src/lib/speaking/audio-signal.ts`（纯 TS 解码 + 能量 VAD + 自相关音高，零依赖）→ `src/lib/speaking/audio-analysis.ts`（停顿/语速/MLR/填充词/重复/自我修正/韵律 + coverage + warnings）→ 评分 prompt 的 `ACOUSTIC EVIDENCE` 块 → 模型结合 IELTS 判据给分。
 - **三种输入严格区分**：原始音频、带时间戳的转写、派生声学指标，绝不混成一个不透明字符串。
 - **诚实原则**：特征缺失标 `null` + warning + coverage 徽标（transcript / word timings / VAD / prosody），不伪造数字；停顿阈值可经 `AUDIO_MIN_PAUSE_MS` 等环境变量调整；"I mean" 仅在真实停顿后才计为修复标记，"like/kind of" 永不计入填充词；音高/能量只是描述性证据，**不得**换算成 Pronunciation 分。
 - **声学指标不直接决定 Band**：prompt 明确要求模型把指标当证据而非公式，缺失特征不得臆测或惩罚。
-- **持久化**：逐答案分析存 `audio_analyses` 表，整场汇总存 `assessments.audio_analysis`（JSONB），报告页新增「声学证据」卡片（含分 Part 表）；旧评分记录无该字段时显示为「未分析」，完全向后兼容。迁移：`npx drizzle-kit push` 或 `drizzle/0002_audio_analysis.sql`。
-- **评分 LLM**：`LLM_PROVIDER=deepseek`（或 `/admin` 面板选 DeepSeek），`DEEPSEEK_API_KEY` / `LLM_API_KEY` 均可，`LLM_BASE_URL` / `LLM_MODEL` 仍可覆盖。
+- **持久化**：逐答案分析存 `audio_analyses` 表，整场汇总存 `assessments.audio_analysis`（JSONB），报告页新增「声学证据」卡片（含分 Part 表）；旧评分记录无该字段时显示为「未分析」，完全向后兼容。迁移：`npx drizzle-kit push`（含 `drizzle/0002_audio_analysis.sql` 与 `0003_scoring_evidence.sql`）。
+- **发音维度（P）**：Azure Pronunciation Assessment 的原始数值（accuracy/fluency/prosody/逐词分）作为 `PRONUNCIATION EVIDENCE` 注入 prompt，由模型对照 [P] rubric 判分——**provider 数值不是 Band，不做 0–100→band 映射**；无 Provider 时 P=not_assessed，绝不用转写推断或用其余三项平均补齐。
+- **评分 LLM（多 Provider 同一标准）**：`LLM_PROVIDER=deepseek | qwen | gemini | openai | anthropic`（或 `/admin` 面板选择），均可配 Model / Base URL / Temperature / Max Tokens；`LLM_FALLBACK_PROVIDER` 可配备用评分模型（同一 rubric，切换必记录）。
 - **出站端点守卫**：所有 OpenAI 兼容 Provider 的 Base URL 在请求前经 `src/lib/ai/url-guard.ts` 校验（仅 http/https、拒绝内网/环回/云元数据地址、DNS 解析复核）；自建 vLLM/Kokoro 部署可显式 `ALLOW_LOCAL_AI_ENDPOINTS=1` 放行。
 
 ## 考官语音（TTS）

@@ -64,6 +64,7 @@ export function openAILLM(): LLMProvider {
     model,
     async complete(messages: ChatMessage[], opts) {
       if (!key) throw new ProviderError("openai-llm", "config", "missing API key");
+      const s = llmSampling(opts);
       const res = await check(
         await fetch(await assertSafeEndpoint(base, "/chat/completions"), {
           method: "POST",
@@ -71,8 +72,8 @@ export function openAILLM(): LLMProvider {
           body: JSON.stringify({
             model,
             messages,
-            temperature: opts?.temperature ?? 0.2,
-            max_tokens: opts?.maxTokens ?? 2500,
+            temperature: s.temperature,
+            max_tokens: s.max_tokens,
             ...(opts?.json ? { response_format: { type: "json_object" } } : {}),
           }),
           signal: opts?.signal,
@@ -87,9 +88,18 @@ export function openAILLM(): LLMProvider {
   };
 }
 
+/** Sampling defaults shared by all LLM providers: per-call opts win, then env, then fixed default. */
+function llmSampling(opts?: { temperature?: number; maxTokens?: number }): { temperature: number; max_tokens: number } {
+  const envTemp = Number(process.env.LLM_TEMPERATURE);
+  const envTokens = Number(process.env.LLM_MAX_TOKENS);
+  return {
+    temperature: opts?.temperature ?? (Number.isFinite(envTemp) ? Math.min(2, Math.max(0, envTemp)) : 0.2),
+    max_tokens: opts?.maxTokens ?? (Number.isFinite(envTokens) && envTokens >= 64 ? Math.floor(envTokens) : 2500),
+  };
+}
+
 /**
- * DeepSeek — the designated scoring LLM for FC/LR/GRA. Same OpenAI-compatible
- * wire format as openAILLM; DEEPSEEK_API_KEY or LLM_API_KEY both work, and
+ * DeepSeek — OpenAI-compatible; DEEPSEEK_API_KEY or LLM_API_KEY both work, and
  * LLM_BASE_URL / LLM_MODEL still override the defaults.
  */
 export function deepseekLLM(): LLMProvider {
@@ -101,6 +111,7 @@ export function deepseekLLM(): LLMProvider {
     model,
     async complete(messages: ChatMessage[], opts) {
       if (!key) throw new ProviderError("deepseek", "config", "missing API key (DEEPSEEK_API_KEY or LLM_API_KEY)");
+      const s = llmSampling(opts);
       const res = await check(
         await fetch(await assertSafeEndpoint(base, "/chat/completions"), {
           method: "POST",
@@ -108,8 +119,8 @@ export function deepseekLLM(): LLMProvider {
           body: JSON.stringify({
             model,
             messages,
-            temperature: opts?.temperature ?? 0.2,
-            max_tokens: opts?.maxTokens ?? 2500,
+            temperature: s.temperature,
+            max_tokens: s.max_tokens,
             ...(opts?.json ? { response_format: { type: "json_object" } } : {}),
           }),
           signal: opts?.signal,
@@ -124,6 +135,81 @@ export function deepseekLLM(): LLMProvider {
   };
 }
 
+/**
+ * Qwen (DashScope compatible mode) — OpenAI-compatible endpoint.
+ * DASHSCOPE_API_KEY / QWEN_API_KEY / LLM_API_KEY all work.
+ */
+export function qwenLLM(): LLMProvider {
+  const base = (process.env.LLM_BASE_URL || "https://dashscope.aliyuncs.com/compatible-mode/v1").replace(/\/$/, "");
+  const key = process.env.DASHSCOPE_API_KEY || process.env.QWEN_API_KEY || process.env.LLM_API_KEY || "";
+  const model = process.env.LLM_MODEL || "qwen-plus";
+  return {
+    id: "qwen",
+    model,
+    async complete(messages: ChatMessage[], opts) {
+      if (!key) throw new ProviderError("qwen", "config", "missing API key (DASHSCOPE_API_KEY or LLM_API_KEY)");
+      const s = llmSampling(opts);
+      const res = await check(
+        await fetch(await assertSafeEndpoint(base, "/chat/completions"), {
+          method: "POST",
+          headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model,
+            messages,
+            temperature: s.temperature,
+            max_tokens: s.max_tokens,
+            ...(opts?.json ? { response_format: { type: "json_object" } } : {}),
+          }),
+          signal: opts?.signal,
+        }),
+        "qwen",
+      );
+      const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+      const c = j.choices?.[0]?.message?.content;
+      if (typeof c !== "string") throw new ProviderError("qwen", "invalid_response", "no content");
+      return c;
+    },
+  };
+}
+
+/**
+ * Gemini via its OpenAI-compatible endpoint. GEMINI_API_KEY / GOOGLE_API_KEY /
+ * LLM_API_KEY all work. Only protocol-level compatibility is assumed: JSON-mode
+ * responses go through the same strict validator as every other provider.
+ */
+export function geminiLLM(): LLMProvider {
+  const base = (process.env.LLM_BASE_URL || "https://generativelanguage.googleapis.com/v1beta/openai").replace(/\/$/, "");
+  const key = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.LLM_API_KEY || "";
+  const model = process.env.LLM_MODEL || "gemini-2.0-flash";
+  return {
+    id: "gemini",
+    model,
+    async complete(messages: ChatMessage[], opts) {
+      if (!key) throw new ProviderError("gemini", "config", "missing API key (GEMINI_API_KEY or LLM_API_KEY)");
+      const s = llmSampling(opts);
+      const res = await check(
+        await fetch(await assertSafeEndpoint(base, "/chat/completions"), {
+          method: "POST",
+          headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model,
+            messages,
+            temperature: s.temperature,
+            max_tokens: s.max_tokens,
+            ...(opts?.json ? { response_format: { type: "json_object" } } : {}),
+          }),
+          signal: opts?.signal,
+        }),
+        "gemini",
+      );
+      const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+      const c = j.choices?.[0]?.message?.content;
+      if (typeof c !== "string") throw new ProviderError("gemini", "invalid_response", "no content");
+      return c;
+    },
+  };
+}
+
 export function anthropicLLM(): LLMProvider {
   const key = process.env.ANTHROPIC_API_KEY || "";
   const model = process.env.LLM_MODEL || "claude-3-5-haiku-latest";
@@ -133,6 +219,7 @@ export function anthropicLLM(): LLMProvider {
     async complete(messages, opts) {
       if (!key) throw new ProviderError("anthropic", "config", "missing API key");
       const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n");
+      const s = llmSampling(opts);
       const res = await check(
         await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
@@ -140,8 +227,8 @@ export function anthropicLLM(): LLMProvider {
           body: JSON.stringify({
             model,
             system,
-            max_tokens: opts?.maxTokens ?? 2500,
-            temperature: opts?.temperature ?? 0.2,
+            max_tokens: s.max_tokens,
+            temperature: s.temperature,
             messages: messages.filter((m) => m.role !== "system").map((m) => ({ role: m.role, content: m.content })),
           }),
           signal: opts?.signal,

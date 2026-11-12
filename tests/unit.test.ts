@@ -4,7 +4,7 @@ import { resolveConfig } from "../src/lib/speaking/config";
 import { canSubmitAnswer, decideAdvance, canRepeat, canFinish, type MachineState, type MachineStep } from "../src/lib/speaking/exam-machine";
 import { overallBand, toHalfBand, score100ToBand } from "../src/lib/speaking/bands";
 import { aggregate, analyzeAnswer, type AnswerInput } from "../src/lib/speaking/metrics";
-import { heuristicScore, validateLanguageScore, extractJson, ScoringValidationError, grammarRuleFindings } from "../src/lib/speaking/scoring";
+import { buildDiagnosticReport, validateLanguageScore, extractJson, ScoringValidationError, grammarRuleFindings } from "../src/lib/speaking/scoring";
 import { sanitizeFollowUp } from "../src/lib/speaking/examiner";
 import { withTimeout, ProviderError } from "../src/lib/ai/types";
 import { pickMimeType, encodeWav, resample } from "../src/lib/audio/wav";
@@ -94,6 +94,7 @@ test("config: practice modes enable only one part and allow re-record", () => {
 test("bands: IELTS overall rounding", () => {
   assert.equal(overallBand([6, 6, 6, 6.5]), 6); // 6.125
   assert.equal(overallBand([6, 6.5, 6.5, 6]), 6.5); // 6.25 → 6.5
+  assert.equal(overallBand([6, 6.5, 6.5, 7.5]), 6.5); // 6.625 → 6.5
   assert.equal(overallBand([6.5, 6.5, 7, 7]), 7); // 6.75 → 7
   assert.equal(overallBand([7, 7, 7]), 7);
   assert.equal(overallBand([null, undefined]), null);
@@ -122,16 +123,17 @@ const HIGH = [
   ans("h4", "Mornings have always been my most productive period. Even though I'm not naturally an early riser, I've trained myself to wake up before six, which gives me an uninterrupted hour to plan my priorities before the inevitable flood of emails begins.", 20),
 ];
 
-test("evaluation set: heuristic bands are monotonic with answer quality", () => {
-  const score = (set: AnswerInput[]) => heuristicScore(set, aggregate(set)).dimensions;
-  const lo = score(LOW), mi = score(MID), hi = score(HIGH);
-  console.log("  heuristic bands  LOW", lo.FC.band, lo.LR.band, lo.GRA.band, "| MID", mi.FC.band, mi.LR.band, mi.GRA.band, "| HIGH", hi.FC.band, hi.LR.band, hi.GRA.band);
-  for (const d of ["FC", "LR", "GRA"] as const) {
-    assert.ok(lo[d].band < mi[d].band, `${d}: low < mid`);
-    assert.ok(mi[d].band <= hi[d].band, `${d}: mid <= high`);
-    assert.ok(lo[d].band >= 2 && hi[d].band <= 9);
-  }
-  assert.ok(lo.FC.band <= 5, "clearly weak answers must not get a high band");
+test("evaluation set: diagnostics separate quality levels WITHOUT producing bands", () => {
+  const diag = (set: AnswerInput[]) => buildDiagnosticReport(set, aggregate(set));
+  const lo = diag(LOW), hi = diag(HIGH);
+  // Diagnostics must never carry a band — not in the report, not in its JSON.
+  assert.equal("dimensions" in lo, false);
+  assert.match(lo.note, /Diagnostic|不是 IELTS Band/);
+  assert.ok(!/"band"\s*:/.test(JSON.stringify(lo)), "diagnostic report must not contain band fields");
+  // Deterministic signals still separate the quality levels.
+  const issues = (r: typeof lo) => r.findings.filter((f) => f.kind !== "strength").length;
+  assert.ok(issues(lo) > issues(hi), `weak answers must trigger more diagnostics (${issues(lo)} vs ${issues(hi)})`);
+  assert.ok(lo.metrics.totalWords < hi.metrics.totalWords);
 });
 
 test("evaluation set: grammar rules catch real errors and do not flag good answers", () => {
@@ -150,8 +152,8 @@ test("metrics: fillers, repetition, wpm", () => {
   assert.ok(m.wpm !== null && m.wpm > 50);
 });
 
-test("heuristic scorer never produces repeated identical findings across answers for unrelated content", () => {
-  const r = heuristicScore(MID, aggregate(MID));
+test("diagnostics never produce repeated identical findings across answers for unrelated content", () => {
+  const r = buildDiagnosticReport(MID, aggregate(MID));
   const keys = r.findings.map((f) => `${f.category}|${f.originalText}`);
   assert.equal(new Set(keys).size, keys.length);
 });

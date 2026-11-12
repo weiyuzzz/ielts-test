@@ -29,8 +29,10 @@ interface BandDescriptor {
   **不会漂移**；导出时按「维度 → 档位升序 → ID」稳定排序，便于 diff 与快照。
 - 每档 1–4 条判据；`P` 的 7 / 5 / 3 档保留官方「桥接式」表述
   （「具备 B6 全部正面特征 + 部分 B8 正面特征」），因为官方就是这么写的。
-- 覆盖度：4 维度 × 10 档，共 **69** 条判据
-  （FC 19 / LR 18 / GRA 17 / P 15），每个维度都完整覆盖 Band 0–9。
+- 覆盖度：4 维度 × 10 档，共 **78** 条判据
+  （FC 22 / LR 21 / GRA 20 / P 15），每个维度都完整覆盖 Band 0–9。
+  rubric-2.0-calibrated 在原有基础上为 FC/LR/GRA 的 3/5/7 过渡档追加了
+  「与相邻档关系」判据（focus: transition），既有 ID 不变、新增 ID 顺延。
   注入 prompt 的 rubric 约 6.9 KB。
 
 ### ID 约定
@@ -107,7 +109,8 @@ DESCRIPTOR_SOURCE = {
   publisher: "British Council / IELTS Partners",
   url: "https://takeielts.britishcouncil.org/take-ielts/ielts-results-scores",
   retrieved: "2026-11-13",
-  revision: "rubric-1.0",
+  revision: "rubric-2.0-calibrated",
+  changeLog: "rubric-2.0-calibrated: appended transitional-band clarifiers (FC/LR/GRA 3/5/7); existing ids unchanged.",
 }
 ```
 

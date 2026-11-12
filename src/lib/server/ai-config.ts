@@ -33,6 +33,10 @@ export interface ProviderConfig {
   apiKey?: string;
   voice?: string;
   region?: string;
+  /** LLM only: sampling temperature 0–2 (overrides LLM_TEMPERATURE). */
+  temperature?: number;
+  /** LLM only: max output tokens 64–8000 (overrides LLM_MAX_TOKENS). */
+  maxTokens?: number;
 }
 
 export interface AiConfig {
@@ -47,6 +51,7 @@ export interface PublicProviderConfig extends Omit<ProviderConfig, "apiKey"> {
   hasKey: boolean;
   keyHint: string | null;
 }
+
 export interface PublicAiConfig {
   llm: PublicProviderConfig;
   asr: PublicProviderConfig;
@@ -66,7 +71,7 @@ const DEFAULTS: AiConfig = {
 };
 
 const PROVIDER_IDS: Record<ProviderKey, string[]> = {
-  llm: ["auto", "openai", "deepseek", "anthropic", "none"],
+  llm: ["auto", "openai", "deepseek", "qwen", "gemini", "anthropic", "none"],
   asr: ["auto", "openai", "browser", "none"],
   tts: ["auto", "openai", "azure", "browser"],
   pronunciation: ["auto", "azure", "none"],
@@ -83,6 +88,10 @@ function sanitizeProvider(key: ProviderKey, raw: unknown): ProviderConfig {
   if (!raw || typeof raw !== "object") return base;
   const r = raw as Record<string, unknown>;
   const str = (v: unknown, max = 300) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : undefined);
+  const num = (v: unknown, lo: number, hi: number) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n >= lo && n <= hi ? n : undefined;
+  };
   const provider = str(r.provider, 40);
   const out: ProviderConfig = {
     enabled: r.enabled !== false,
@@ -98,6 +107,12 @@ function sanitizeProvider(key: ProviderKey, raw: unknown): ProviderConfig {
   if (apiKey) out.apiKey = apiKey;
   if (voice) out.voice = voice;
   if (region) out.region = region;
+  if (key === "llm") {
+    const temperature = num(r.temperature, 0, 2);
+    const maxTokens = num(r.maxTokens, 64, 8000);
+    if (temperature !== undefined) out.temperature = temperature;
+    if (maxTokens !== undefined) out.maxTokens = Math.floor(maxTokens);
+  }
   return out;
 }
 
@@ -181,6 +196,10 @@ function mergeProvider(cur: ProviderConfig, p?: Partial<ProviderConfig> & { clea
       if (v) out[f] = v; else delete out[f];
     }
   }
+  // LLM sampling overrides: valid numbers replace, everything else is ignored
+  // (there is deliberately no "clear" — send the default value instead).
+  if (typeof p.temperature === "number" && p.temperature >= 0 && p.temperature <= 2) out.temperature = p.temperature;
+  if (typeof p.maxTokens === "number" && p.maxTokens >= 64 && p.maxTokens <= 8000) out.maxTokens = Math.floor(p.maxTokens);
   if (p.clearKey) delete out.apiKey;
   else if (typeof p.apiKey === "string" && p.apiKey.trim()) out.apiKey = p.apiKey.trim();
   return out;
@@ -203,6 +222,8 @@ export function publicAiConfig(): PublicAiConfig {
     ...(p.model ? { model: p.model } : {}),
     ...(p.voice ? { voice: p.voice } : {}),
     ...(p.region ? { region: p.region } : {}),
+    ...(p.temperature !== undefined ? { temperature: p.temperature } : {}),
+    ...(p.maxTokens !== undefined ? { maxTokens: p.maxTokens } : {}),
     hasKey: !!p.apiKey,
     keyHint: mask(p.apiKey),
   });
@@ -217,6 +238,10 @@ export function publicAiConfig(): PublicAiConfig {
  * (provider "auto" and enabled → keep the env-driven default).
  */
 export function envOverridesFor(cfg: AiConfig, key: ProviderKey): Record<string, string | undefined> | null {
+  const sampling = (p: ProviderConfig, out: Record<string, string | undefined>) => {
+    if (key === "llm" && p.temperature !== undefined) out.LLM_TEMPERATURE = String(p.temperature);
+    if (key === "llm" && p.maxTokens !== undefined) out.LLM_MAX_TOKENS = String(p.maxTokens);
+  };
   const p = cfg[key];
   if (p.provider === "auto" && p.enabled) {
     // Still allow credentials/model overrides while keeping provider auto-detection.
@@ -224,6 +249,7 @@ export function envOverridesFor(cfg: AiConfig, key: ProviderKey): Record<string,
     if (p.apiKey) extra[KEY_ENV[key].apiKey] = p.apiKey;
     if (p.baseUrl) extra[KEY_ENV[key].baseUrl] = p.baseUrl;
     if (p.model) extra[KEY_ENV[key].model] = p.model;
+    sampling(p, extra);
     if (key === "tts" && p.voice) extra.TTS_VOICE = p.voice;
     if (key === "tts" && p.region) extra.AZURE_SPEECH_REGION = p.region;
     if (key === "pronunciation" && p.region) extra.AZURE_SPEECH_REGION = p.region;
@@ -243,6 +269,7 @@ export function envOverridesFor(cfg: AiConfig, key: ProviderKey): Record<string,
   if (p.apiKey) out[e.apiKey] = p.apiKey;
   if (p.baseUrl) out[e.baseUrl] = p.baseUrl;
   if (p.model) out[e.model] = p.model;
+  sampling(p, out);
   if (key === "tts") {
     if (p.voice) out.TTS_VOICE = p.voice;
     if (p.region) out.AZURE_SPEECH_REGION = p.region;
