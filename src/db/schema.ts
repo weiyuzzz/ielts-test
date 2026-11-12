@@ -66,6 +66,12 @@ export const questions = pgTable(
     examinees: integer("examinees"),
     /** Optional pre-recorded examiner audio; TTS is used when absent. */
     questionAudioUrl: text("question_audio_url"),
+    /**
+     * Which voice recorded `question_audio_url` (VoiceProfile id). A recording
+     * whose voice cannot be identified must not be assumed to match the
+     * examiner, so playback is skipped when this does not match the session.
+     */
+    questionVoiceProfile: text("question_voice_profile"),
     orderIndex: integer("order_index").notNull().default(0),
   },
   (t) => [index("questions_part_topic_idx").on(t.module, t.part, t.topicKey)],

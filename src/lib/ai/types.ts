@@ -3,6 +3,8 @@
  * Concrete vendors are selected in ./registry.ts from environment variables.
  */
 import type { WordTiming } from "@/db/schema";
+import type { ExaminerSpeechAct } from "@/lib/speaking/speech-act";
+import type { VoiceProfile } from "@/lib/speaking/voice-profile";
 
 export interface ProviderInfo {
   id: string;
@@ -34,15 +36,34 @@ export interface TTSStream {
   mimeType: string;
 }
 
+/**
+ * Per-request synthesis options. `profile` / `speechAct` are optional so every
+ * existing caller keeps working; when present, the provider adapts rate, pauses,
+ * emphasis and steering text to the speech act.
+ */
+export interface TTSSynthesisOptions {
+  voice?: string;
+  signal?: AbortSignal;
+  profile?: VoiceProfile;
+  speechAct?: ExaminerSpeechAct;
+}
+
 export interface TTSProvider extends ProviderInfo {
   location: "server" | "browser";
-  synthesize(text: string, opts?: { voice?: string; signal?: AbortSignal }): Promise<{ audio: Buffer; mimeType: string }>;
+  /** Which steering capabilities the underlying engine actually has. */
+  supports?: {
+    ssml: boolean;
+    instructions: boolean;
+    style: boolean;
+    pitch: boolean;
+  };
+  synthesize(text: string, opts?: TTSSynthesisOptions): Promise<{ audio: Buffer; mimeType: string }>;
   /**
    * Optional progressive synthesis. When available the API route pipes the audio
    * straight to the browser, so playback starts at the first spoken sentence
    * instead of waiting for the whole line to be generated.
    */
-  synthesizeStream?(text: string, opts?: { voice?: string; signal?: AbortSignal }): Promise<TTSStream | null>;
+  synthesizeStream?(text: string, opts?: TTSSynthesisOptions): Promise<TTSStream | null>;
 }
 
 export interface PronunciationResult {

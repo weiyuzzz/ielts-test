@@ -55,7 +55,7 @@ stateDiagram-v2
 |---|---|---|
 | ASRProvider | OpenAI 兼容 `/audio/transcriptions`（词级时间戳）；Browser Web Speech | `ASR_PROVIDER` |
 | LLMProvider | OpenAI 兼容 Chat Completions；Anthropic Messages | `LLM_PROVIDER` |
-| TTSProvider | OpenAI 兼容 `/audio/speech`（含本地 Kokoro）、Azure Neural TTS、浏览器 speechSynthesis | `TTS_PROVIDER` / `auto` |
+| TTSProvider | OpenAI 兼容 `/audio/speech`（含本地 Kokoro）、Azure Neural TTS、浏览器 speechSynthesis；由 `VoiceProfile.provider` 选择，能力通过 `supports` 声明 | `TTS_PROVIDER` / `EXAMINER_PROFILE` / 用户设置 |
 | PronunciationProvider | Azure Pronunciation Assessment（非脚本模式，ReferenceText=转写文本） | `PRONUNCIATION_PROVIDER` |
 
 所有调用都经过 `withTimeout()`，超时会真正 abort 请求。业务代码只依赖接口。
@@ -68,8 +68,9 @@ stateDiagram-v2
             └─ 客户端 blob URL + preload 预解码 → 播放时命中即出声
 未预取到（LLM 动态追问）→ GET 流式直接播 → 失败回退 POST 完整缓冲 → 浏览器语音 → 字幕
 ```
-- **自然度**：`toProsodySsml()` / `toAzureSsml()` 插入句间停顿；音色、语速、格式由环境变量控制；Azure 输出 48 kHz 无损 PCM。兼容引擎才发送 `ssml` 字段，OpenAI 官方接口收到的是 `instructions` 语气指令。
-- **延迟**：合成完全移出考试关键路径；`X-TTS-Cache` 响应头区分 `hit` / `miss` / `miss-stream`；流式响应在后台 tee 一份写入缓存，供后续重复请求秒回。
+- **自然度（Phase 2）**：每句台词带一个 `ExaminerSpeechAct`（greeting / introduction / instruction / question / acknowledgement / time_warning / closing），`prepareExaminerSpeech()` 按 act 决定语速、停顿、是否强调，并产出纯文本与可移植 SSML。`VoiceProfile` 描述「谁在说话」，与 provider 解耦；provider 只发送自己文档支持的字（Azure 用精确 `<break time>` + `prosody`，OpenAI 用 `instructions`，Kokoro 用 `<break strength>`）。配置分三层：内置预设/env → 用户偏好 → **考试开始时的 session 快照**，考试中改设置不影响当前场次。详见 `docs/phase2-examiner-voice.md`。
+- **音色一致性**：预置音频必须带 `questionVoiceProfile` 且与本次 profile 相同才播放，否则直接用考官音色合成并提示；请求未配置的 provider 返回明确错误，不静默换声音。
+- **延迟**：合成完全移出考试关键路径；`X-TTS-Cache` 响应头区分 `hit` / `miss` / `miss-stream`；流式响应在后台 tee 一份写入缓存，供后续重复请求秒回。缓存 key 含 provider、model、voice、language、speed、pitch、style、instructions、prosody、speechAct、format 与文本。
 - `/api/config` 只暴露引擎信息，密钥不出服务端。
 
 ## 5. 评分管线（`report-service.ts`）

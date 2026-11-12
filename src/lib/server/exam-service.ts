@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { examSessions, examQuestions, questions, answerRecords, audioAssets, transcripts, assessments, users } from "@/db/schema";
 import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { resolveConfig, EXAMINER_NAMES, type SpeakingExamConfig, type SpeakingMode } from "@/lib/speaking/config";
+import { resolveVoiceProfile, sanitizeProfile, type VoiceProfile } from "@/lib/speaking/voice-profile";
 import { canSubmitAnswer, canRepeat, decideAdvance, canFinish, type MachineState, type MachineError } from "@/lib/speaking/exam-machine";
 import { LINES, templateFollowUp, generateFollowUp } from "@/lib/speaking/examiner";
 import { tokenize } from "@/lib/speaking/metrics";
@@ -159,7 +160,7 @@ export async function createSession(user: User, mode: SpeakingMode) {
   return db.transaction(async (tx) => {
     const [s] = await tx
       .insert(examSessions)
-      .values({ userId: user.id, module: "speaking", mode, examinerName, configSnapshot: { ...config, bankSeason: bank.season, bankRegion: bank.region } as unknown as Record<string, unknown>, totalSteps: steps.length })
+      .values({ userId: user.id, module: "speaking", mode, examinerName, configSnapshot: { ...config, bankSeason: bank.season, bankRegion: bank.region, voiceProfile: resolveVoiceProfile(user.examinerVoice) } as unknown as Record<string, unknown>, totalSteps: steps.length })
       .returning();
     await tx.insert(examQuestions).values(steps.map((st, i) => ({ ...st, sessionId: s.id, stepIndex: i })));
     return s;
@@ -186,24 +187,36 @@ async function machineState(s: typeof examSessions.$inferSelect): Promise<{ stat
   };
 }
 
+/**
+ * The voice frozen when the exam was created. Sessions started before Phase 2
+ * have no snapshot, so they fall back to the deployment default rather than an
+ * arbitrary voice — and never to a different speaker mid-test.
+ */
+function resolveSessionVoice(snapshot: unknown): VoiceProfile {
+  const snap = snapshot as { voiceProfile?: unknown } | null;
+  return sanitizeProfile(snap?.voiceProfile);
+}
+
 export async function getSessionView(user: User, id: string) {
   const s = await loadOwned(user, id);
   const { steps } = await machineState(s);
   const qIds = steps.map((x) => x.questionId).filter((v): v is number => typeof v === "number");
-  const qRows = qIds.length ? await db.select({ id: questions.id, audioUrl: questions.questionAudioUrl }).from(questions).where(inArray(questions.id, qIds)) : [];
-  const audioByQuestion = new Map(qRows.map((q) => [q.id, q.audioUrl]));
+  const qRows = qIds.length ? await db.select({ id: questions.id, audioUrl: questions.questionAudioUrl, voiceProfile: questions.questionVoiceProfile }).from(questions).where(inArray(questions.id, qIds)) : [];
+  const audioByQuestion = new Map(qRows.map((q) => [q.id, { url: q.audioUrl, profile: q.voiceProfile }]));
   const answers = await db.select().from(answerRecords).where(and(eq(answerRecords.sessionId, s.id), eq(answerRecords.isCurrent, true)));
   const ts = answers.length ? await db.select().from(transcripts).where(inArray(transcripts.answerId, answers.map((a) => a.id))).orderBy(desc(transcripts.createdAt)) : [];
   const [assessment] = await db.select({ id: assessments.id, status: assessments.status }).from(assessments).where(eq(assessments.sessionId, s.id)).orderBy(desc(assessments.startedAt)).limit(1);
   return {
-    session: { id: s.id, mode: s.mode, status: s.status, currentStep: s.currentStep, examinerName: s.examinerName, startedAt: s.startedAt, completedAt: s.completedAt, config: s.configSnapshot as unknown as SpeakingExamConfig },
+    session: { id: s.id, mode: s.mode, status: s.status, currentStep: s.currentStep, examinerName: s.examinerName, startedAt: s.startedAt, completedAt: s.completedAt, config: s.configSnapshot as unknown as SpeakingExamConfig, voiceProfile: resolveSessionVoice(s.configSnapshot) },
     steps: steps.map((st) => {
       const a = answers.find((x) => x.examQuestionId === st.id);
       const t = a ? ts.find((x) => x.answerId === a.id) : undefined;
       return {
         id: st.id, stepIndex: st.stepIndex, part: st.part, kind: st.kind, topic: st.topic, examinerLead: st.examinerLead, promptText: st.promptText,
         cuePoints: st.cuePoints ?? [], generator: st.generator, prepSeconds: st.prepSeconds, answerSeconds: st.answerSeconds, status: st.status, repeatCount: st.repeatCount,
-        questionAudioUrl: st.questionId ? audioByQuestion.get(st.questionId) ?? null : null,
+        questionAudioUrl: st.questionId ? audioByQuestion.get(st.questionId)?.url ?? null : null,
+        /** Which voice recorded the preset clip; null means unknown → do not use it. */
+        questionAudioProfile: st.questionId ? audioByQuestion.get(st.questionId)?.profile ?? null : null,
         answer: a ? { id: a.id, attempt: a.attempt, status: a.status, durationMs: a.durationMs, audioAssetId: a.audioAssetId, transcript: t ? { status: t.status, text: t.text, provider: t.provider } : null } : null,
       };
     }),

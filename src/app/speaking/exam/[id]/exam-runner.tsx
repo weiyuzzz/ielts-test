@@ -3,19 +3,25 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { DualRecorder, RecorderError, listInputDevices, requestMicPermission, type Recording } from "@/lib/audio/recorder";
-import { BrowserTranscriber, browserAsrSupported, prefetchTTS, prefetchManyTTS, speak, stopSpeaking, warmupSpeech } from "@/lib/audio/speech";
+import { BrowserTranscriber, browserAsrSupported, prefetchTTS, prefetchManyTTS, speak, stopSpeaking, warmupSpeech, type ScriptLine } from "@/lib/audio/speech";
 import { uploadWithRetry, postJson, UploadError } from "@/lib/audio/upload";
 import { LINES } from "@/lib/speaking/examiner";
+import type { ExaminerSpeechAct } from "@/lib/speaking/speech-act";
 import type { SpeakingExamConfig } from "@/lib/speaking/config";
 
 interface StepView {
   id: string; stepIndex: number; part: number; kind: string; topic: string; examinerLead: string; promptText: string; cuePoints: string[];
   generator: string; prepSeconds: number; answerSeconds: number; status: string; repeatCount: number;
   questionAudioUrl: string | null;
+  questionAudioProfile: string | null;
   answer: { id: string; status: string } | null;
 }
 interface SessionView {
-  session: { id: string; mode: string; status: string; currentStep: number; examinerName: string; config: SpeakingExamConfig };
+  session: {
+    id: string; mode: string; status: string; currentStep: number; examinerName: string; config: SpeakingExamConfig;
+    /** Frozen when the exam was created — the voice must not change mid-test. */
+    voiceProfile?: { id: string; name: string; provider: string; voice: string; speed?: number };
+  };
   steps: StepView[];
 }
 type Phase = "loading" | "setup" | "examiner" | "prep" | "recording" | "review" | "uploading" | "advancing" | "finishing" | "blocked" | "error";
@@ -25,12 +31,43 @@ interface Props { sessionId: string; voice: string; showSubtitlesDefault: boolea
 
 const uid = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
-/** Exact examiner line for a step — one source of truth for speaking AND prefetching. */
-function examinerLine(step: StepView, o: { first: boolean; noResponse: boolean }): string {
-  const ack = o.first ? "" : o.noResponse ? LINES.noResponse : LINES.ack[step.stepIndex % LINES.ack.length];
-  return step.kind === "cue_card"
-    ? [ack, step.examinerLead, "Here is your topic."].filter(Boolean).join(" ")
-    : [ack, step.examinerLead, step.promptText].filter(Boolean).join(" ");
+/**
+ * The examiner's utterance(s) for a step, each with the speech act it should be
+ * delivered as. An acknowledgement stays a separate short utterance so it does
+ * not inherit the melody of the question that follows it.
+ */
+function examinerLine(step: StepView, o: { first: boolean; noResponse: boolean }): ScriptLine[] {
+  const out: ScriptLine[] = [];
+  if (!o.first) {
+    out.push({
+      text: o.noResponse ? LINES.noResponse : LINES.ack[step.stepIndex % LINES.ack.length],
+      act: "acknowledgement",
+    });
+  }
+  if (step.examinerLead) {
+    out.push({ text: step.examinerLead, act: o.first ? "greeting" : "introduction" });
+  }
+  if (step.kind === "cue_card") {
+    out.push({ text: "Here is your topic.", act: "instruction" });
+  } else {
+    out.push({ text: step.promptText, act: "question" });
+  }
+  return out;
+}
+
+/** Joined text for the on-screen subtitle (what the examiner says in one block). */
+const lineText = (lines: ScriptLine[]) => lines.map((l) => l.text).filter(Boolean).join(" ");
+
+/**
+ * A bank-supplied recording may only replace the generated voice when it is
+ * known to be the same voice. An unlabelled clip (or one recorded with another
+ * profile) could be a completely different person, so it is skipped instead of
+ * switching the examiner mid-test.
+ */
+function presetAudioFor(step: StepView, sessionProfileId: string): string | null {
+  if (!step.questionAudioUrl) return null;
+  if (!step.questionAudioProfile || step.questionAudioProfile !== sessionProfileId) return null;
+  return step.questionAudioUrl;
 }
 
 /**
@@ -38,25 +75,35 @@ function examinerLine(step: StepView, o: { first: boolean; noResponse: boolean }
  * is known before the candidate presses "begin", so synthesis can happen during
  * the setup screen instead of blocking the examiner's first question.
  */
-function examLines(v: SessionView): string[] {
-  const out: string[] = [];
-  const add = (s?: string) => { if (s?.trim()) out.push(s); };
+function examLines(v: SessionView): ScriptLine[] {
+  const out: ScriptLine[] = [];
+  const add = (line?: ScriptLine) => { if (line?.text?.trim()) out.push(line); };
+  const addText = (text: string, act: ExaminerSpeechAct) => add({ text, act });
   const answered = v.steps.some((s) => s.status === "answered");
   const current = v.steps.find((s) => s.stepIndex === v.session.currentStep);
   // 1) the first line must be ready before anything else
-  if (current && current.status !== "answered") add(examinerLine(current, { first: !answered, noResponse: false }));
+  if (current && current.status !== "answered") {
+    for (const line of examinerLine(current, { first: !answered, noResponse: false })) add(line);
+  }
   // 2) fixed script lines
-  add(LINES.part2Start);
-  add(LINES.closing);
-  add(`${LINES.noResponse.split(".")[0]}. ${LINES.closing}`);
+  addText(LINES.part2Start, "instruction");
+  addText(LINES.part2TimeUp, "time_warning");
+  addText(LINES.closing, "closing");
+  addText(`${LINES.noResponse.split(".")[0]}. ${LINES.closing}`, "closing");
   // 3) every remaining step, both acknowledgement variants and the repeat form
   for (const step of v.steps) {
     if (step.status === "answered") continue;
-    add(examinerLine(step, { first: false, noResponse: false }));
-    add(examinerLine(step, { first: false, noResponse: true }));
-    if (step.kind !== "cue_card") add(`${LINES.repeatPrefix} ${step.promptText}`);
+    for (const line of examinerLine(step, { first: false, noResponse: false })) add(line);
+    for (const line of examinerLine(step, { first: false, noResponse: true })) add(line);
+    if (step.kind !== "cue_card") addText(`${LINES.repeatPrefix} ${step.promptText}`, "question");
   }
-  return [...new Set(out)];
+  const seen = new Set<string>();
+  return out.filter((l) => {
+    const k = `${l.act}\u0000${l.text}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 }
 
 export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, browserAsr, asrAvailable }: Props) {
@@ -89,6 +136,13 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
   const userAction = useRef<((v: string) => void) | null>(null);
   const prevNoResponse = useRef(false);
   const levelTs = useRef(0);
+  /**
+   * The voice id actually in use. It starts from the saved setting and is
+   * replaced by the session snapshot once loaded: changing the setting during an
+   * exam must not change the examiner's voice, and refreshing the page must not
+   * switch to whatever was saved last.
+   */
+  const voiceRef = useRef(voice);
 
   const load = useCallback(async (): Promise<SessionView> => {
     const res = await fetch(`/api/speaking/sessions/${sessionId}`, { cache: "no-store" });
@@ -107,9 +161,11 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
       load()
         .then((v) => {
           if (cancelled) return;
+          const pid = v.session.voiceProfile?.id ?? voice;
+          voiceRef.current = pid;
           // Synthesise the entire script while the candidate reads the setup screen.
           // By the time they grant microphone access, the first line is already buffered.
-          prefetchManyTTS(examLines(v), voice, serverTts);
+          prefetchManyTTS(examLines(v), pid, serverTts, pid);
           if (v.session.status === "completed") router.replace(`/speaking/report/${sessionId}`);
           else if (v.session.status === "abandoned") { setFatal("This exam was ended early and can no longer be continued."); setPhase("error"); }
           else setPhase("setup");
@@ -190,18 +246,27 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
     });
   }
 
-  async function say(text: string, signal: AbortSignal, audioUrl?: string | null) {
-    if (signal.aborted) return;
-    setSubtitle(text);
+  async function say(lines: ScriptLine[], signal: AbortSignal, audioUrl?: string | null) {
+    const full = lineText(lines);
+    if (signal.aborted || !full.trim()) return;
+    setSubtitle(full);
     setSpeaking(true);
     setPhase("examiner");
+    // A bank-supplied recording replaces the generated voice for this step.
     if (audioUrl && (await playPresetAudio(audioUrl, signal))) {
       setSpeaking(false);
       return;
     }
-    const r = await speak(text, { serverTts, voice, signal });
+    for (const line of lines) {
+      if (signal.aborted) break;
+      if (!line.text.trim()) continue;
+      const r = await speak(line.text, { serverTts, voice: voiceRef.current, act: line.act, profileId: voiceRef.current, signal });
+      if (!r.ok && !signal.aborted) {
+        setNotice("The examiner voice is unavailable in this browser. Read the question on screen instead.");
+        break;
+      }
+    }
     setSpeaking(false);
-    if (!r.ok && !signal.aborted) setNotice("The examiner voice is unavailable in this browser. Read the question on screen instead.");
   }
 
   async function record(step: StepView, signal: AbortSignal, cfg: SpeakingExamConfig): Promise<{ rec: Recording; transcript: string } | null> {
@@ -258,7 +323,7 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
         try {
           await postJson(`/api/speaking/sessions/${sessionId}/repeat`, { examQuestionId: step.id });
           repeats++;
-          await say(`${LINES.repeatPrefix} ${step.promptText}`, signal);
+          await say([{ text: `${LINES.repeatPrefix} ${step.promptText}`, act: "question" }], signal);
         } catch (e) {
           setNotice((e as Error).message);
         }
@@ -331,16 +396,20 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
         if (!step) throw new Error("Exam step not found");
         setCurrent(step);
         if (step.status !== "answered") {
-          const line = examinerLine(step, { first, noResponse: prevNoResponse.current });
+          const lines = examinerLine(step, { first, noResponse: prevNoResponse.current });
           first = false;
+          const preset = presetAudioFor(step, v.session.voiceProfile?.id ?? voiceRef.current);
+          if (step.questionAudioUrl && !preset) {
+            setNotice("This prompt has a pre-recorded clip in a different voice, so it is being read with your examiner's voice.");
+          }
           if (step.kind === "cue_card") {
-            await say(line, signal, step.questionAudioUrl);
+            await say(lines, signal, preset);
             setPhase("prep");
             await countdown(step.prepSeconds, 10, signal);
             if (signal.aborted) return;
-            await say(LINES.part2Start, signal);
+            await say([{ text: LINES.part2Start, act: "instruction" }], signal);
           } else {
-            await say(line, signal, step.questionAudioUrl);
+            await say(lines, signal, preset);
           }
           if (signal.aborted) return;
           // While the user records this answer, synthesise the next question in the
@@ -348,14 +417,14 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
           if (serverTts) {
             const next = v.steps.find((s) => s.stepIndex === step.stepIndex + 1 && s.status !== "answered");
             if (next) {
-              prefetchTTS(examinerLine(next, { first: false, noResponse: false }), voice, true);
-              if (next.kind === "cue_card") prefetchTTS(LINES.part2Start, voice, true);
+              prefetchManyTTS(examinerLine(next, { first: false, noResponse: false }), voiceRef.current, true, voiceRef.current);
+              if (next.kind === "cue_card") prefetchTTS(LINES.part2Start, voiceRef.current, true, { act: "instruction", profileId: voiceRef.current, priority: true });
             }
           }
           const data = await record(step, signal, cfg);
           if (!data) return;
           // The examiner stops the candidate at 2 minutes, as in the real test.
-          if (step.kind === "cue_card" && !signal.aborted) await say(LINES.part2TimeUp, signal);
+          if (step.kind === "cue_card" && !signal.aborted) await say([{ text: LINES.part2TimeUp, act: "time_warning" }], signal);
           if (!(await submit(step, data, signal, cfg))) return;
         }
         setPhase("advancing");
@@ -368,7 +437,7 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
         }
         if (adv.finished) {
           setPhase("finishing");
-          await say(prevNoResponse.current ? `${LINES.noResponse.split(".")[0]}. ${LINES.closing}` : LINES.closing, signal);
+          await say([{ text: prevNoResponse.current ? `${LINES.noResponse.split(".")[0]}. ${LINES.closing}` : LINES.closing, act: "closing" }], signal);
           setPhase("finishing");
           await postJson(`/api/speaking/sessions/${sessionId}/finish`);
           router.replace(`/speaking/report/${sessionId}`);
@@ -377,7 +446,7 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
         v = await load();
         // A Part 3 follow-up can be inserted by the state machine at advance time;
         // queue any lines that were not part of the original plan.
-        if (serverTts) prefetchManyTTS(examLines(v), voice, true);
+        if (serverTts) prefetchManyTTS(examLines(v), voiceRef.current, true, voiceRef.current);
       }
     } catch (e) {
       if (!signal.aborted) { setFatal((e as Error).message); setPhase("error"); }

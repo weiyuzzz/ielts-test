@@ -12,6 +12,7 @@
  * progressive GET stream, so the first sentence is audible instead of blocking on
  * the whole clip. A complete buffered request and the browser voice are last resorts.
  */
+import { speechActStyle, type ExaminerSpeechAct } from "@/lib/speaking/speech-act";
 
 type SR = {
   lang: string;
@@ -176,7 +177,7 @@ function pickVoice(pref: string): SpeechSynthesisVoice | undefined {
 
 // ------------------------------------------------------------------ server TTS clip cache
 interface Clip { url: string; audio: HTMLAudioElement }
-interface PrefetchTask { text: string; voice: string; key: string; resolve: (c: Clip | null) => void }
+interface PrefetchTask { text: string; voice: string; act: ExaminerSpeechAct; profileId?: string; key: string; resolve: (c: Clip | null) => void }
 
 const clipCache = new Map<string, Promise<Clip | null>>();
 const TTS_CACHE_MAX = 60;
@@ -186,10 +187,19 @@ const queue: PrefetchTask[] = [];
 let active = 0;
 let liveAudio: HTMLAudioElement | null = null;
 
-const keyOf = (text: string, voice: string) => `${voice}\u0000${text}`;
-const ttsStreamUrl = (text: string, voice: string) => `/api/tts?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voice)}`;
+/** The speech act and voice profile are part of a clip's identity: the same
+ *  words delivered as a greeting and as a question are different audio. */
+const keyOf = (text: string, voice: string, act: ExaminerSpeechAct, profileId?: string) =>
+  `${profileId ?? voice}\u0000${act}\u0000${text}`;
 
-async function fetchClip(text: string, voice: string): Promise<Clip | null> {
+const ttsStreamUrl = (text: string, voice: string, act: ExaminerSpeechAct, profileId?: string) => {
+  const q = new URLSearchParams({ text, act });
+  if (profileId) q.set("profile", profileId);
+  else q.set("voice", voice);
+  return `/api/tts?${q.toString()}`;
+};
+
+async function fetchClip(text: string, voice: string, act: ExaminerSpeechAct, profileId?: string): Promise<Clip | null> {
   try {
     // Prefetch uses the buffered POST path: a single synthesis job finishes faster
     // than the sentence-by-sentence stream, which matters when warming 30+ lines.
@@ -197,7 +207,7 @@ async function fetchClip(text: string, voice: string): Promise<Clip | null> {
     const res = await fetch("/api/tts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, voice }),
+      body: JSON.stringify({ text, voice: profileId ? undefined : voice, act, ...(profileId ? { profile: profileId } : {}) }),
       cache: "no-store",
     });
     if (!res.ok) return null;
@@ -232,7 +242,7 @@ function pump() {
   while (active < MAX_PARALLEL && queue.length) {
     const task = queue.shift()!;
     active++;
-    void fetchClip(task.text, task.voice)
+    void fetchClip(task.text, task.voice, task.act, task.profileId)
       .then(task.resolve)
       .finally(() => {
         active--;
@@ -241,14 +251,25 @@ function pump() {
   }
 }
 
+export interface PrefetchOptions {
+  /** Which speech act the line belongs to (affects rate, pauses, emphasis). */
+  act?: ExaminerSpeechAct;
+  /** Voice profile id; when set the server reads the profile instead of `voice`. */
+  profileId?: string;
+  /** Jump the queue — used for the very next line the examiner will speak. */
+  priority?: boolean;
+}
+
 /** Queue one line for background synthesis. Failures are not cached, so they can be retried. */
-export function prefetchTTS(text: string, voice: string, serverTts: boolean, priority = false): void {
+export function prefetchTTS(text: string, voice: string, serverTts: boolean, priorityOrOpts: boolean | PrefetchOptions = false, legacyAct: ExaminerSpeechAct = "question"): void {
   if (!serverTts || !text.trim() || typeof window === "undefined") return;
-  const key = keyOf(text, voice);
+  const opts: PrefetchOptions = typeof priorityOrOpts === "boolean" ? { priority: priorityOrOpts, act: legacyAct } : priorityOrOpts;
+  const act = opts.act ?? "question";
+  const key = keyOf(text, voice, act, opts.profileId);
   if (clipCache.has(key)) return;
   const p = new Promise<Clip | null>((resolve) => {
-    const task = { text, voice, key, resolve };
-    if (priority) queue.unshift(task);
+    const task = { text, voice, act, profileId: opts.profileId, key, resolve };
+    if (opts.priority) queue.unshift(task);
     else queue.push(task);
     pump();
   });
@@ -259,14 +280,23 @@ export function prefetchTTS(text: string, voice: string, serverTts: boolean, pri
   });
 }
 
+export interface ScriptLine {
+  text: string;
+  act: ExaminerSpeechAct;
+}
+
 /** Prefetch the whole script in play order (fixed lines first, then every step). */
-export function prefetchManyTTS(lines: string[], voice: string, serverTts: boolean): void {
+export function prefetchManyTTS(lines: (string | ScriptLine)[], voice: string, serverTts: boolean, profileId?: string): void {
   if (!serverTts || typeof window === "undefined") return;
   const seen = new Set<string>();
   for (const line of lines) {
-    if (!line?.trim() || seen.has(line)) continue;
-    seen.add(line);
-    prefetchTTS(line, voice, true);
+    const text = typeof line === "string" ? line : line.text;
+    const act: ExaminerSpeechAct = typeof line === "string" ? "question" : line.act;
+    if (!text?.trim()) continue;
+    const k = `${act}\u0000${text}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    prefetchTTS(text, voice, true, { act, profileId });
   }
 }
 
@@ -294,8 +324,8 @@ function playClip(clip: Clip, signal?: AbortSignal): Promise<boolean> {
 }
 
 /** Progressive playback: audio starts at the first sentence the engine produces. */
-function playStream(text: string, voice: string, signal?: AbortSignal): Promise<boolean> {
-  const audio = new Audio(ttsStreamUrl(text, voice));
+function playStream(text: string, voice: string, act: ExaminerSpeechAct, profileId: string | undefined, signal?: AbortSignal): Promise<boolean> {
+  const audio = new Audio(ttsStreamUrl(text, voice, act, profileId));
   audio.preload = "auto";
   liveAudio = audio;
   return new Promise((resolve) => {
@@ -327,6 +357,10 @@ function playStream(text: string, voice: string, signal?: AbortSignal): Promise<
 export interface SpeakOptions {
   serverTts: boolean;
   voice: string;
+  /** How this line should be delivered (greeting, question, instruction …). */
+  act?: ExaminerSpeechAct;
+  /** Voice profile id — when set, the server uses it instead of the raw voice name. */
+  profileId?: string;
   signal?: AbortSignal;
 }
 
@@ -336,8 +370,9 @@ export interface SpeakOptions {
  */
 export async function speak(text: string, opts: SpeakOptions): Promise<{ ok: boolean; via: string }> {
   if (!text.trim()) return { ok: true, via: "none" };
+  const act: ExaminerSpeechAct = opts.act ?? "question";
   if (opts.serverTts) {
-    const key = keyOf(text, opts.voice);
+    const key = keyOf(text, opts.voice, act, opts.profileId);
     const cached = clipCache.get(key);
     if (cached) {
       // A clip queued but not finished yet is usually just about to arrive; don't
@@ -346,8 +381,8 @@ export async function speak(text: string, opts: SpeakOptions): Promise<{ ok: boo
       if (clip && (await playClip(clip, opts.signal))) return { ok: true, via: "server-cache" };
       if (clipCache.get(key) === cached) clipCache.delete(key);
     }
-    if (await playStream(text, opts.voice, opts.signal)) return { ok: true, via: "server-stream" };
-    const clip = await fetchClip(text, opts.voice);
+    if (await playStream(text, opts.voice, act, opts.profileId, opts.signal)) return { ok: true, via: "server-stream" };
+    const clip = await fetchClip(text, opts.voice, act, opts.profileId);
     if (clip) {
       clipCache.set(key, Promise.resolve(clip));
       if (await playClip(clip, opts.signal)) return { ok: true, via: "server-buffered" };
@@ -357,13 +392,16 @@ export async function speak(text: string, opts: SpeakOptions): Promise<{ ok: boo
   // -------------------------------------------------------------- browser fallback
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return { ok: false, via: "none" };
   await loadVoices();
+  const style = speechActStyle(act);
   return new Promise((resolve) => {
     const u = new SpeechSynthesisUtterance(text);
     const v = pickVoice(opts.voice);
     if (v) u.voice = v;
     u.lang = v?.lang || "en-GB";
-    u.rate = 0.92;
-    u.pitch = 1;
+    // The browser voice has no SSML, but rate/pitch still separate a greeting
+    // from an instruction instead of delivering every line identically.
+    u.rate = Math.min(2, Math.max(0.5, 0.94 * style.browserRateFactor));
+    u.pitch = Math.min(2, Math.max(0, 1 * style.browserPitchFactor));
     let done = false;
     // Chrome stops long utterances after ~15 s unless the engine is nudged.
     const heartbeat = setInterval(() => {

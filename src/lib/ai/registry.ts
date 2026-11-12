@@ -10,6 +10,8 @@
 import type { ASRProvider, LLMProvider, TTSProvider, PronunciationProvider } from "./types";
 import { ProviderError } from "./types";
 import { openAIASR, openAILLM, anthropicLLM, openAITTS, azureTTS, azurePronunciation } from "./providers";
+import { SPEECH_ACT_LIST } from "@/lib/speaking/speech-act";
+import { DEFAULT_PROFILE_ID, VOICE_PRESETS, resolveVoiceProfile, type VoiceProviderId } from "@/lib/speaking/voice-profile";
 
 const hasOpenAI = () => !!(process.env.OPENAI_API_KEY || process.env.LLM_API_KEY || process.env.ASR_API_KEY);
 
@@ -55,6 +57,36 @@ export function getTTS(): TTSProvider {
   return browserTTS;
 }
 
+const hasAzureSpeech = () => !!(process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION);
+const hasServerTts = () => !!(process.env.TTS_BASE_URL || process.env.TTS_API_KEY || process.env.OPENAI_API_KEY);
+
+/**
+ * Resolve the provider a VoiceProfile asks for. A missing credential is a hard
+ * error rather than a silent downgrade: swapping the examiner's voice mid-test
+ * would be worse than telling the caller the voice is unavailable.
+ */
+export function getTTSFor(provider: VoiceProviderId): TTSProvider {
+  if (provider === "azure") {
+    if (!hasAzureSpeech()) throw new ProviderError("azure-tts", "config", "AZURE_SPEECH_KEY / AZURE_SPEECH_REGION not configured");
+    return azureTTS();
+  }
+  if (provider === "openai" || provider === "kokoro") {
+    if (!hasServerTts()) throw new ProviderError("openai-compatible-tts", "config", "TTS_BASE_URL / TTS_API_KEY not configured");
+    return openAITTS();
+  }
+  return browserTTS;
+}
+
+/** Which providers this deployment can actually reach — used by the Voice Lab. */
+export function ttsAvailability() {
+  return {
+    azure: hasAzureSpeech(),
+    openai: hasServerTts(),
+    kokoro: hasServerTts(),
+    browser: true,
+  };
+}
+
 export function getPronunciation(): PronunciationProvider | null {
   const p = process.env.PRONUNCIATION_PROVIDER || (process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION ? "azure" : "none");
   return p === "azure" ? azurePronunciation() : null;
@@ -75,6 +107,7 @@ export function capabilities() {
   const llm = getLLM();
   const tts = getTTS();
   const pron = getPronunciation();
+  const active = resolveVoiceProfile(process.env.EXAMINER_PROFILE || process.env.TTS_VOICE);
   return {
     asr: asr ? { id: asr.id, location: asr.location, model: asr.model ?? null } : null,
     llm: llm ? { id: llm.id, model: llm.model ?? null } : null,
@@ -85,6 +118,16 @@ export function capabilities() {
       voice: process.env.TTS_VOICE || (tts.id === "azure-neural-tts" ? process.env.AZURE_TTS_VOICE || "en-GB-SoniaNeural" : "auto"),
       format: process.env.TTS_FORMAT || "mp3",
       streaming: typeof tts.synthesizeStream === "function",
+      supports: tts.supports ?? { ssml: false, instructions: false, style: false, pitch: false },
+      /** Voice profiles the UI may offer, plus what this deployment can actually reach. */
+      profiles: VOICE_PRESETS.map((p) => ({
+        id: p.id, name: p.name, provider: p.provider, voice: p.voice,
+        speed: p.speed, pitch: p.pitch ?? 0, hasStyle: !!p.style,
+      })),
+      defaultProfileId: DEFAULT_PROFILE_ID,
+      activeProfile: { id: active.id, name: active.name, provider: active.provider, voice: active.voice, speed: active.speed },
+      availability: ttsAvailability(),
+      speechActs: SPEECH_ACT_LIST.map((a) => ({ id: a.id, label: a.label })),
     },
     pronunciation: pron ? { id: pron.id } : null,
   };
