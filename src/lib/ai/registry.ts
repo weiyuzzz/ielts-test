@@ -11,7 +11,7 @@ import type { ASRProvider, LLMProvider, TTSProvider, PronunciationProvider } fro
 import { ProviderError } from "./types";
 import { openAIASR, openAILLM, deepseekLLM, qwenLLM, geminiLLM, anthropicLLM, openAITTS, azureTTS, azurePronunciation } from "./providers";
 import { tencentSoePronunciation } from "./tencent-soe";
-import { tencentFlashAsr } from "./tencent-asr";
+import { tencentAsr } from "./tencent-asr";
 import { SPEECH_ACT_LIST } from "@/lib/speaking/speech-act";
 import { readAiConfig, envOverridesFor, withEnvOverrides, type ProviderKey } from "@/lib/server/ai-config";
 
@@ -49,7 +49,7 @@ export function getASR(): ASRProvider | null {
   return withCfg("asr", () => {
     const p = process.env.ASR_PROVIDER || (process.env.OPENAI_API_KEY || process.env.ASR_API_KEY ? "openai" : process.env.TENCENT_SECRET_ID && process.env.TENCENT_APP_ID ? "tencent-asr" : "browser");
     if (p === "openai") return openAIASR();
-    if (p === "tencent-asr") return tencentFlashAsr();
+    if (p === "tencent-asr") return tencentAsr();
     if (p === "browser") return browserASR;
     return null;
   });
