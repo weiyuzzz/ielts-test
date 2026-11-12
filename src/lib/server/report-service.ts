@@ -185,10 +185,14 @@ export async function runScoring(assessmentId: string): Promise<void> {
       const fb = getLLMFallback();
       if (fb && fb.id !== llm!.id) attempts.push({ llm: fb, kind: "fallback" });
       for (const attempt of attempts) {
+        // The multimodal output (per-criterion evidence, strengths/weaknesses)
+        // is far larger than a plain-band response: request a generous token
+        // budget so providers never truncate the JSON mid-structure, and give
+        // slow providers time to emit it.
         for (let tryNo = 1; tryNo <= 2 && !lang; tryNo++) {
           try {
-            const raw = await withTimeout(attempt.llm.id, TIMEOUTS.llmMs, (signal) =>
-              attempt.llm.complete([{ role: "system", content: system }, { role: "user", content: user }], { json: true, signal }));
+            const raw = await withTimeout(attempt.llm.id, Math.max(TIMEOUTS.llmMs, 150_000), (signal) =>
+              attempt.llm.complete([{ role: "system", content: system }, { role: "user", content: user }], { json: true, maxTokens: 8000, signal }));
             const v = validateLanguageScore(extractJson(raw), scorable, { allowPronunciation: pronEvidence !== null });
             lang = v.score;
             usedLLM = attempt.llm;
