@@ -1,18 +1,23 @@
 import { getTTS, TIMEOUTS } from "@/lib/ai/registry";
 import { withTimeout } from "@/lib/ai/types";
 import { requireUser, errorResponse, HttpError } from "@/lib/server/user";
-import { concatChunks, getClip, pendingClip, putClip, ttsCacheKey, withInflight, type CachedClip } from "@/lib/server/tts-cache";
+import {
+  concatChunks, getClip, pendingClip, putClip, ttsCacheKey,
+  withInflightPriority, activeJobPriority, cancelPrefetchJob, type CachedClip,
+} from "@/lib/server/tts-cache";
 
 /**
  * Examiner TTS proxy (keeps API keys on the server).
  *
- *  GET  /api/tts?text=…&voice=…  → progressive audio; compatible engines stream
- *                                  sentence by sentence, so the browser starts
- *                                  playing at the first sentence.
- *  POST /api/tts {text, voice}    → complete audio (kept for compatibility).
+ *  GET  /api/tts?text=…&voice=…  → progressive audio for LIVE playback.
+ *                                  Highest priority: never waits on a POST
+ *                                  warm-up, and cancels that warm-up instead.
+ *  POST /api/tts {text, voice}    → complete audio for background PREFETCH.
+ *                                  Best effort, cancellable via client abort.
  *
- * Both paths share an LRU cache keyed by everything that changes the waveform,
- * so repeated lines (fixed script, reloads, "Test voice") are served instantly.
+ * Both paths share the LRU cache keyed by everything that changes the waveform.
+ * `X-TTS-Cache` distinguishes hit / miss / miss-stream; `X-TTS-Synthesis-Ms`
+ * and `Server-Timing` feed the client performance trace.
  * Returns 501 when the browser TTS provider is active.
  */
 export const dynamic = "force-dynamic";
@@ -36,13 +41,15 @@ function keyFor(ttsId: string, model: string | undefined, p: TtsParams): string 
   ]);
 }
 
-function audioResponse(clip: CachedClip, cache: string): Response {
+function audioResponse(clip: CachedClip, cache: string, synthesisMs = 0): Response {
   return new Response(new Uint8Array(clip.audio), {
     headers: {
       "Content-Type": clip.mimeType,
       "Content-Length": String(clip.audio.byteLength),
       "Cache-Control": "private, no-store",
       "X-TTS-Cache": cache,
+      "X-TTS-Synthesis-Ms": String(Math.round(synthesisMs)),
+      "Server-Timing": `tts;dur=${Math.round(synthesisMs)};desc="${cache}"`,
       "X-Accel-Buffering": "no",
     },
   });
@@ -63,57 +70,95 @@ async function collect(body: ReadableStream<Uint8Array>): Promise<Uint8Array[]> 
   return chunks;
 }
 
-async function buffered(tts: ReturnType<typeof getTTS>, p: TtsParams, key: string): Promise<Response> {
-  const clip = await withInflight(key, async () => {
-    const r = await withTimeout(tts.id, TIMEOUTS.ttsMs, (signal) => tts.synthesize(p.text, { voice: p.voice, signal }));
-    const out: CachedClip = { audio: new Uint8Array(r.audio), mimeType: r.mimeType };
-    putClip(key, out);
-    return out;
-  });
-  return audioResponse(clip, "miss");
+function mergeSignals(...signals: (AbortSignal | undefined)[]): AbortSignal {
+  const valid = signals.filter((s): s is AbortSignal => !!s);
+  return valid.length === 1 ? valid[0] : AbortSignal.any(valid);
 }
 
-async function handle(p: TtsParams, allowStream: boolean): Promise<Response> {
-  await requireUser();
-  const tts = getTTS();
-  if (tts.location !== "server") throw new HttpError(501, "Server TTS not configured; use browser speech synthesis", "browser_tts");
-  const key = keyFor(tts.id, tts.model, p);
+type TTS = ReturnType<typeof getTTS>;
 
-  const hit = getClip(key);
-  if (hit) return audioResponse(hit, "hit");
-
-  // Another request is already synthesising this exact line — wait for it and
-  // serve the finished clip rather than starting a second expensive job.
-  const pending = pendingClip(key);
-  if (pending) {
-    await pending.catch(() => {});
-    const after = getClip(key);
-    if (after) return audioResponse(after, "hit");
+/** Complete buffered synthesis, used by POST prefetch and as the stream fallback. */
+async function buffered(tts: TTS, p: TtsParams, key: string, requestSignal?: AbortSignal): Promise<Response> {
+  const started = Date.now();
+  // A live stream for this exact line is already producing the clip — share it
+  // instead of starting a second (duplicate) synthesis job.
+  if (activeJobPriority(key) === "live") {
+    const live = pendingClip(key);
+    if (live) {
+      await live.catch(() => {});
+      const fromLive = getClip(key);
+      if (fromLive) return audioResponse(fromLive, "hit", Date.now() - started);
+    }
   }
+  try {
+    const clip = await withInflightPriority<CachedClip>(key, "prefetch", async (jobSignal) => {
+      const signal = mergeSignals(jobSignal, requestSignal);
+      const r = await withTimeout(tts.id, TIMEOUTS.ttsMs, (timeoutSignal) =>
+        tts.synthesize(p.text, { voice: p.voice, signal: mergeSignals(signal, timeoutSignal) }));
+      const out: CachedClip = { audio: new Uint8Array(r.audio), mimeType: r.mimeType };
+      putClip(key, out);
+      return out;
+    });
+    return audioResponse(clip, "miss", Date.now() - started);
+  } catch (e) {
+    // A warm-up cancelled because live playback arrived is expected, not an error.
+    if ((e as Error)?.name === "AbortError" || requestSignal?.aborted) {
+      return Response.json({ error: "prefetch superseded by live playback", code: "tts_prefetch_cancelled" }, { status: 409 });
+    }
+    throw e;
+  }
+}
 
-  if (allowStream && tts.synthesizeStream) {
-    const stream = await tts
-      .synthesizeStream(p.text, { voice: p.voice, signal: AbortSignal.timeout(TIMEOUTS.ttsMs * 3) })
-      .catch(() => null);
-    if (stream?.body) {
-      const [client, copy] = stream.body.tee();
-      // Keep the in-flight slot until the whole clip has been buffered.
-      void withInflight(key, async () => {
-        const chunks = await collect(copy);
-        if (chunks.length) putClip(key, { audio: concatChunks(chunks), mimeType: stream.mimeType });
-      }).catch(() => {});
-      return new Response(client, {
-        headers: {
-          "Content-Type": stream.mimeType,
-          "Cache-Control": "private, no-store",
-          "X-TTS-Cache": "miss-stream",
-          "X-Accel-Buffering": "no",
-        },
-      });
+/**
+ * Progressive GET stream. This path deliberately does NOT await any pending
+ * prefetch: the old implementation blocked the browser's <audio> on a slow POST
+ * warm-up, which is the main source of examiner voice delay.
+ */
+async function streaming(tts: TTS, p: TtsParams, key: string, requestSignal?: AbortSignal): Promise<Response | null> {
+  if (!tts.synthesizeStream) return null;
+
+  // Another live stream is already generating this line: wait for its cached
+  // result rather than creating a duplicate synthesis job for the same text.
+  if (activeJobPriority(key) === "live") {
+    const live = pendingClip(key);
+    if (live) {
+      await Promise.race([
+        live.catch(() => {}),
+        new Promise<void>((r) => setTimeout(r, TIMEOUTS.ttsMs * 3)),
+      ]);
+      const after = getClip(key);
+      if (after) return audioResponse(after, "hit");
     }
   }
 
-  return buffered(tts, p, key);
+  // Free the engine from a background warm-up of the same line.
+  cancelPrefetchJob(key);
+
+  const started = Date.now();
+  const signal = mergeSignals(requestSignal, AbortSignal.timeout(TIMEOUTS.ttsMs * 3));
+  const stream = await tts
+    .synthesizeStream(p.text, { voice: p.voice, signal })
+    .catch(() => null);
+  if (!stream?.body) return null;
+
+  const [client, copy] = stream.body.tee();
+  // Register as a *live* job. A later POST prefetch for the same line will share
+  // this collection instead of synthesising the sentence a second time.
+  void withInflightPriority(key, "live", async () => {
+    const chunks = await collect(copy);
+    if (chunks.length) putClip(key, { audio: concatChunks(chunks), mimeType: stream.mimeType });
+  }).catch(() => {});
+
+  return new Response(client, {
+    headers: {
+      "Content-Type": stream.mimeType,
+      "Cache-Control": "private, no-store",
+      "X-TTS-Cache": "miss-stream",
+      "X-TTS-Synthesis-Ms": String(Date.now() - started),
+      "Server-Timing": `tts;dur=${Date.now() - started};desc="miss-stream"`,
+      "X-Accel-Buffering": "no",
+    },
+  });
 }
 
 function onError(e: unknown): Response {
@@ -125,8 +170,19 @@ function onError(e: unknown): Response {
 
 export async function GET(req: Request): Promise<Response> {
   try {
+    await requireUser();
     const u = new URL(req.url);
-    return await handle(parse(u.searchParams.get("text"), u.searchParams.get("voice")), true);
+    const p = parse(u.searchParams.get("text"), u.searchParams.get("voice"));
+    const tts = getTTS();
+    if (tts.location !== "server") throw new HttpError(501, "Server TTS not configured; use browser speech synthesis", "browser_tts");
+    const key = keyFor(tts.id, tts.model, p);
+
+    const hit = getClip(key);
+    if (hit) return audioResponse(hit, "hit", 0);
+
+    const streamed = await streaming(tts, p, key, req.signal);
+    if (streamed) return streamed;
+    return await buffered(tts, p, key, req.signal);
   } catch (e) {
     return onError(e);
   }
@@ -134,8 +190,16 @@ export async function GET(req: Request): Promise<Response> {
 
 export async function POST(req: Request): Promise<Response> {
   try {
+    await requireUser();
     const body = (await req.json().catch(() => ({}))) as { text?: string; voice?: string };
-    return await handle(parse(body.text, body.voice), false);
+    const p = parse(body.text, body.voice);
+    const tts = getTTS();
+    if (tts.location !== "server") throw new HttpError(501, "Server TTS not configured; use browser speech synthesis", "browser_tts");
+    const key = keyFor(tts.id, tts.model, p);
+
+    const hit = getClip(key);
+    if (hit) return audioResponse(hit, "hit", 0);
+    return await buffered(tts, p, key, req.signal);
   } catch (e) {
     return onError(e);
   }

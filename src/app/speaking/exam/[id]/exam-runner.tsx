@@ -2,8 +2,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { DualRecorder, RecorderError, listInputDevices, requestMicPermission, type Recording } from "@/lib/audio/recorder";
-import { BrowserTranscriber, browserAsrSupported, prefetchTTS, prefetchManyTTS, speak, stopSpeaking, warmupSpeech } from "@/lib/audio/speech";
+import { RecorderError, listInputDevices, type Recording } from "@/lib/audio/recorder";
+import { RecordingSession } from "@/lib/audio/recording-session";
+import {
+  BrowserTranscriber, browserAsrSupported, speak, speakPreset, disposeAudio,
+  warmupSpeech, promoteTTS, audioMetrics,
+} from "@/lib/audio/speech";
+import { AudioPreloader, classifyScriptLines, type PreloadEntry } from "@/lib/audio/audio-resources";
+import { outcomeOf, type PlaybackOutcome } from "@/lib/audio/audio-lifecycle";
 import { uploadWithRetry, postJson, UploadError } from "@/lib/audio/upload";
 import { LINES } from "@/lib/speaking/examiner";
 import type { SpeakingExamConfig } from "@/lib/speaking/config";
@@ -18,10 +24,22 @@ interface SessionView {
   session: { id: string; mode: string; status: string; currentStep: number; examinerName: string; config: SpeakingExamConfig };
   steps: StepView[];
 }
+/** Response of the unified complete-answer endpoint. */
+interface CompleteResponse {
+  answer: { answerId: string; status: string; duplicate: boolean; asrDurationMs: number };
+  advance: { currentStep: number; finished?: boolean; duplicate?: boolean; partChanged?: boolean; followUp?: { text: string; generator: string } };
+  timings: { submitMs: number; advanceMs: number };
+  view: SessionView;
+}
 type Phase = "loading" | "setup" | "examiner" | "prep" | "recording" | "review" | "uploading" | "advancing" | "finishing" | "blocked" | "error";
 type CountdownResult = "timeout" | "early" | "repeat" | "device" | "aborted";
 
-interface Props { sessionId: string; voice: string; showSubtitlesDefault: boolean; serverTts: boolean; browserAsr: boolean; asrAvailable: boolean }
+interface Props {
+  sessionId: string; voice: string; showSubtitlesDefault: boolean; serverTts: boolean;
+  browserAsr: boolean; asrAvailable: boolean;
+  /** Engine identity for the TTS cache key (model/format changes must not reuse old audio). */
+  ttsModel?: string | null; ttsFormat?: string | null;
+}
 
 const uid = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
@@ -33,33 +51,52 @@ function examinerLine(step: StepView, o: { first: boolean; noResponse: boolean }
     : [ack, step.examinerLead, step.promptText].filter(Boolean).join(" ");
 }
 
-/**
- * Every line this session could possibly speak, in play order. The whole script
- * is known before the candidate presses "begin", so synthesis can happen during
- * the setup screen instead of blocking the examiner's first question.
- */
-function examLines(v: SessionView): string[] {
-  const out: string[] = [];
-  const add = (s?: string) => { if (s?.trim()) out.push(s); };
-  const answered = v.steps.some((s) => s.status === "answered");
-  const current = v.steps.find((s) => s.stepIndex === v.session.currentStep);
-  // 1) the first line must be ready before anything else
-  if (current && current.status !== "answered") add(examinerLine(current, { first: !answered, noResponse: false }));
-  // 2) fixed script lines
-  add(LINES.part2Start);
-  add(LINES.closing);
-  add(`${LINES.noResponse.split(".")[0]}. ${LINES.closing}`);
-  // 3) every remaining step, both acknowledgement variants and the repeat form
-  for (const step of v.steps) {
-    if (step.status === "answered") continue;
-    add(examinerLine(step, { first: false, noResponse: false }));
-    add(examinerLine(step, { first: false, noResponse: true }));
-    if (step.kind !== "cue_card") add(`${LINES.repeatPrefix} ${step.promptText}`);
-  }
-  return [...new Set(out)];
+/** True when the previous answer was classified as "no response" (used on resume). */
+function currentNoResponse(v: SessionView): boolean {
+  return v.steps.find((s) => s.stepIndex === v.session.currentStep - 1)?.answer?.status === "no_response";
 }
 
-export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, browserAsr, asrAvailable }: Props) {
+interface ScriptPlan {
+  entries: PreloadEntry[];
+  presetUrls: string[];
+  firstLine: string;
+  firstQuestionAudioUrl: string | null;
+}
+
+/**
+ * Build a PRIORITISED resource plan for the whole session. Unlike the old
+ * `examLines()` (which flattened everything into one FIFO order), backups and
+ * repeat forms are explicitly LOW so they can never delay a real question.
+ */
+function buildScriptPlan(v: SessionView): ScriptPlan {
+  const answered = v.steps.some((s) => s.status === "answered");
+  const current = v.steps.find((s) => s.stepIndex === v.session.currentStep);
+  const noResponse = currentNoResponse(v);
+  const firstLine = current && current.status !== "answered"
+    ? examinerLine(current, { first: !answered, noResponse })
+    : "";
+  const remaining = v.steps.filter((s) => s.status !== "answered");
+  const nextLines: string[] = [];
+  const rest: string[] = [];
+  const backups: string[] = [];
+  for (const step of remaining) {
+    const line = examinerLine(step, { first: false, noResponse: false });
+    if (step.stepIndex === (current?.stepIndex ?? -1) + 1) nextLines.push(line);
+    else if (step !== current) rest.push(line);
+    backups.push(examinerLine(step, { first: false, noResponse: true }));
+    if (step.kind !== "cue_card") backups.push(`${LINES.repeatPrefix} ${step.promptText}`);
+  }
+  const fixed = [LINES.part2Start, LINES.part2TimeUp, LINES.closing, `${LINES.noResponse.split(".")[0]}. ${LINES.closing}`];
+  const entries = classifyScriptLines({ opening: firstLine, first: firstLine, next: nextLines, rest, fixed, backups });
+  return {
+    entries,
+    presetUrls: remaining.map((s) => s.questionAudioUrl).filter((u): u is string => !!u),
+    firstLine,
+    firstQuestionAudioUrl: current?.questionAudioUrl ?? null,
+  };
+}
+
+export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, browserAsr, asrAvailable, ttsModel, ttsFormat }: Props) {
   const router = useRouter();
   const [view, setView] = useState<SessionView | null>(null);
   const [phase, setPhase] = useState<Phase>("loading");
@@ -81,10 +118,15 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
   const [online, setOnline] = useState(true);
   const [liveText, setLiveText] = useState("");
   const [current, setCurrent] = useState<StepView | null>(null);
+  /** Dev-only: shows how many preloaded resources are ready (subscribable state). */
+  const [readiness, setReadiness] = useState<{ ready: number; total: number } | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
-  const recRef = useRef<DualRecorder | null>(null);
+  const recSessionRef = useRef<RecordingSession | null>(null);
   const trRef = useRef<BrowserTranscriber | null>(null);
+  const preloaderRef = useRef<AudioPreloader | null>(null);
+  const planRef = useRef<ScriptPlan | null>(null);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
   const cdResolve = useRef<((r: CountdownResult) => void) | null>(null);
   const userAction = useRef<((v: string) => void) | null>(null);
   const prevNoResponse = useRef(false);
@@ -101,15 +143,20 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
   useEffect(() => {
     warmupSpeech();
     let cancelled = false;
-    // Deferred so the effect body has no synchronous setState and SSR stays
-    // deterministic (localStorage is only available in the browser).
     const t = setTimeout(() => {
       load()
         .then((v) => {
           if (cancelled) return;
-          // Synthesise the entire script while the candidate reads the setup screen.
-          // By the time they grant microphone access, the first line is already buffered.
-          prefetchManyTTS(examLines(v), voice, serverTts);
+          // One coordinator for TTS + preset bank audio + fixed examiner lines.
+          const preloader = new AudioPreloader({ voice, serverTts, model: ttsModel, format: ttsFormat });
+          preloaderRef.current = preloader;
+          const unsub = preloader.subscribe((s) => setReadiness({ ready: s.readyCount, total: s.totalCount }));
+          unsubscribeRef.current = unsub;
+          const plan = buildScriptPlan(v);
+          planRef.current = plan;
+          // Fire-and-forget: the exam never waits for the whole backup script.
+          preloader.prepareScript(plan.entries, plan.presetUrls);
+          prevNoResponse.current = currentNoResponse(v);
           if (v.session.status === "completed") router.replace(`/speaking/report/${sessionId}`);
           else if (v.session.status === "abandoned") { setFatal("This exam was ended early and can no longer be continued."); setPhase("error"); }
           else setPhase("setup");
@@ -127,11 +174,17 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
       cancelled = true;
       window.removeEventListener("online", on);
       window.removeEventListener("offline", off);
+      unsubscribeRef.current?.();
+      unsubscribeRef.current = null;
       abortRef.current?.abort();
-      recRef.current?.cleanup();
-      stopSpeaking();
+      recSessionRef.current?.dispose();
+      recSessionRef.current = null;
+      trRef.current?.stop().catch(() => {});
+      preloaderRef.current?.dispose();
+      preloaderRef.current = null;
+      disposeAudio();
     };
-  }, [load, router, sessionId, serverTts, voice]);
+  }, [load, router, sessionId, serverTts, voice, ttsModel, ttsFormat]);
 
   // Warn before leaving while the exam is running (state is saved server-side, but the current answer would be lost)
   useEffect(() => {
@@ -169,75 +222,79 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
     });
   }
 
-  /** Pre-recorded examiner audio from the bank takes priority over TTS. */
-  function playPresetAudio(url: string, signal: AbortSignal): Promise<boolean> {
-    const audio = new Audio(url);
-    audio.preload = "auto";
-    return new Promise((resolve) => {
-      let done = false;
-      const finish = (ok: boolean) => {
-        if (done) return;
-        done = true;
-        audio.pause();
-        signal.removeEventListener("abort", onAbort);
-        resolve(ok);
-      };
-      const onAbort = () => finish(false);
-      audio.onended = () => finish(true);
-      audio.onerror = () => finish(false);
-      signal.addEventListener("abort", onAbort, { once: true });
-      void audio.play().catch(() => finish(false));
-    });
-  }
-
-  async function say(text: string, signal: AbortSignal, audioUrl?: string | null) {
-    if (signal.aborted) return;
+  /**
+   * Play one examiner line. Returns an EXPLICIT lifecycle outcome so a failed
+   * or interrupted play can never be mistaken for a completed one.
+   * On failure we keep the on-screen subtitle (the original degradation) but
+   * require the candidate to acknowledge before recording starts — the exam
+   * must not silently advance on broken audio.
+   */
+  async function say(text: string, signal: AbortSignal, audioUrl?: string | null): Promise<PlaybackOutcome> {
+    if (signal.aborted) return outcomeOf("interrupted", "none", { aborted: true });
     setSubtitle(text);
     setSpeaking(true);
     setPhase("examiner");
-    if (audioUrl && (await playPresetAudio(audioUrl, signal))) {
+    promoteTTS(text, voice);
+    try {
+      let outcome: PlaybackOutcome | null = null;
+      if (audioUrl) {
+        const preset = await speakPreset(audioUrl, signal);
+        if (preset.status === "ended" || preset.status === "interrupted") outcome = preset;
+        // failed → fall through to TTS (pre-recorded audio is optional)
+      }
+      if (!outcome) {
+        const r = await speak(text, { serverTts, voice, signal });
+        outcome = r.outcome;
+      }
+      if (outcome.status === "failed" && !signal.aborted) {
+        setNotice("The examiner voice is unavailable in this browser. Read the question on screen instead.");
+        setBlocked({ title: "Examiner audio unavailable", message: "The examiner voice could not be played. Read the question in the subtitles, then continue when you are ready.", action: "continue-anyway" });
+        setPhase("blocked");
+        await waitUser();
+        setBlocked(null);
+        if (signal.aborted) return outcomeOf("interrupted", outcome.via, { aborted: true });
+      }
+      return outcome;
+    } finally {
       setSpeaking(false);
-      return;
     }
-    const r = await speak(text, { serverTts, voice, signal });
-    setSpeaking(false);
-    if (!r.ok && !signal.aborted) setNotice("The examiner voice is unavailable in this browser. Read the question on screen instead.");
   }
 
+  /** One RecordingSession owns the mic + AudioContext for the WHOLE exam. */
   async function record(step: StepView, signal: AbortSignal, cfg: SpeakingExamConfig): Promise<{ rec: Recording; transcript: string } | null> {
+    const rs = recSessionRef.current;
+    if (!rs) throw new Error("Recording session is not ready");
     let repeats = step.repeatCount;
     for (;;) {
-      // start microphone (with recovery UI)
-      const rec = new DualRecorder();
-      for (;;) {
-        try {
-          rec.onLevel = (l) => {
-            const now = performance.now();
-            if (now - levelTs.current < 70) return;
-            levelTs.current = now;
-            setLevel(l);
-            // Fast attack, slow release — the classic behaviour of a recording meter.
-            setBars((prev) => {
-              const next = prev.slice(1);
-              next.push(Math.max(l, (prev[prev.length - 1] ?? 0) * 0.55));
-              return next;
-            });
-          };
-          rec.onError = () => cdResolve.current?.("device");
-          await rec.start(deviceId || undefined);
-          break;
-        } catch (e) {
-          rec.cleanup();
-          const err = e as RecorderError;
-          setDevices(await listInputDevices().catch(() => []));
-          setBlocked({ title: "Microphone problem", message: err.message, action: "retry-mic" });
-          setPhase("blocked");
-          await waitUser();
-          setBlocked(null);
-          if (signal.aborted) return null;
-        }
+      try {
+        // One RecordingSession owns the mic + AudioContext for the whole exam; each
+        // answer only swaps the MediaRecorder/PCM buffer, so starting is instant.
+        rs.onLevel = (l) => {
+          const now = performance.now();
+          if (now - levelTs.current < 70) return;
+          levelTs.current = now;
+          setLevel(l);
+          // Fast attack, slow release — the classic behaviour of a recording meter.
+          setBars((prev) => {
+            const next = prev.slice(1);
+            next.push(Math.max(l, (prev[prev.length - 1] ?? 0) * 0.55));
+            return next;
+          });
+        };
+        rs.onError = (e) => { if (e.code === "device_disconnected") cdResolve.current?.("device"); };
+        rs.startAnswer(); // fresh MediaRecorder + PCM buffer, SAME stream/context
+      } catch (e) {
+        const err = e as RecorderError;
+        setDevices(await listInputDevices().catch(() => []));
+        setBlocked({ title: "Microphone problem", message: err.message, action: "retry-mic" });
+        setPhase("blocked");
+        await waitUser();
+        setBlocked(null);
+        if (signal.aborted) return null;
+        try { await rs.reopen(deviceId || undefined); }
+        catch (e2) { setNotice((e2 as Error).message); return null; }
+        continue;
       }
-      recRef.current = rec;
       let tr: BrowserTranscriber | null = null;
       if (browserAsr) {
         tr = new BrowserTranscriber();
@@ -248,9 +305,9 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
       setLiveText("");
       setPhase("recording");
       const r = await countdown(step.answerSeconds, cfg.minFinishSeconds, signal);
-      const recording = await rec.stop();
-      recRef.current = null;
+      const recording = await rs.stopAnswer();
       const transcript = tr ? await tr.stop() : "";
+      trRef.current = null;
       setLevel(0);
       setBars(new Array(32).fill(0));
       if (r === "aborted") return null;
@@ -258,13 +315,17 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
         try {
           await postJson(`/api/speaking/sessions/${sessionId}/repeat`, { examQuestionId: step.id });
           repeats++;
-          await say(`${LINES.repeatPrefix} ${step.promptText}`, signal);
+          const o = await say(`${LINES.repeatPrefix} ${step.promptText}`, signal);
+          if (o.status === "interrupted") return null;
         } catch (e) {
           setNotice((e as Error).message);
         }
         continue;
       }
-      if (r === "device") setNotice("Your microphone was disconnected. The answer so far has been kept. Check the device before the next question.");
+      if (r === "device") {
+        setNotice("Your microphone was disconnected. The answer so far has been kept. Check the device before the next question.");
+        try { await rs.reopen(deviceId || undefined); } catch { /* next answer will surface the error */ }
+      }
       if (cfg.allowRerecord && recording.durationMs > 500) {
         const url = URL.createObjectURL(recording.blob ?? recording.wav ?? new Blob());
         setReview({ url, transcript });
@@ -279,37 +340,44 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
     }
   }
 
-  async function submit(step: StepView, data: { rec: Recording; transcript: string }, signal: AbortSignal, cfg: SpeakingExamConfig) {
+  /** ONE round trip: answer + authoritative advance + full next-step view. */
+  async function submitAndAdvance(step: StepView, data: { rec: Recording; transcript: string }, signal: AbortSignal, cfg: SpeakingExamConfig): Promise<CompleteResponse | null> {
     const idem = uid();
+    const fd = new FormData();
+    fd.append("examQuestionId", step.id);
+    fd.append("idempotencyKey", idem);
+    fd.append("durationMs", String(data.rec.durationMs));
+    fd.append("fromStep", String(step.stepIndex));
+    const ext = (m: string) => (m.includes("mp4") ? "m4a" : m.includes("ogg") ? "ogg" : m.includes("wav") ? "wav" : "webm");
+    if (data.rec.blob && data.rec.blob.size <= cfg.maxUploadBytes) fd.append("audio", data.rec.blob, `answer.${ext(data.rec.blob.type)}`);
+    if (data.rec.wav && data.rec.wav.size <= cfg.maxUploadBytes) fd.append("wav", data.rec.wav, "answer.wav");
+    if (data.transcript) fd.append("browserTranscript", data.transcript);
+
     for (;;) {
-      const fd = new FormData();
-      fd.append("examQuestionId", step.id);
-      fd.append("idempotencyKey", idem);
-      fd.append("durationMs", String(data.rec.durationMs));
-      const ext = (m: string) => (m.includes("mp4") ? "m4a" : m.includes("ogg") ? "ogg" : m.includes("wav") ? "wav" : "webm");
-      if (data.rec.blob && data.rec.blob.size <= cfg.maxUploadBytes) fd.append("audio", data.rec.blob, `answer.${ext(data.rec.blob.type)}`);
-      if (data.rec.wav && data.rec.wav.size <= cfg.maxUploadBytes) fd.append("wav", data.rec.wav, "answer.wav");
-      if (data.transcript) fd.append("browserTranscript", data.transcript);
       setPhase("uploading");
       setProgress(0);
+      const t0 = performance.now();
       try {
-        const r = await uploadWithRetry<{ status: string }>(`/api/speaking/sessions/${sessionId}/answers`, fd, {
+        const r = await uploadWithRetry<CompleteResponse>(`/api/speaking/sessions/${sessionId}/complete-answer`, fd, {
           onProgress: setProgress,
           onRetry: (n, e) => setNotice(`Upload problem (${e.message}). Retrying… (${n})`),
         });
+        audioMetrics.record("upload_duration_ms", performance.now() - t0, "none");
+        audioMetrics.record("asr_duration_ms", r.answer?.asrDurationMs ?? 0, "none", "server sync ASR");
+        audioMetrics.record("advance_duration_ms", r.timings?.advanceMs ?? 0, "none");
         setProgress(null);
         setNotice(null);
-        prevNoResponse.current = r.status === "no_response";
-        return true;
+        return r;
       } catch (e) {
+        audioMetrics.record("upload_duration_ms", performance.now() - t0, "none", "failed");
         setProgress(null);
         const err = e as UploadError;
-        if (err.status === 409) return true; // server already has an answer for this step → resync
+        if (err.status === 409) return null; // conflicting state → resync from the server
         setBlocked({ title: "Upload failed", message: `${err.message}. Your recording is still on this device.`, action: "retry-upload" });
         setPhase("blocked");
         await waitUser();
         setBlocked(null);
-        if (signal.aborted) return false;
+        if (signal.aborted) return null;
       }
     }
   }
@@ -320,64 +388,84 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
     abortRef.current = ctrl;
     const signal = ctrl.signal;
     // unlock audio output on iOS/Safari inside the user gesture
-    try { if ("speechSynthesis" in window) speechSynthesis.speak(new SpeechSynthesisUtterance("")); } catch {}
+    try { if ("speechSynthesis" in window) speechSynthesis.speak(new SpeechSynthesisUtterance("")); } catch { /* ignore */ }
     try {
       let v = await load();
       let first = !v.steps.some((s) => s.status === "answered");
-      // The full script (including fixed lines) was queued on the setup screen.
       while (!signal.aborted) {
         const cfg = v.session.config;
         const step = v.steps.find((s) => s.stepIndex === v.session.currentStep);
         if (!step) throw new Error("Exam step not found");
         setCurrent(step);
+        audioMetrics.startTurn(step.stepIndex);
+
+        let data: { rec: Recording; transcript: string } | null = null;
         if (step.status !== "answered") {
           const line = examinerLine(step, { first, noResponse: prevNoResponse.current });
           first = false;
           if (step.kind === "cue_card") {
-            await say(line, signal, step.questionAudioUrl);
+            if ((await say(line, signal, step.questionAudioUrl)).status === "interrupted") return;
             setPhase("prep");
             await countdown(step.prepSeconds, 10, signal);
             if (signal.aborted) return;
-            await say(LINES.part2Start, signal);
-          } else {
-            await say(line, signal, step.questionAudioUrl);
-          }
+            if ((await say(LINES.part2Start, signal)).status === "interrupted") return;
+          } else if ((await say(line, signal, step.questionAudioUrl)).status === "interrupted") return;
           if (signal.aborted) return;
-          // While the user records this answer, synthesise the next question in the
-          // background so the examiner starts speaking with no gap (server TTS only).
-          if (serverTts) {
-            const next = v.steps.find((s) => s.stepIndex === step.stepIndex + 1 && s.status !== "answered");
-            if (next) {
-              prefetchTTS(examinerLine(next, { first: false, noResponse: false }), voice, true);
-              if (next.kind === "cue_card") prefetchTTS(LINES.part2Start, voice, true);
-            }
-          }
-          const data = await record(step, signal, cfg);
+
+          // Prepare the NEXT question while the candidate answers this one.
+          const next = v.steps.find((s) => s.stepIndex === step.stepIndex + 1 && s.status !== "answered");
+          if (next) preloaderRef.current?.prepareNext(examinerLine(next, { first: false, noResponse: false }), next.questionAudioUrl);
+
+          data = await record(step, signal, cfg);
           if (!data) return;
           // The examiner stops the candidate at 2 minutes, as in the real test.
-          if (step.kind === "cue_card" && !signal.aborted) await say(LINES.part2TimeUp, signal);
-          if (!(await submit(step, data, signal, cfg))) return;
+          if (step.kind === "cue_card" && !signal.aborted && (await say(LINES.part2TimeUp, signal)).status === "interrupted") return;
         }
+
         setPhase("advancing");
-        let adv: { finished?: boolean };
-        try {
-          adv = await postJson<{ finished?: boolean }>(`/api/speaking/sessions/${sessionId}/advance`, { fromStep: step.stepIndex });
-        } catch (e) {
-          if ((e as UploadError).status === 409) { v = await load(); continue; }
-          throw e;
+        let result: CompleteResponse | null;
+        if (data) {
+          result = await submitAndAdvance(step, data, signal, cfg);
+        } else {
+          // Resume case: the answer is already stored but advance was lost.
+          // The legacy /advance endpoint is kept for this path.
+          const t0 = performance.now();
+          try {
+            const adv = await postJson<CompleteResponse["advance"]>(`/api/speaking/sessions/${sessionId}/advance`, { fromStep: step.stepIndex });
+            audioMetrics.record("advance_duration_ms", performance.now() - t0, "none", "resync");
+            result = {
+              answer: { answerId: "", status: step.answer?.status ?? "answered", duplicate: true, asrDurationMs: 0 },
+              advance: adv,
+              timings: { submitMs: 0, advanceMs: performance.now() - t0 },
+              view: await load(),
+            };
+          } catch (e) {
+            if ((e as UploadError).status === 409) { v = await load(); continue; }
+            throw e;
+          }
         }
-        if (adv.finished) {
+        if (!result) { v = await load(); continue; } // 409 → re-read authoritative state
+        prevNoResponse.current = result.answer.status === "no_response";
+
+        if (result.advance.finished) {
           setPhase("finishing");
-          await say(prevNoResponse.current ? `${LINES.noResponse.split(".")[0]}. ${LINES.closing}` : LINES.closing, signal);
+          const closing = prevNoResponse.current ? `${LINES.noResponse.split(".")[0]}. ${LINES.closing}` : LINES.closing;
+          if ((await say(closing, signal)).status === "interrupted") return;
           setPhase("finishing");
           await postJson(`/api/speaking/sessions/${sessionId}/finish`);
+          audioMetrics.endTurn("finished");
           router.replace(`/speaking/report/${sessionId}`);
           return;
         }
-        v = await load();
-        // A Part 3 follow-up can be inserted by the state machine at advance time;
-        // queue any lines that were not part of the original plan.
-        if (serverTts) prefetchManyTTS(examLines(v), voice, true);
+
+        v = result.view; // no extra GET /sessions/:id round trip
+        setView(v);
+        // A Part 3 follow-up can be inserted by the state machine at advance
+        // time. Queue any newly-appeared lines so they can stream immediately.
+        const plan = buildScriptPlan(v);
+        planRef.current = plan;
+        preloaderRef.current?.replan(plan.entries, plan.presetUrls, plan.firstLine);
+        audioMetrics.endTurn("advanced");
       }
     } catch (e) {
       if (!signal.aborted) { setFatal((e as Error).message); setPhase("error"); }
@@ -386,7 +474,16 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
 
   async function startFromSetup() {
     try {
-      await requestMicPermission(deviceId || undefined);
+      const plan = planRef.current;
+      // Readiness gate (opening + first question only) and mic acquisition are
+      // independent, so run them together instead of serialising two waits.
+      // getUserMedia + AudioContext are acquired ONCE for the whole session.
+      const rs = new RecordingSession({});
+      await Promise.all([
+        preloaderRef.current?.ensureOpeningAndFirst(plan?.firstLine ?? "", plan?.firstQuestionAudioUrl ?? null) ?? Promise.resolve(),
+        rs.acquire(deviceId || undefined),
+      ]);
+      recSessionRef.current = rs;
       setDevices(await listInputDevices());
       setNotice(null);
       run();
@@ -399,8 +496,10 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
   async function exitExam() {
     if (!confirm("End this exam now? Your answers so far are saved, but the exam cannot be resumed or scored.")) return;
     abortRef.current?.abort();
-    recRef.current?.cleanup();
-    stopSpeaking();
+    recSessionRef.current?.dispose();
+    recSessionRef.current = null;
+    trRef.current?.stop().catch(() => {});
+    disposeAudio(); // cancels every queued TTS task + stops live audio
     act("abort");
     await postJson(`/api/speaking/sessions/${sessionId}/abandon`).catch(() => {});
     router.push("/speaking");
@@ -445,6 +544,11 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
         <div className="flex items-center gap-3">
           <span className="grid h-7 w-7 place-items-center rounded-md bg-zinc-900 text-xs font-bold text-white">B9</span>
           <div className="hidden text-sm font-medium sm:block">{view?.session.mode === "full" ? "Speaking mock test" : "Speaking practice"}</div>
+          {process.env.NODE_ENV !== "production" && readiness && readiness.total > 0 && (
+            <span className="hidden rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] text-indigo-700 sm:inline" title="Preloaded audio resources ready">
+              audio {readiness.ready}/{readiness.total}
+            </span>
+          )}
         </div>
         <ol className="flex items-center gap-1.5" aria-label="Exam progress">
           {parts.map((p) => (
@@ -496,7 +600,9 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
                 {devices.map((d, i) => <option key={d.deviceId || i} value={d.deviceId}>{d.label || `Microphone ${i + 1}`}</option>)}
               </select>
             )}
-            <button onClick={() => act("retry")} className="mt-4 rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Try again</button>
+            <button onClick={() => act("retry")} className="mt-4 rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">
+              {blocked.action === "retry-mic" ? "Try again" : "Continue"}
+            </button>
           </div>
         )}
 

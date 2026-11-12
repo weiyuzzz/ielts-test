@@ -72,6 +72,38 @@ stateDiagram-v2
 - **延迟**：合成完全移出考试关键路径；`X-TTS-Cache` 响应头区分 `hit` / `miss` / `miss-stream`；流式响应在后台 tee 一份写入缓存，供后续重复请求秒回。
 - `/api/config` 只暴露引擎信息，密钥不出服务端。
 
+## 4.2 音频性能改造（第一阶段，`feat/speaking-audio-perf-phase1`）
+
+> 只改性能与正确性；题库、评分规则、考试流程与状态机语义均不变。
+
+```
+setup 页  ──► AudioPreloader.prepareScript()  ──► TtsScheduler (4 级优先级)
+                 ├─ CURRENT    开场 + 第一题（ensureOpeningAndFirst 就绪门）
+                 ├─ NEXT       下一题（考生作答期间 prepareNext）
+                 ├─ BACKGROUND 其余脚本 / 固定话术
+                 └─ LOW        重复问题、no-response 备用反馈（可被抢占取消）
+              └─ preloadPresetAudio() 预下载 questionAudioUrl（不再播放时才下载）
+
+播放 say() ─► PlaybackGuard（单一所有者 + generation 去重）
+              └─ AudioLifecycle: loading → ready → playing → ended | interrupted | failed
+                 缓存命中直接播 → 否则立刻 GET 流式 → 缓冲 POST → 浏览器语音 → 字幕
+                 failed 必须用户确认（字幕降级保留），interrupted 直接终止考试循环
+
+提交答案 ─► POST /complete-answer（1 次往返取代 answers + advance + GET session）
+              └─ exam-service.completeAnswer(): submitAnswer() → advance() → getSessionView()
+                 状态机权威 / 幂等键 / 所有权 / 并发安全全部保留
+                 ASR 由 asr-policy.ts 决定：full 永不同步等待；practice Part 3 保留同步
+
+录音 ─────► RecordingSession：整场 1 个 MediaStream + 1 个 AudioContext
+             每题 1 个 MediaRecorder + 1 份 PCM 缓冲 → 独立录音文件
+             AudioWorklet 优先，失败回退 ScriptProcessorNode（Safari 兼容）
+```
+
+- `tts-scheduler.ts` 的 key 包含 `text + voice + model + format`，高优先级任务可抢占低优先级任务并取消其 POST 预加载。
+- `/api/tts` 的 GET（实时流）**不再等待** POST 预加载：`tts-cache.ts` 的 in-flight 任务区分 `live` / `prefetch`，`live` 会取消同文本的 `prefetch`。POST 客户端断开即中止合成。
+- 性能指标（`metrics.ts`）：`tts_synthesis_ms`、`audio_download_ms`、`audio_ready_ms`、`playback_start_delay_ms`、`recording_duration_ms`、`audio_encoding_ms`、`upload_duration_ms`、`asr_duration_ms`、`advance_duration_ms`、`inter_turn_gap_ms`，并区分 `cache-hit / cache-miss / stream / preset / browser`；开发环境通过 `window.__B9_AUDIO_TRACE__()`、`__B9_AUDIO_METRICS__()`、`__B9_AUDIO_CHAIN__()` 查看完整调用链。
+- 真实浏览器音频行为（流式播放、麦克风、AudioWorklet、speechSynthesis）无法在 Node 环境验证，见 `tests/audio-perf.test.ts` 末尾的 BROWSER-ONLY 清单与 `tests/integration.mjs`。
+
 ## 5. 评分管线（`report-service.ts`）
 1. 转写：补齐缺失的转写（服务端 ASR）。失败的条目写入 notes 并排除在评分之外。
 2. 识别出的总词数 < 10：评分直接判为 **failed**，不编造分数。

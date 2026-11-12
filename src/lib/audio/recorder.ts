@@ -32,7 +32,8 @@ export async function requestMicPermission(deviceId?: string): Promise<void> {
   s.getTracks().forEach((t) => t.stop());
 }
 
-async function openStream(deviceId?: string): Promise<MediaStream> {
+/** Shared by the legacy DualRecorder and the session-wide RecordingSession. */
+export async function openStream(deviceId?: string): Promise<MediaStream> {
   if (typeof window !== "undefined" && !window.isSecureContext) throw new RecorderError("insecure", "Recording needs HTTPS or localhost.");
   if (!navigator.mediaDevices?.getUserMedia) throw new RecorderError("unsupported", "This browser does not support microphone recording.");
   try {
