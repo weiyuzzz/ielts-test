@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { AudioPlayer } from "@/components/audio-player";
 import { RecorderError, listInputDevices, type Recording } from "@/lib/audio/recorder";
 import { RecordingSession } from "@/lib/audio/recording-session";
 import {
@@ -765,7 +766,7 @@ export function ExamRunner({ sessionId, voice, showSubtitlesDefault, serverTts, 
               {phase === "review" && review && (
                 <div className="w-full rounded-2xl border border-zinc-200 bg-white p-5">
                   <div className="mb-2 text-sm font-medium">Listen back</div>
-                  <audio controls src={review.url} className="w-full" />
+                  <AudioPlayer src={review.url} className="w-full" />
                   {review.transcript && <p className="mt-3 text-sm text-zinc-600"><span className="text-xs uppercase tracking-wide text-zinc-400">Recognised: </span>{review.transcript}</p>}
                   <div className="mt-4 flex gap-3">
                     <button onClick={() => act("rerecord")} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm">Re-record</button>

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, Badge, Band, modeLabel, statusTone, fmtDate } from "@/components/ui";
+import { AudioPlayer } from "@/components/audio-player";
 import { DIMENSION_LABELS, type Dimension } from "@/lib/speaking/bands";
 import { CRITERIA, DESCRIPTOR_SOURCE, findDescriptor } from "@/lib/speaking/band-descriptors";
 
@@ -247,7 +248,7 @@ export function ReportView({ sessionId }: { sessionId: string }) {
                 {s.answer?.transcript && <Badge tone={statusTone(s.answer.transcript.status === "completed" ? "completed" : "failed")}>transcript: {s.answer.transcript.status}</Badge>}
               </div>
               <div className="mt-1 text-sm font-medium">{s.promptText}</div>
-              {s.answer?.audioAssetId && <audio controls preload="none" src={`/api/audio/${s.answer.audioAssetId}`} className="mt-2 h-9 w-full max-w-md" />}
+              {s.answer?.audioAssetId && <AudioPlayer src={`/api/audio/${s.answer.audioAssetId}`} className="mt-2 h-9 w-full max-w-md" />}
               <p className="mt-2 text-sm leading-6 text-zinc-600">{s.answer?.transcript?.text || <span className="italic text-zinc-400">{s.answer ? (s.answer.status === "no_response" ? "No answer was given." : "No transcript available.") : "Not answered."}</span>}</p>
             </li>
           ))}
