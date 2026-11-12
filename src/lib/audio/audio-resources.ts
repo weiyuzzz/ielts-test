@@ -18,16 +18,24 @@
  * two resources. It NEVER waits for the whole script or the backup voices.
  */
 import { TTS_PRIORITY, type TtsPriority, type TtsTaskSnapshot } from "./tts-scheduler";
+import type { ExaminerSpeechAct } from "@/lib/speaking/speech-act";
 import {
   configureTtsIdentity, prefetchManyTTSWithPriorities, waitForTTS,
   preloadPresetAudio, loadVoices, subscribeTts, ttsSnapshot, disposeAudio, rearmAudio,
 } from "./speech";
 import { audioMetrics } from "./metrics";
 
-export interface PreloadEntry { text: string; priority: TtsPriority }
+/** A line to warm up, with the delivery it will be spoken in. */
+export interface PreloadEntry { text: string; priority: TtsPriority; act?: ExaminerSpeechAct }
+
+/** Classifier input: a bare string (legacy) or a line with its speech act. */
+export type ScriptLineLike = string | { text: string; act?: ExaminerSpeechAct };
 
 export interface AudioPreloaderOptions {
   voice: string;
+  /** VoiceProfile id. When set, every warm-up is synthesised with exactly the
+   *  profile the session will play with — never the deployment default. */
+  profile?: string;
   model?: string | null;
   format?: string | null;
   serverTts: boolean;
@@ -46,6 +54,7 @@ const OPENING_TIMEOUT_MS = 12_000;
 
 export class AudioPreloader {
   private readonly voice: string;
+  private readonly profile: string | undefined;
   private readonly serverTts: boolean;
   private readonly readyTimeoutMs: number;
   private readonly listeners = new Set<(s: ReadinessSnapshot) => void>();
@@ -55,6 +64,7 @@ export class AudioPreloader {
 
   constructor(opts: AudioPreloaderOptions) {
     this.voice = opts.voice;
+    this.profile = opts.profile;
     this.serverTts = opts.serverTts;
     this.readyTimeoutMs = opts.readyTimeoutMs ?? OPENING_TIMEOUT_MS;
     rearmAudio();
@@ -65,20 +75,28 @@ export class AudioPreloader {
   /** Queue the full script in priority order. Fire-and-forget by design. */
   prepareScript(entries: PreloadEntry[], presetUrls: string[] = []): void {
     if (this.disposed) return;
-    prefetchManyTTSWithPriorities(entries, this.voice, this.serverTts);
+    prefetchManyTTSWithPriorities(entries, this.voice, this.serverTts, this.profile);
     for (const url of new Set(presetUrls.filter(Boolean))) void preloadPresetAudio(url);
     this.emit();
   }
 
   /**
-   * Gate before the exam starts: only the opening line and the first question's
-   * resources. Backup voices are explicitly NOT awaited.
+   * Gate before the exam starts: only the opening utterance (one or more lines)
+   * and the first question's resources. Backup voices are explicitly NOT awaited.
    */
-  async ensureOpeningAndFirst(openingLine: string, firstQuestionAudioUrl: string | null): Promise<ReadinessSnapshot> {
+  async ensureOpeningAndFirst(
+    opening: ScriptLineLike | ScriptLineLike[],
+    firstQuestionAudioUrl: string | null,
+    act: ExaminerSpeechAct = "question",
+  ): Promise<ReadinessSnapshot> {
     if (this.disposed) return this.snapshot();
     const jobs: Promise<unknown>[] = [];
     if (this.serverTts) {
-      jobs.push(waitForTTS(openingLine, this.voice, this.readyTimeoutMs));
+      const openingLines = toLines(opening);
+      jobs.push(...openingLines
+        .filter((l) => l.text.trim())
+        .map((l) => waitForTTS(l.text, this.voice, this.readyTimeoutMs, l.act ?? act, this.profile)));
+      if (!openingLines.length) jobs.push(loadVoices());
     } else {
       jobs.push(loadVoices()); // browser fallback voice list
     }
@@ -99,26 +117,32 @@ export class AudioPreloader {
   }
 
   /** Prepare the next question while the candidate is answering the current one. */
-  prepareNext(line: string, questionAudioUrl: string | null): void {
+  prepareNext(line: ScriptLineLike | ScriptLineLike[], questionAudioUrl: string | null): void {
     if (this.disposed) return;
-    prefetchManyTTSWithPriorities([{ text: line, priority: TTS_PRIORITY.NEXT }], this.voice, this.serverTts);
+    prefetchManyTTSWithPriorities(
+      toLines(line).map((l) => ({ ...l, priority: TTS_PRIORITY.NEXT })),
+      this.voice, this.serverTts, this.profile,
+    );
     if (questionAudioUrl) void preloadPresetAudio(questionAudioUrl);
     this.emit();
   }
 
   /** A Part 3 follow-up inserted at advance time must be able to stream at once. */
-  prepareDynamic(line: string, questionAudioUrl: string | null = null): void {
+  prepareDynamic(line: ScriptLineLike | ScriptLineLike[], questionAudioUrl: string | null = null): void {
     if (this.disposed) return;
-    prefetchManyTTSWithPriorities([{ text: line, priority: TTS_PRIORITY.CURRENT }], this.voice, this.serverTts);
+    prefetchManyTTSWithPriorities(
+      toLines(line).map((l) => ({ ...l, priority: TTS_PRIORITY.CURRENT })),
+      this.voice, this.serverTts, this.profile,
+    );
     if (questionAudioUrl) void preloadPresetAudio(questionAudioUrl);
     this.emit();
   }
 
   /** Re-plan after a refresh / re-entry: requeue everything from the fresh view. */
-  replan(entries: PreloadEntry[], presetUrls: string[], currentLine: string): void {
+  replan(entries: PreloadEntry[], presetUrls: string[], currentLine: ScriptLineLike | ScriptLineLike[]): void {
     if (this.disposed) return;
     this.prepareScript(entries, presetUrls);
-    if (currentLine) this.prepareDynamic(currentLine);
+    if (toLines(currentLine).some((l) => l.text.trim())) this.prepareDynamic(currentLine);
     this.emit();
   }
 
@@ -156,31 +180,53 @@ export class AudioPreloader {
   }
 }
 
+function normalizeLine(l: ScriptLineLike): { text: string; act?: ExaminerSpeechAct } {
+  return typeof l === "string" ? { text: l } : { text: l.text, act: l.act };
+}
+
+/** Accept one line or a list of lines (an examiner turn is often several parts). */
+function toLines(l: ScriptLineLike | ScriptLineLike[]): { text: string; act?: ExaminerSpeechAct }[] {
+  return (Array.isArray(l) ? l : [l]).map(normalizeLine);
+}
+
+/** The spoken text of a line (used for emptiness checks). */
+export function lineOf(l: ScriptLineLike): string {
+  return typeof l === "string" ? l : l.text;
+}
+
 /**
  * Pure priority classifier (unit-testable). Kept here so the runner and the
  * preloader agree on which lines may never block the exam.
  */
 export function classifyScriptLines(lines: {
-  opening: string;
-  first: string;
-  next: string[];
-  rest: string[];
-  fixed: string[];
-  backups: string[];
+  opening: ScriptLineLike | ScriptLineLike[];
+  first: ScriptLineLike | ScriptLineLike[];
+  next: ScriptLineLike | ScriptLineLike[];
+  rest: ScriptLineLike | ScriptLineLike[];
+  fixed: ScriptLineLike | ScriptLineLike[];
+  backups: ScriptLineLike | ScriptLineLike[];
 }): PreloadEntry[] {
   const out: PreloadEntry[] = [];
   const seen = new Set<string>();
-  const add = (text: string | undefined, priority: TtsPriority) => {
-    if (!text?.trim() || seen.has(text)) return;
-    seen.add(text);
-    out.push({ text, priority });
+  const addAll = (line: ScriptLineLike | ScriptLineLike[] | undefined, priority: TtsPriority) => {
+    if (!line) return;
+    for (const l of toLines(line)) {
+      const { text, act } = l;
+      if (!text?.trim()) continue;
+      // Identity includes the speech act: the same sentence as a question and as a
+      // closing is two different clips, so both must be warmed.
+      const id = `${act ?? "question"}\u0000${text}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push({ text, priority, act });
+    }
   };
-  add(lines.opening, TTS_PRIORITY.CURRENT);
-  add(lines.first, TTS_PRIORITY.CURRENT);
-  for (const t of lines.next) add(t, TTS_PRIORITY.NEXT);
-  for (const t of lines.fixed) add(t, TTS_PRIORITY.BACKGROUND);
-  for (const t of lines.rest) add(t, TTS_PRIORITY.BACKGROUND);
+  addAll(lines.opening, TTS_PRIORITY.CURRENT);
+  addAll(lines.first, TTS_PRIORITY.CURRENT);
+  addAll(lines.next, TTS_PRIORITY.NEXT);
+  addAll(lines.fixed, TTS_PRIORITY.BACKGROUND);
+  addAll(lines.rest, TTS_PRIORITY.BACKGROUND);
   // Repeat forms + no-response/backup feedback are the first to be cut.
-  for (const t of lines.backups) add(t, TTS_PRIORITY.LOW);
+  addAll(lines.backups, TTS_PRIORITY.LOW);
   return out;
 }

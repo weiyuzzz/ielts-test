@@ -1,21 +1,28 @@
-import { getTTS, TIMEOUTS } from "@/lib/ai/registry";
-import { withTimeout } from "@/lib/ai/types";
+import { getTTS, getTTSFor, TIMEOUTS } from "@/lib/ai/registry";
+import { withTimeout, type TTSProvider } from "@/lib/ai/types";
 import { requireUser, errorResponse, HttpError } from "@/lib/server/user";
 import {
   concatChunks, getClip, pendingClip, putClip, ttsCacheKey,
   withInflightPriority, activeJobPriority, cancelPrefetchJob, type CachedClip,
 } from "@/lib/server/tts-cache";
+import { isSpeechAct, type ExaminerSpeechAct } from "@/lib/speaking/speech-act";
+import { profileFingerprint, resolveVoiceProfile, sanitizeProfile, type VoiceProfile } from "@/lib/speaking/voice-profile";
 
 /**
  * Examiner TTS proxy (keeps API keys on the server).
  *
- *  GET  /api/tts?text=…&voice=…  → progressive audio for LIVE playback.
- *                                  Highest priority: never waits on a POST
- *                                  warm-up, and cancels that warm-up instead.
- *  POST /api/tts {text, voice}    → complete audio for background PREFETCH.
- *                                  Best effort, cancellable via client abort.
+ *  GET  /api/tts?text=…&voice=…&act=question&profile=azure-sonia
+ *       → progressive audio for LIVE playback. Highest priority: never waits on
+ *         a POST warm-up, and cancels that warm-up instead.
+ *  POST /api/tts { text, voice, act, profile }
+ *       → complete audio for background PREFETCH. Best effort, cancellable.
  *
- * Both paths share the LRU cache keyed by everything that changes the waveform.
+ * `profile` may be a preset id ("azure-sonia"), "provider:voice"
+ * ("azure:en-GB-RyanNeural") or a full VoiceProfile object (Voice Lab).
+ *
+ * Both paths share the LRU cache keyed by everything that changes the waveform:
+ * provider, model, the VoiceProfile fingerprint (voice, language, speed, pitch,
+ * style, instructions, prosody), the speech act, the output format and the text.
  * `X-TTS-Cache` distinguishes hit / miss / miss-stream; `X-TTS-Synthesis-Ms`
  * and `Server-Timing` feed the client performance trace.
  * Returns 501 when the browser TTS provider is active.
@@ -24,34 +31,72 @@ export const dynamic = "force-dynamic";
 
 const MAX_TEXT = 1500;
 
-interface TtsParams { text: string; voice: string }
-
-function parse(text?: string | null, voice?: string | null): TtsParams {
-  if (!text || !text.trim()) throw new HttpError(400, "text required (max 1500 chars)");
-  if (text.length > MAX_TEXT) throw new HttpError(400, "text too long (max 1500 chars)");
-  return { text: text.trim(), voice: voice || "auto" };
+interface TtsParams {
+  text: string;
+  profile: VoiceProfile;
+  act: ExaminerSpeechAct;
+  /** True when the caller chose a profile explicitly (Voice Lab / a session
+   *  snapshot), which also selects the provider instead of the deployment default. */
+  explicitProfile: boolean;
 }
 
-function keyFor(ttsId: string, model: string | undefined, p: TtsParams): string {
+function parseText(text?: string | null): string {
+  if (!text || !text.trim()) throw new HttpError(400, "text required (max 1500 chars)");
+  if (text.length > MAX_TEXT) throw new HttpError(400, "text too long (max 1500 chars)");
+  return text.trim();
+}
+
+function buildParams(input: { text?: string | null; voice?: string | null; act?: string | null; profile?: unknown }): TtsParams {
+  const text = parseText(input.text);
+  const explicitProfile = input.profile !== undefined && input.profile !== null && input.profile !== "";
+  const profile = explicitProfile
+    ? typeof input.profile === "string"
+      ? resolveVoiceProfile(input.profile)
+      : sanitizeProfile(input.profile)
+    : resolveVoiceProfile(input.voice);
+  const act: ExaminerSpeechAct = isSpeechAct(input.act) ? input.act : "question";
+  return { text, profile, act, explicitProfile };
+}
+
+/** Output format actually requested from the engine (part of the cache identity). */
+function outputFormat(tts: TTSProvider): string {
+  if (tts.id === "azure-neural-tts") return process.env.AZURE_TTS_FORMAT || "riff-48khz-16bit-mono-pcm";
+  return process.env.TTS_FORMAT || "mp3";
+}
+
+function keyFor(tts: TTSProvider, p: TtsParams): string {
   return ttsCacheKey([
-    ttsId, model, p.voice, p.text,
-    process.env.TTS_MODEL, process.env.TTS_FORMAT, process.env.TTS_SPEED,
-    process.env.TTS_PROSODY, process.env.TTS_INSTRUCTIONS,
-    process.env.AZURE_TTS_VOICE, process.env.AZURE_TTS_FORMAT,
+    tts.id,
+    tts.model,
+    profileFingerprint(p.profile, p.act, outputFormat(tts)),
+    p.text,
   ]);
 }
 
-function audioResponse(clip: CachedClip, cache: string, synthesisMs = 0): Response {
+function ttsHeaders(extra: Record<string, string>, tts: TTSProvider, p: TtsParams): Record<string, string> {
+  return {
+    "Cache-Control": "private, no-store",
+    "X-Accel-Buffering": "no",
+    "X-TTS-Provider": tts.id,
+    "X-TTS-Voice": p.profile.voice,
+    "X-TTS-Act": p.act,
+    ...extra,
+  };
+}
+
+function audioResponse(clip: CachedClip, cache: string, tts: TTSProvider, p: TtsParams, synthesisMs = 0): Response {
   return new Response(new Uint8Array(clip.audio), {
-    headers: {
-      "Content-Type": clip.mimeType,
-      "Content-Length": String(clip.audio.byteLength),
-      "Cache-Control": "private, no-store",
-      "X-TTS-Cache": cache,
-      "X-TTS-Synthesis-Ms": String(Math.round(synthesisMs)),
-      "Server-Timing": `tts;dur=${Math.round(synthesisMs)};desc="${cache}"`,
-      "X-Accel-Buffering": "no",
-    },
+    headers: ttsHeaders(
+      {
+        "Content-Type": clip.mimeType,
+        "Content-Length": String(clip.audio.byteLength),
+        "X-TTS-Cache": cache,
+        "X-TTS-Synthesis-Ms": String(Math.round(synthesisMs)),
+        "Server-Timing": `tts;dur=${Math.round(synthesisMs)};desc="${cache}"`,
+      },
+      tts,
+      p,
+    ),
   });
 }
 
@@ -75,10 +120,8 @@ function mergeSignals(...signals: (AbortSignal | undefined)[]): AbortSignal {
   return valid.length === 1 ? valid[0] : AbortSignal.any(valid);
 }
 
-type TTS = ReturnType<typeof getTTS>;
-
 /** Complete buffered synthesis, used by POST prefetch and as the stream fallback. */
-async function buffered(tts: TTS, p: TtsParams, key: string, requestSignal?: AbortSignal): Promise<Response> {
+async function buffered(tts: TTSProvider, p: TtsParams, key: string, requestSignal?: AbortSignal): Promise<Response> {
   const started = Date.now();
   // A live stream for this exact line is already producing the clip — share it
   // instead of starting a second (duplicate) synthesis job.
@@ -87,19 +130,19 @@ async function buffered(tts: TTS, p: TtsParams, key: string, requestSignal?: Abo
     if (live) {
       await live.catch(() => {});
       const fromLive = getClip(key);
-      if (fromLive) return audioResponse(fromLive, "hit", Date.now() - started);
+      if (fromLive) return audioResponse(fromLive, "hit", tts, p, Date.now() - started);
     }
   }
   try {
     const clip = await withInflightPriority<CachedClip>(key, "prefetch", async (jobSignal) => {
       const signal = mergeSignals(jobSignal, requestSignal);
       const r = await withTimeout(tts.id, TIMEOUTS.ttsMs, (timeoutSignal) =>
-        tts.synthesize(p.text, { voice: p.voice, signal: mergeSignals(signal, timeoutSignal) }));
+        tts.synthesize(p.text, { voice: p.profile.voice, profile: p.profile, speechAct: p.act, signal: mergeSignals(signal, timeoutSignal) }));
       const out: CachedClip = { audio: new Uint8Array(r.audio), mimeType: r.mimeType };
       putClip(key, out);
       return out;
     });
-    return audioResponse(clip, "miss", Date.now() - started);
+    return audioResponse(clip, "miss", tts, p, Date.now() - started);
   } catch (e) {
     // A warm-up cancelled because live playback arrived is expected, not an error.
     if ((e as Error)?.name === "AbortError" || requestSignal?.aborted) {
@@ -114,7 +157,7 @@ async function buffered(tts: TTS, p: TtsParams, key: string, requestSignal?: Abo
  * prefetch: the old implementation blocked the browser's <audio> on a slow POST
  * warm-up, which is the main source of examiner voice delay.
  */
-async function streaming(tts: TTS, p: TtsParams, key: string, requestSignal?: AbortSignal): Promise<Response | null> {
+async function streaming(tts: TTSProvider, p: TtsParams, key: string, requestSignal?: AbortSignal): Promise<Response | null> {
   if (!tts.synthesizeStream) return null;
 
   // Another live stream is already generating this line: wait for its cached
@@ -127,7 +170,7 @@ async function streaming(tts: TTS, p: TtsParams, key: string, requestSignal?: Ab
         new Promise<void>((r) => setTimeout(r, TIMEOUTS.ttsMs * 3)),
       ]);
       const after = getClip(key);
-      if (after) return audioResponse(after, "hit");
+      if (after) return audioResponse(after, "hit", tts, p);
     }
   }
 
@@ -137,7 +180,7 @@ async function streaming(tts: TTS, p: TtsParams, key: string, requestSignal?: Ab
   const started = Date.now();
   const signal = mergeSignals(requestSignal, AbortSignal.timeout(TIMEOUTS.ttsMs * 3));
   const stream = await tts
-    .synthesizeStream(p.text, { voice: p.voice, signal })
+    .synthesizeStream(p.text, { voice: p.profile.voice, profile: p.profile, speechAct: p.act, signal })
     .catch(() => null);
   if (!stream?.body) return null;
 
@@ -150,19 +193,28 @@ async function streaming(tts: TTS, p: TtsParams, key: string, requestSignal?: Ab
   }).catch(() => {});
 
   return new Response(client, {
-    headers: {
-      "Content-Type": stream.mimeType,
-      "Cache-Control": "private, no-store",
-      "X-TTS-Cache": "miss-stream",
-      "X-TTS-Synthesis-Ms": String(Date.now() - started),
-      "Server-Timing": `tts;dur=${Date.now() - started};desc="miss-stream"`,
-      "X-Accel-Buffering": "no",
-    },
+    headers: ttsHeaders(
+      {
+        "Content-Type": stream.mimeType,
+        "X-TTS-Cache": "miss-stream",
+        "X-TTS-Synthesis-Ms": String(Date.now() - started),
+        "Server-Timing": `tts;dur=${Date.now() - started};desc="miss-stream"`,
+      },
+      tts,
+      p,
+    ),
   });
 }
 
+/** Pick the provider: an explicit profile (Voice Lab / session snapshot) wins,
+ *  otherwise the deployment default. A provider without credentials must fail
+ *  loudly — never silently substitute a different voice. */
+function providerFor(p: TtsParams): TTSProvider {
+  return p.explicitProfile ? getTTSFor(p.profile.provider) : getTTS();
+}
+
 function onError(e: unknown): Response {
-  if (e instanceof Error && /timeout|http/.test(e.message) && !(e instanceof HttpError)) {
+  if (e instanceof Error && /timeout|http|config/.test(e.message) && !(e instanceof HttpError)) {
     return Response.json({ error: e.message, code: "tts_failed" }, { status: 502 });
   }
   return errorResponse(e);
@@ -172,13 +224,18 @@ export async function GET(req: Request): Promise<Response> {
   try {
     await requireUser();
     const u = new URL(req.url);
-    const p = parse(u.searchParams.get("text"), u.searchParams.get("voice"));
-    const tts = getTTS();
+    const p = buildParams({
+      text: u.searchParams.get("text"),
+      voice: u.searchParams.get("voice"),
+      act: u.searchParams.get("act"),
+      profile: u.searchParams.get("profile") ?? undefined,
+    });
+    const tts = providerFor(p);
     if (tts.location !== "server") throw new HttpError(501, "Server TTS not configured; use browser speech synthesis", "browser_tts");
-    const key = keyFor(tts.id, tts.model, p);
+    const key = keyFor(tts, p);
 
     const hit = getClip(key);
-    if (hit) return audioResponse(hit, "hit", 0);
+    if (hit) return audioResponse(hit, "hit", tts, p, 0);
 
     const streamed = await streaming(tts, p, key, req.signal);
     if (streamed) return streamed;
@@ -191,14 +248,19 @@ export async function GET(req: Request): Promise<Response> {
 export async function POST(req: Request): Promise<Response> {
   try {
     await requireUser();
-    const body = (await req.json().catch(() => ({}))) as { text?: string; voice?: string };
-    const p = parse(body.text, body.voice);
-    const tts = getTTS();
+    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+    const p = buildParams({
+      text: typeof body.text === "string" ? body.text : null,
+      voice: typeof body.voice === "string" ? body.voice : null,
+      act: typeof body.act === "string" ? body.act : null,
+      profile: body.profile,
+    });
+    const tts = providerFor(p);
     if (tts.location !== "server") throw new HttpError(501, "Server TTS not configured; use browser speech synthesis", "browser_tts");
-    const key = keyFor(tts.id, tts.model, p);
+    const key = keyFor(tts, p);
 
     const hit = getClip(key);
-    if (hit) return audioResponse(hit, "hit", 0);
+    if (hit) return audioResponse(hit, "hit", tts, p, 0);
     return await buffered(tts, p, key, req.signal);
   } catch (e) {
     return onError(e);

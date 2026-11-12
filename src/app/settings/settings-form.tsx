@@ -5,8 +5,9 @@ import { listInputDevices, requestMicPermission } from "@/lib/audio/recorder";
 import { loadVoices, speak, warmupSpeech } from "@/lib/audio/speech";
 
 interface S { displayName: string; targetBand: number; examDate: string; examinerVoice: string; showSubtitles: boolean }
+interface ProfileOption { id: string; name: string; provider: string }
 
-export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming }: { initial: S; serverTts: boolean; ttsVoice: string; ttsStreaming: boolean }) {
+export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profiles }: { initial: S; serverTts: boolean; ttsVoice: string; ttsStreaming: boolean; profiles: ProfileOption[] }) {
   const [s, setS] = useState(initial);
   const [saved, setSaved] = useState<string | null>(null);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -52,14 +53,19 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming }: { i
           </select>
         </label>
         <label className="text-sm">Exam date<input type="date" className={field} value={s.examDate} onChange={(e) => setS({ ...s, examDate: e.target.value })} /></label>
-        <label className="text-sm">Examiner voice {serverTts ? "(server TTS voice name)" : "(browser voice)"}
+        <label className="text-sm">Examiner voice {serverTts ? "(voice profile)" : "(browser voice)"}
           {serverTts ? (
             <>
-              <input list="tts-voice-options" className={field} value={s.examinerVoice} onChange={(e) => setS({ ...s, examinerVoice: e.target.value })} placeholder="auto" />
-              <datalist id="tts-voice-options">
-                {["auto", "af_heart", "bf_emma", "alloy", "en-GB-SoniaNeural", "en-GB-RyanNeural"].map((v) => <option key={v} value={v} />)}
-              </datalist>
-              <span className="mt-1 block text-xs text-zinc-400">Engine default: {ttsVoice}. {ttsStreaming ? "Progressive playback is on." : "Buffered playback."}</span>
+              <select className={field} value={s.examinerVoice} onChange={(e) => setS({ ...s, examinerVoice: e.target.value })}>
+                <option value="auto">Auto · deployment default ({ttsVoice})</option>
+                {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                {s.examinerVoice !== "auto" && !profiles.some((p) => p.id === s.examinerVoice) && (
+                  <option value={s.examinerVoice}>{s.examinerVoice} · custom</option>
+                )}
+              </select>
+              <span className="mt-1 block text-xs text-zinc-400">
+                {ttsStreaming ? "Progressive playback is on." : "Buffered playback."} A running exam keeps the voice it started with.
+              </span>
             </>
           ) : (
             <select className={field} value={s.examinerVoice} onChange={(e) => setS({ ...s, examinerVoice: e.target.value })}>
@@ -72,7 +78,7 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming }: { i
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={s.showSubtitles} onChange={(e) => setS({ ...s, showSubtitles: e.target.checked })} /> Show examiner subtitles during the test</label>
       <div className="flex items-center gap-3">
         <button onClick={save} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700">Save</button>
-        <button onClick={() => speak("Hello. This is how your examiner will sound.", { serverTts, voice: s.examinerVoice })} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm">Test voice</button>
+        <button onClick={() => speak("Good morning. My name is Sarah. Could I see your identification, please?", { serverTts, voice: s.examinerVoice, act: "greeting", profileId: s.examinerVoice })} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm">Test voice</button>
         {saved && <span className="text-sm text-zinc-500">{saved}</span>}
       </div>
       <hr className="border-zinc-100" />

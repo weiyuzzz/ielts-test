@@ -262,3 +262,101 @@ test("TTS text: Azure SSML carries voice, language and rate", () => {
   assert.ok(s.includes("<break "));
   assert.ok(EXAMINER_TTS_INSTRUCTIONS.length > 40);
 });
+
+// ------------------------------------------------------------------ Phase 2: VoiceProfile & speech acts
+import { presetById, resolveVoiceProfile, sanitizeProfile, profileFingerprint, VOICE_PRESETS } from "../src/lib/speaking/voice-profile";
+import { SPEECH_ACTS } from "../src/lib/speaking/speech-act";
+import { prepareExaminerSpeech, toAzureSsmlForAct, pickEmphasisWord } from "../src/lib/ai/tts-text";
+
+test("speech acts: closing is slower and less emphatic than a question", () => {
+  const profile = presetById("azure-sonia")!;
+  const q = prepareExaminerSpeech({ text: "Do you enjoy reading books?", speechAct: "question", profile });
+  const c = prepareExaminerSpeech({ text: "Thank you. That is the end of the speaking test.", speechAct: "closing", profile });
+  assert.ok(c.speed < q.speed, "closing speaks slightly slower");
+  assert.ok(q.ssml.includes("<emphasis"), "questions may emphasise one informative word");
+  assert.ok(!c.ssml.includes("<emphasis"), "closing never emphasises");
+  assert.ok(SPEECH_ACTS.time_warning.sentencePauseMs >= SPEECH_ACTS.acknowledgement.sentencePauseMs);
+});
+
+test("speech acts: every act has a distinct steering instruction", () => {
+  const texts = new Set(Object.values(SPEECH_ACTS).map((a) => a.instructions));
+  assert.equal(texts.size, Object.keys(SPEECH_ACTS).length, "no two acts share instructions");
+  for (const a of Object.values(SPEECH_ACTS)) {
+    assert.ok(a.instructions.length > 60);
+    assert.ok(a.speedFactor > 0.9 && a.speedFactor < 1.1, "rate changes stay subtle");
+  }
+});
+
+test("emphasis picks one informative word and skips function words", () => {
+  assert.equal(pickEmphasisWord("Do you enjoy reading books?"), "reading");
+  assert.equal(pickEmphasisWord("Thank you."), null, "short function words are not emphasised");
+  const idWord = pickEmphasisWord("Could I see your identification, please?");
+  assert.ok(idWord !== null && idWord.length > 5);
+});
+
+test("Azure SSML for an act is valid XML, uses exact pause times and a real rate", () => {
+  const profile = presetById("azure-sonia")!;
+  const prepared = prepareExaminerSpeech({ text: "Thank you. Where did you grow up?", speechAct: "question", profile });
+  const ssml = toAzureSsmlForAct(prepared, "en-GB-SoniaNeural");
+  assert.ok(ssml.startsWith("<speak version="));
+  assert.ok(ssml.includes('xml:lang="en-GB"'));
+  assert.ok(ssml.includes('name="en-GB-SoniaNeural"'));
+  assert.ok(ssml.includes('<break time="'), "uses measured break times, not guessed strengths");
+  assert.ok(/rate="[+-]\d+%"/.test(ssml));
+  assert.ok(!ssml.includes("mstts:express-as"), "no expressive style unless one was chosen");
+  // every & must be a proper entity — an unescaped one makes Azure reject the request
+  assert.ok(!/&(?!amp;|lt;|gt;|quot;|apos;)/.test(ssml));
+});
+
+test("voice profiles: presets, provider:voice, legacy Azure and Kokoro values all resolve", () => {
+  assert.equal(resolveVoiceProfile("azure-sonia").voice, "en-GB-SoniaNeural");
+  assert.equal(resolveVoiceProfile("azure-ryan").provider, "azure");
+  const explicit = resolveVoiceProfile("azure:en-GB-RyanNeural");
+  assert.equal(explicit.provider, "azure");
+  assert.equal(explicit.voice, "en-GB-RyanNeural");
+  const legacyAzure = resolveVoiceProfile("en-GB-SoniaNeural");
+  assert.equal(legacyAzure.provider, "azure");
+  // pre-Phase-2 `examinerVoice` values were bare Kokoro voice names
+  const legacyKokoro = resolveVoiceProfile("bf_emma");
+  assert.equal(legacyKokoro.provider, "kokoro");
+  assert.equal(legacyKokoro.voice, "bf_emma");
+  assert.ok(VOICE_PRESETS.length >= 4);
+});
+
+test("voice profile fingerprint separates every parameter that changes the audio", () => {
+  const base = presetById("azure-sonia")!;
+  const fp = (p: typeof base, act: string, fmt = "mp3") => profileFingerprint(p, act, fmt);
+  assert.notEqual(fp(base, "question"), fp(base, "greeting"), "speech act changes the key");
+  assert.notEqual(fp(base, "question"), fp({ ...base, speed: 0.9 }, "question"), "speed changes the key");
+  assert.notEqual(fp(base, "question"), fp({ ...base, pitch: 1 }, "question"), "pitch changes the key");
+  assert.notEqual(fp(base, "question"), fp({ ...base, voice: "en-GB-RyanNeural" }, "question"), "voice changes the key");
+  assert.notEqual(fp(base, "question"), fp(base, "question", "wav"), "format changes the key");
+  assert.equal(fp(base, "question"), fp({ ...base }, "question"), "same profile → same key");
+});
+
+test("sanitizeProfile clamps hostile or malformed settings", () => {
+  const p = sanitizeProfile({ provider: "not-a-provider", voice: "", speed: 99, pitch: -99, prosody: { sentencePauseMs: 99999 } });
+  assert.ok(p.speed <= 1.4 && p.speed >= 0.6);
+  assert.ok((p.pitch ?? 0) >= -2 && (p.pitch ?? 0) <= 2);
+  assert.ok(p.prosody.sentencePauseMs <= 900);
+  assert.equal(p.language, "en-GB");
+  assert.ok(p.voice.length > 0, "never returns an empty voice");
+});
+
+// ------------------------------------------------------------------ Phase 1 × Phase 2 integration
+import { ttsTaskKey } from "../src/lib/audio/tts-scheduler";
+
+test("client scheduler key separates speech act and voice profile", () => {
+  const base = { text: "Do you enjoy reading?", voice: "af_heart", model: "kokoro", format: "mp3" };
+  const asQuestion = ttsTaskKey({ ...base, act: "question" });
+  const asClosing = ttsTaskKey({ ...base, act: "closing" });
+  assert.notEqual(asQuestion, asClosing, "the same sentence delivered differently is a different clip");
+  assert.notEqual(
+    ttsTaskKey({ ...base, act: "question", profile: "azure-sonia" }),
+    ttsTaskKey({ ...base, act: "question", profile: "kokoro-af-heart" }),
+    "two profiles never share a clip",
+  );
+  // Warm-ups queued without an explicit act must still collide with the playback
+  // request for a question, otherwise every line is synthesised twice.
+  assert.equal(ttsTaskKey({ ...base }), ttsTaskKey({ ...base, act: "", profile: "" }));
+});

@@ -34,6 +34,11 @@ export interface TtsKeyParts {
   voice: string;
   model: string;
   format?: string;
+  /** Examiner speech act (greeting / question / closing …). Part of the identity:
+   *  the same sentence delivered as a question and as a closing must not share a clip. */
+  act?: string;
+  /** VoiceProfile id (or "provider:voice"); omitted when the deployment default applies. */
+  profile?: string;
 }
 
 export interface TtsTaskSnapshot {
@@ -42,6 +47,10 @@ export interface TtsTaskSnapshot {
   voice: string;
   model: string;
   format: string;
+  /** Speech act used for this synthesis ("" when not applicable). */
+  act: string;
+  /** VoiceProfile id used for this synthesis ("" when the default applies). */
+  profile: string;
   priority: TtsPriority;
   status: TtsTaskStatus;
   attempts: number;
@@ -66,7 +75,7 @@ export interface TtsSchedulerOptions<T> {
   maxParallel?: number;
   maxAttempts?: number;
   maxCache?: number;
-  keyOf?: (parts: Required<TtsKeyParts>) => string;
+  keyOf?: (parts: TtsKeyParts) => string;
   /** Release a resource (e.g. revoke a blob URL) when it is evicted / disposed. */
   release?: (resource: T) => void;
   /** Injectable clock, for deterministic tests. */
@@ -84,10 +93,13 @@ interface InternalTask<T> extends TtsTaskSnapshot {
   lastStateAt: number;
 }
 
-export function ttsTaskKey(parts: Required<TtsKeyParts>): string {
-  // Model + format are part of the identity: changing the engine, voice, speed
-  // or format must never reuse a clip produced by a different configuration.
-  return `${parts.model}\u0000${parts.voice}\u0000${parts.format}\u0000${parts.text}`;
+export function ttsTaskKey(parts: TtsKeyParts): string {
+  // Model + format + speech act + voice profile are all part of the identity:
+  // changing the engine, voice, delivery or format must never reuse a clip
+  // produced by a different configuration.
+  return [
+    parts.model, parts.voice, parts.format, parts.act ?? "", parts.profile ?? "", parts.text,
+  ].join("\u0000");
 }
 
 export class TtsScheduler<T> {
@@ -97,7 +109,7 @@ export class TtsScheduler<T> {
   private readonly maxParallel: number;
   private readonly maxAttempts: number;
   private readonly maxCache: number;
-  private readonly keyOf: (parts: Required<TtsKeyParts>) => string;
+  private readonly keyOf: (parts: TtsKeyParts) => string;
   private readonly release?: (resource: T) => void;
   private readonly now: () => number;
   private running = new Set<string>();
@@ -115,7 +127,7 @@ export class TtsScheduler<T> {
   }
 
   request(parts: TtsKeyParts, priority: TtsPriority = TTS_PRIORITY.BACKGROUND): TtsRequest<T> {
-    const full: Required<TtsKeyParts> = { format: "default", ...parts };
+    const full: Required<TtsKeyParts> = { format: "default", act: "", profile: "", ...parts };
     const key = this.keyOf(full);
     if (this.disposed) {
       // No work may start after teardown, and the promise must still settle so
@@ -157,6 +169,7 @@ export class TtsScheduler<T> {
     const promise = new Promise<T | null>((res) => { resolve = res; });
     const t: InternalTask<T> = {
       key, parts, text: parts.text, voice: parts.voice, model: parts.model, format: parts.format,
+      act: parts.act ?? "", profile: parts.profile ?? "",
       priority, status: "queued", attempts, hasResource: false,
       seq: this.seq++, promise, resolve, controller: new AbortController(),
       resource: null, runId: 0, lastStateAt: this.now(),
@@ -286,6 +299,7 @@ export class TtsScheduler<T> {
   private snapshot(t: InternalTask<T>): TtsTaskSnapshot {
     return {
       key: t.key, text: t.text, voice: t.voice, model: t.model, format: t.format,
+      act: t.act, profile: t.profile,
       priority: t.priority, status: t.status, attempts: t.attempts, hasResource: t.hasResource,
     };
   }

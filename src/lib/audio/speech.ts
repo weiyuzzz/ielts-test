@@ -16,6 +16,7 @@
  * a broken examiner voice. One PlaybackGuard owns the single live <audio>.
  */
 import { TtsScheduler, TTS_PRIORITY, ttsTaskKey, type TtsPriority, type TtsTaskSnapshot } from "./tts-scheduler";
+import { SPEECH_ACTS, type ExaminerSpeechAct } from "@/lib/speaking/speech-act";
 import { AudioLifecycle, PlaybackGuard, outcomeOf, type PlaybackOutcome } from "./audio-lifecycle";
 import { audioMetrics, installDevTrace, type AudioSource } from "./metrics";
 
@@ -193,8 +194,13 @@ export function configureTtsIdentity(model?: string | null, format?: string | nu
   ttsFormat = format || "default";
 }
 
-export const keyOf = (text: string, voice: string) => ttsTaskKey({ text, voice, model: ttsModel, format: ttsFormat });
-const ttsStreamUrl = (text: string, voice: string) => `/api/tts?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voice)}`;
+export const keyOf = (text: string, voice: string, act: ExaminerSpeechAct = "question", profile?: string) =>
+  ttsTaskKey({ text, voice, model: ttsModel, format: ttsFormat, act, profile: profile ?? "" });
+const ttsStreamUrl = (text: string, voice: string, act: ExaminerSpeechAct, profile?: string) => {
+  const q = new URLSearchParams({ text, voice, act });
+  if (profile) q.set("profile", profile);
+  return `/api/tts?${q.toString()}`;
+};
 
 let liveAudio: HTMLAudioElement | null = null;
 const stopLiveAudio = () => {
@@ -207,12 +213,12 @@ const stopLiveAudio = () => {
 const guard = new PlaybackGuard(stopLiveAudio);
 
 /** POST warm-up. Honours the scheduler's AbortSignal so a live GET can cancel it. */
-async function fetchClip(text: string, voice: string, signal?: AbortSignal): Promise<Clip | null> {
+async function fetchClip(text: string, voice: string, act: ExaminerSpeechAct, profile: string | undefined, signal?: AbortSignal): Promise<Clip | null> {
   try {
     const res = await fetch("/api/tts", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-TTS-Priority": "prefetch" },
-      body: JSON.stringify({ text, voice }),
+      body: JSON.stringify({ text, voice, act, ...(profile ? { profile } : {}) }),
       cache: "no-store",
       signal,
     });
@@ -237,7 +243,7 @@ const releaseClip = (c: Clip) => {
 export const ttsScheduler = new TtsScheduler<Clip>({
   run: (task, signal) => {
     const t0 = performance.now();
-    return fetchClip(task.text, task.voice, signal).then((clip) => {
+    return fetchClip(task.text, task.voice, (task.act || "question") as ExaminerSpeechAct, task.profile || undefined, signal).then((clip) => {
       audioMetrics.record("tts_synthesis_ms", performance.now() - t0, "cache-miss", task.text.slice(0, 48));
       audioMetrics.record("audio_download_ms", performance.now() - t0, "cache-miss", task.text.slice(0, 48));
       return clip;
@@ -249,46 +255,76 @@ export const ttsScheduler = new TtsScheduler<Clip>({
 });
 
 /** Prefetch one line. Returns a promise + live status (void-returning legacy callers still work). */
-export function prefetchTTSWithPriority(text: string, voice: string, serverTts: boolean, priority: TtsPriority) {
+export function prefetchTTSWithPriority(
+  text: string,
+  voice: string,
+  serverTts: boolean,
+  priority: TtsPriority,
+  act: ExaminerSpeechAct = "question",
+  profile?: string,
+) {
   if (!serverTts || !text.trim() || typeof window === "undefined") {
-    return { key: keyOf(text, voice), promise: Promise.resolve(null), ready: () => false, status: () => "cancelled" as const, promote: () => {}, cancel: () => {} };
+    return { key: keyOf(text, voice, act, profile), promise: Promise.resolve(null), ready: () => false, status: () => "cancelled" as const, promote: () => {}, cancel: () => {} };
   }
-  return ttsScheduler.request({ text, voice, model: ttsModel, format: ttsFormat }, priority);
+  return ttsScheduler.request({ text, voice, model: ttsModel, format: ttsFormat, act, profile }, priority);
 }
 
 /** Legacy signature kept: `priority=true` means NEXT, otherwise BACKGROUND. */
-export function prefetchTTS(text: string, voice: string, serverTts: boolean, priority = false): void {
-  void prefetchTTSWithPriority(text, voice, serverTts, priority ? TTS_PRIORITY.NEXT : TTS_PRIORITY.BACKGROUND).promise;
+export function prefetchTTS(
+  text: string,
+  voice: string,
+  serverTts: boolean,
+  priority = false,
+  act: ExaminerSpeechAct = "question",
+  profile?: string,
+): void {
+  void prefetchTTSWithPriority(text, voice, serverTts, priority ? TTS_PRIORITY.NEXT : TTS_PRIORITY.BACKGROUND, act, profile).promise;
 }
 
 /** Queue the whole script. Repeat forms and no-response backups are LOW priority. */
 export function prefetchManyTTSWithPriorities(
-  entries: { text: string; priority: TtsPriority }[],
+  entries: { text: string; priority: TtsPriority; act?: ExaminerSpeechAct }[],
   voice: string,
   serverTts: boolean,
+  profile?: string,
 ): void {
   if (!serverTts || typeof window === "undefined") return;
   const seen = new Set<string>();
   for (const e of entries) {
-    if (!e.text?.trim() || seen.has(e.text)) continue;
-    seen.add(e.text);
-    void prefetchTTSWithPriority(e.text, voice, true, e.priority).promise;
+    if (!e.text?.trim()) continue;
+    const act = e.act ?? "question";
+    const id = keyOf(e.text, voice, act, profile);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    void prefetchTTSWithPriority(e.text, voice, true, e.priority, act, profile).promise;
   }
 }
 
-/** Legacy signature kept for compatibility. */
-export function prefetchManyTTS(lines: string[], voice: string, serverTts: boolean): void {
-  prefetchManyTTSWithPriorities(lines.map((text) => ({ text, priority: TTS_PRIORITY.BACKGROUND })), voice, serverTts);
+/** A script line with the delivery it should use. Plain strings default to "question". */
+export interface ScriptLine {
+  text: string;
+  act: ExaminerSpeechAct;
+}
+
+/** Legacy signature kept for compatibility; also accepts {text, act} entries. */
+export function prefetchManyTTS(lines: (string | ScriptLine)[], voice: string, serverTts: boolean, profile?: string): void {
+  prefetchManyTTSWithPriorities(
+    lines.map((l) => (typeof l === "string"
+      ? { text: l, priority: TTS_PRIORITY.BACKGROUND, act: "question" as ExaminerSpeechAct }
+      : { text: l.text, priority: TTS_PRIORITY.BACKGROUND, act: l.act })),
+    voice,
+    serverTts,
+    profile,
+  );
 }
 
 /** Promote a queued line to CURRENT when playback is about to start. */
-export function promoteTTS(text: string, voice: string): void {
-  ttsScheduler.promote(keyOf(text, voice), TTS_PRIORITY.CURRENT);
+export function promoteTTS(text: string, voice: string, act: ExaminerSpeechAct = "question", profile?: string): void {
+  ttsScheduler.promote(keyOf(text, voice, act, profile), TTS_PRIORITY.CURRENT);
 }
 
-export function waitForTTS(text: string, voice: string, timeoutMs = 15000): Promise<Clip | null> {
-  const key = keyOf(text, voice);
-  const req = ttsScheduler.request({ text, voice, model: ttsModel, format: ttsFormat }, TTS_PRIORITY.CURRENT);
+export function waitForTTS(text: string, voice: string, timeoutMs = 15000, act: ExaminerSpeechAct = "question", profile?: string): Promise<Clip | null> {
+  const req = ttsScheduler.request({ text, voice, model: ttsModel, format: ttsFormat, act, profile }, TTS_PRIORITY.CURRENT);
   let timer: ReturnType<typeof setTimeout> | undefined;
   return Promise.race([
     req.promise,
@@ -357,8 +393,8 @@ function playClip(clip: Clip, signal?: AbortSignal): Promise<PlaybackOutcome> {
 }
 
 /** Progressive playback: audio starts at the first sentence the engine produces. */
-function playStream(text: string, voice: string, signal?: AbortSignal): Promise<PlaybackOutcome> {
-  const audio = new Audio(ttsStreamUrl(text, voice));
+function playStream(text: string, voice: string, act: ExaminerSpeechAct, profile: string | undefined, signal?: AbortSignal): Promise<PlaybackOutcome> {
+  const audio = new Audio(ttsStreamUrl(text, voice, act, profile));
   audio.preload = "auto";
   liveAudio = audio;
   const lifecycle = new AudioLifecycle("tts-stream");
@@ -421,6 +457,13 @@ function presetUrl(url: string): string {
 export interface SpeakOptions {
   serverTts: boolean;
   voice: string;
+  /** How this line should be delivered (greeting, question, instruction …).
+   *  It changes the prosody/instructions sent to the engine, so it is part of the
+   *  cache identity — never reuse a question clip for a closing line. */
+  act?: ExaminerSpeechAct;
+  /** VoiceProfile id. When set the server uses it (and its provider) instead of
+   *  the raw voice name, which is how a session's voice stays fixed. */
+  profileId?: string;
   signal?: AbortSignal;
 }
 export interface SpeakResult {
@@ -434,7 +477,7 @@ export interface SpeakResult {
 const activeSpeaks = new Map<string, Promise<SpeakResult>>();
 
 export function speak(text: string, opts: SpeakOptions): Promise<SpeakResult> {
-  const key = keyOf(text, opts.voice);
+  const key = keyOf(text, opts.voice, opts.act ?? "question", opts.profileId);
   const existing = activeSpeaks.get(key);
   if (existing) return existing;
   const p = doSpeak(text, opts, key).finally(() => activeSpeaks.delete(key));
@@ -444,6 +487,8 @@ export function speak(text: string, opts: SpeakOptions): Promise<SpeakResult> {
 
 async function doSpeak(text: string, opts: SpeakOptions, key: string): Promise<SpeakResult> {
   if (!text.trim()) return { ok: true, via: "none", outcome: outcomeOf("ended", "none") };
+  const act = opts.act ?? "question";
+  const profile = opts.profileId;
   const begun = guard.begin(key);
   if (!begun) return { ok: false, via: "duplicate", outcome: outcomeOf("interrupted", "duplicate") };
 
@@ -465,8 +510,8 @@ async function doSpeak(text: string, opts: SpeakOptions, key: string): Promise<S
     } else {
       // 2) Promote any in-flight warm-up, but NEVER wait on it: go straight to
       //    the progressive GET stream (dynamic LLM follow-ups take this path).
-      promoteTTS(text, opts.voice);
-      const streamOutcome = await playStream(text, opts.voice, opts.signal);
+      promoteTTS(text, opts.voice, act, profile);
+      const streamOutcome = await playStream(text, opts.voice, act, profile, opts.signal);
       if (streamOutcome.status === "ended") return finish({ ok: true, via: "server-stream", outcome: streamOutcome });
       if (streamOutcome.status === "interrupted") return finish({ ok: false, via: "server-stream", outcome: streamOutcome });
       if (streamOutcome.partial) {
@@ -474,7 +519,7 @@ async function doSpeak(text: string, opts: SpeakOptions, key: string): Promise<S
         return finish({ ok: false, via: "server-stream", outcome: streamOutcome });
       }
       // 3) Buffered fallback (also repopulates the client cache).
-      const clip = await fetchClip(text, opts.voice, opts.signal);
+      const clip = await fetchClip(text, opts.voice, act, profile, opts.signal);
       if (clip) {
         const o = await playClip(clip, opts.signal);
         // Playback has finished (or been aborted): release the temporary blob
@@ -495,8 +540,11 @@ async function doSpeak(text: string, opts: SpeakOptions, key: string): Promise<S
     const v = pickVoice(opts.voice);
     if (v) u.voice = v;
     u.lang = v?.lang || "en-GB";
-    u.rate = 0.92;
-    u.pitch = 1;
+    // The browser voice has no SSML, but rate/pitch still separate a greeting
+    // from an instruction instead of delivering every line identically.
+    const style = SPEECH_ACTS[act];
+    u.rate = Math.min(2, Math.max(0.5, 0.94 * style.browserRateFactor));
+    u.pitch = Math.min(2, Math.max(0, 1 * style.browserPitchFactor));
     const lifecycle = new AudioLifecycle("browser-voice");
     lifecycle.send("LOAD");
     lifecycle.send("READY");

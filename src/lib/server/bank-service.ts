@@ -16,6 +16,9 @@ export interface BankEntry {
   text: string;
   textZh?: string;
   cuePoints?: string[];
+  /** Pre-recorded audio for this prompt, and the profile that recorded it. */
+  questionAudioUrl?: string;
+  questionVoiceProfile?: string;
 }
 export interface BankTopic {
   key: string;
@@ -90,9 +93,9 @@ export async function importBank(raw: unknown, activate = false) {
         setId: set.id, module: "speaking", topic: t.name, topicKey: t.key, topicZh: t.nameZh ?? null,
         questionType: String(t.type), category: String(t.category ?? "part1"), examinees: t.examinees ?? null,
       };
-      t.part1?.forEach((q, i) => rows.push({ ...base, part: 1, text: q.text.trim(), textZh: q.textZh?.trim() || null, orderIndex: i }));
-      t.part2?.forEach((q, i) => rows.push({ ...base, part: 2, text: q.text.trim(), cuePoints: q.cuePoints ?? [], orderIndex: i }));
-      t.part3?.forEach((q, i) => rows.push({ ...base, part: 3, text: q.text.trim(), textZh: q.textZh?.trim() || null, orderIndex: i }));
+      t.part1?.forEach((q, i) => rows.push({ ...base, part: 1, text: q.text.trim(), textZh: q.textZh?.trim() || null, orderIndex: i, questionAudioUrl: q.questionAudioUrl ?? null, questionVoiceProfile: q.questionVoiceProfile ?? null }));
+      t.part2?.forEach((q, i) => rows.push({ ...base, part: 2, text: q.text.trim(), cuePoints: q.cuePoints ?? [], orderIndex: i, questionAudioUrl: q.questionAudioUrl ?? null, questionVoiceProfile: q.questionVoiceProfile ?? null }));
+      t.part3?.forEach((q, i) => rows.push({ ...base, part: 3, text: q.text.trim(), textZh: q.textZh?.trim() || null, orderIndex: i, questionAudioUrl: q.questionAudioUrl ?? null, questionVoiceProfile: q.questionVoiceProfile ?? null }));
     }
     for (let i = 0; i < rows.length; i += 100) await tx.insert(questions).values(rows.slice(i, i + 100));
 

@@ -4,8 +4,9 @@
  *  - Anthropic Messages API
  *  - Azure Speech: Neural TTS + Pronunciation Assessment (audio-based)
  */
-import { ProviderError, type ASRProvider, type LLMProvider, type TTSProvider, type PronunciationProvider, type ChatMessage } from "./types";
-import { EXAMINER_TTS_INSTRUCTIONS, normalizeExaminerText, toAzureSsml, toProsodySsml } from "./tts-text";
+import { ProviderError, type ASRProvider, type LLMProvider, type TTSProvider, type PronunciationProvider, type ChatMessage, type TTSSynthesisOptions } from "./types";
+import { prepareExaminerSpeech, toAzureSsmlForAct } from "./tts-text";
+import { clampSpeed, resolveVoiceProfile } from "@/lib/speaking/voice-profile";
 
 async function check(res: Response, provider: string) {
   if (!res.ok) {
@@ -128,45 +129,56 @@ function ttsMime(format: string): string {
 /**
  * OpenAI-compatible /audio/speech, also used by self-hosted engines (Kokoro, etc.).
  *
- * Two things matter for examiner audio quality:
- *  - prosody: a flat string sounds mechanical; SSML <break>s give it human rhythm.
- *    Only sent to compatible engines — OpenAI rejects unknown request fields.
- *  - streaming: compatible engines emit one sentence per chunk, so the route can
- *    pipe audio to the browser while it is still being generated.
+ * Three engine families are addressed by the same endpoint but accept different
+ * fields, so capabilities are detected once and nothing unsupported is sent:
+ *   - gpt-4o-*-tts  : natural-language `instructions`, plain text input
+ *   - tts-1 / -hd   : plain text, no instructions
+ *   - Kokoro-like   : `ssml` + `allow_voice_tags` for real pauses, and streaming
+ * Sending an unknown field is a hard 400 on the official API, hence the split.
  */
 export function openAITTS(): TTSProvider {
   const base = (process.env.TTS_BASE_URL || process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
   const key = process.env.TTS_API_KEY || process.env.OPENAI_API_KEY || "";
   const model = process.env.TTS_MODEL || "gpt-4o-mini-tts";
   const format = process.env.TTS_FORMAT || "mp3";
-  const speed = Number(process.env.TTS_SPEED || 0.95);
-  const instructions = process.env.TTS_INSTRUCTIONS || EXAMINER_TTS_INSTRUCTIONS;
-  const configuredVoice = (v?: string) => (v && v !== "auto" ? v : process.env.TTS_VOICE || "alloy");
 
-  // A custom base URL / dedicated key or a Kokoro model id means a compatible engine.
+  const neural = /gpt-4o.*-tts/i.test(model);
+  const legacyOpenAI = /^tts-1/i.test(model);
+  const kokoroLike = /^kokoro/i.test(model) || /kokoro/i.test(base);
   const compatible = !!(process.env.TTS_BASE_URL || process.env.TTS_API_KEY) || /^(kokoro|tts-1|tts-1-hd)$/i.test(model);
-  const prosody = process.env.TTS_PROSODY ? process.env.TTS_PROSODY !== "0" : compatible;
+  // Only engines that document `ssml` receive it; OpenAI's own models reject it.
+  const ssmlSupported = kokoroLike || (compatible && !neural && !legacyOpenAI);
+  const useSsml = process.env.TTS_PROSODY ? process.env.TTS_PROSODY !== "0" && ssmlSupported : ssmlSupported;
   const streaming = process.env.TTS_STREAM ? process.env.TTS_STREAM !== "0" : compatible;
-  const neural = /gpt-4o.*-tts|gpt-4o-mini-tts/i.test(model);
 
-  const payload = (text: string, voice: string | undefined, stream: boolean) => JSON.stringify({
-    model,
-    voice: configuredVoice(voice),
-    input: prosody ? toProsodySsml(text) : normalizeExaminerText(text),
-    response_format: format,
-    speed,
-    ...(compatible ? { stream } : {}),
-    ...(prosody ? { ssml: true, allow_voice_tags: true } : {}),
-    ...(neural ? { instructions } : {}),
-  });
+  const resolveProfile = (opts?: TTSSynthesisOptions) =>
+    opts?.profile ?? resolveVoiceProfile(opts?.voice ?? process.env.TTS_VOICE);
 
-  const request = (text: string, voice: string | undefined, stream: boolean, signal?: AbortSignal) => {
+  const payload = (text: string, opts: TTSSynthesisOptions | undefined, stream: boolean) => {
+    const profile = resolveProfile(opts);
+    const prepared = prepareExaminerSpeech({ text, speechAct: opts?.speechAct ?? "question", profile });
+    const explicit = opts?.voice && opts.voice !== "auto" ? opts.voice : "";
+    const voice = explicit || profile.voice || process.env.TTS_VOICE || "alloy";
+    const instructions = process.env.TTS_INSTRUCTIONS || prepared.instructions;
+    return JSON.stringify({
+      model,
+      voice,
+      input: useSsml ? prepared.ssml : prepared.plain,
+      response_format: format,
+      speed: clampSpeed(prepared.speed),
+      ...(compatible ? { stream } : {}),
+      ...(useSsml ? { ssml: true, allow_voice_tags: true } : {}),
+      ...(neural ? { instructions } : {}),
+    });
+  };
+
+  const request = (text: string, opts: TTSSynthesisOptions | undefined, stream: boolean) => {
     if (!key) throw new ProviderError("openai-tts", "config", "missing API key");
     return fetch(`${base}/audio/speech`, {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: payload(text, voice, stream),
-      signal,
+      body: payload(text, opts, stream),
+      signal: opts?.signal,
     });
   };
 
@@ -174,13 +186,14 @@ export function openAITTS(): TTSProvider {
     id: "openai-compatible-tts",
     model,
     location: "server",
+    supports: { ssml: useSsml, instructions: neural, style: false, pitch: false },
     async synthesize(text, opts) {
-      const res = await check(await request(text, opts?.voice, false, opts?.signal), "openai-tts");
+      const res = await check(await request(text, opts, false), "openai-tts");
       return { audio: Buffer.from(await res.arrayBuffer()), mimeType: ttsMime(res.headers.get("content-type")?.includes("wav") ? "wav" : format) };
     },
     async synthesizeStream(text, opts) {
       if (!streaming) return null;
-      const res = await check(await request(text, opts?.voice, true, opts?.signal), "openai-tts");
+      const res = await check(await request(text, opts, true), "openai-tts");
       if (!res.body) return null;
       const ct = res.headers.get("content-type") || "";
       return {
@@ -194,24 +207,31 @@ export function openAITTS(): TTSProvider {
 /**
  * Azure Neural TTS — the most natural option, including genuine British neural
  * voices. Reuses the same speech key/region as pronunciation assessment.
+ *
+ * SSML is built per speech act: exact pause times between sentences, a slower
+ * rate for instructions and closings, and a subtle emphasis on one informative
+ * word. `mstts:express-as` is emitted only when a style was explicitly chosen,
+ * because an unsupported style is a hard failure rather than a graceful no-op.
  */
 export function azureTTS(): TTSProvider {
   const key = process.env.AZURE_SPEECH_KEY || "";
   const region = process.env.AZURE_SPEECH_REGION || "";
-  const configured = process.env.TTS_VOICE || "";
-  const isNeuralName = /^[a-z]{2}-[A-Z]{2}-.+/i.test(configured);
   const fallback = process.env.AZURE_TTS_VOICE || "en-GB-SoniaNeural";
-  const defaultVoice = isNeuralName ? configured : fallback;
   const outputFormat = process.env.AZURE_TTS_FORMAT || "riff-48khz-16bit-mono-pcm";
+  const isNeuralVoice = (s?: string) => !!s && /^[a-z]{2}-[A-Z]{2}-[A-Za-z]+Neural$/.test(s);
 
   return {
     id: "azure-neural-tts",
-    model: defaultVoice,
+    model: fallback,
     location: "server",
+    supports: { ssml: true, instructions: false, style: true, pitch: true },
     async synthesize(text, opts) {
       if (!key || !region) throw new ProviderError("azure-tts", "config", "missing AZURE_SPEECH_KEY / AZURE_SPEECH_REGION");
-      const voice = opts?.voice && /^[a-z]{2}-[A-Z]{2}-.+/i.test(opts.voice) ? opts.voice : defaultVoice;
+      const profile = opts?.profile ?? resolveVoiceProfile(opts?.voice ?? process.env.TTS_VOICE);
+      const voice = isNeuralVoice(opts?.voice) ? opts!.voice! : isNeuralVoice(profile.voice) ? profile.voice : fallback;
       const lang = /^en-GB/i.test(voice) ? "en-GB" : /^en-/i.test(voice) ? voice.slice(0, 5) : "en-GB";
+      const prepared = prepareExaminerSpeech({ text, speechAct: opts?.speechAct ?? "question", profile });
+      const ssml = toAzureSsmlForAct(prepared, voice, lang, profile.style);
       const res = await check(
         await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
           method: "POST",
@@ -221,7 +241,7 @@ export function azureTTS(): TTSProvider {
             "X-Microsoft-OutputFormat": outputFormat,
             "User-Agent": "band-nine-ielts",
           },
-          body: toAzureSsml(text, voice, lang),
+          body: ssml,
           signal: opts?.signal,
         }),
         "azure-tts",

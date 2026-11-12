@@ -99,6 +99,55 @@ npm run build && npx next start -p 3100   # 生产；开发用 npm run dev -p 31
 ### 延迟优化
 实测本地 Kokoro 短句 2–4s、长句 9–13s。优化点：setup 阶段预取整场台词（并发 2，POST 完整缓冲）+ blob 预解码、服务端 LRU 缓存与 in-flight 去重、`GET /api/tts` 逐句流式 pipe、四级播放兜底（缓存 → 流式 → 完整缓冲 → 浏览器语音）。重复台词从 7.6s 降到 0.03s；动态追问首字节约 3s 即可出声。详见 `.env.example` 与 `docs/architecture.md`。
 
+## 考官语音系统（Phase 2）
+
+### VoiceProfile：一套配置描述任何引擎
+`src/lib/speaking/voice-profile.ts` 把「谁在说话」抽象成与供应商无关的结构：`provider`（azure / openai / kokoro / browser）+ `voice` + `speed` + `pitch` + `style?` + `instructions?` + `prosody`（句间/问句/分句停顿、是否强调）。Provider 与音色解耦，换引擎不需要改考试流程。
+
+配置分三层，互不覆盖：
+
+| 层级 | 来源 | 生效范围 |
+|---|---|---|
+| 默认 | 内置预设 `VOICE_PRESETS` + `TTS_PROVIDER/TTS_VOICE/TTS_SPEED` | 未做任何选择时 |
+| 用户偏好 | `users.examiner_voice`（设置页 / Voice Lab） | 之后新建的考试 |
+| 考试快照 | 创建考试时写入 `configSnapshot.voiceProfile` | **该场考试全程固定** |
+
+考试中改设置不会改变当前考官声音；刷新页面也会读回快照，而不是最新设置。旧值全部兼容：`bf_emma`（Kokoro 旧音色名）→ `kokoro:bf_emma`，`en-GB-SoniaNeural` → `azure:en-GB-SoniaNeural`，`provider:voice` 原样识别。
+
+### SpeechAct：同样是文字，说法不同
+`src/lib/speaking/speech-act.ts` 定义 7 种表达类型，每种只调整**表达方式**，绝不改动题目文字或考试规则：
+
+| Act | 语速 | 句间停顿 | 强调 | 典型台词 |
+|---|---|---|---|---|
+| `greeting` | ×0.99 | 240ms | 否 | Good morning. My name is Sarah. |
+| `introduction` | ×1.00 | 260ms | 轻微 | In this first part, I'd like to ask… |
+| `instruction` | ×0.96 | 300ms | 轻微 | You'll have one minute to prepare… |
+| `question` | ×1.00 | 240ms / 问句 440ms | 轻微 | Do you enjoy reading? |
+| `acknowledgement` | ×1.02 | 180ms | 否 | Thank you. / Right. |
+| `time_warning` | ×1.00 | 300ms | 轻微 | That is the end of your talk. |
+| `closing` | ×0.95 | 320ms | 否 | That is the end of the speaking test. |
+
+`prepareExaminerSpeech()` 输出纯文本 + 可移植 SSML + 该 act 的 steering 文本 + 最终语速/音高；强调每句最多一个实词（停用词表过滤），因为过度强调最容易听起来像机器。开场白、Part 引导、追问、叫停、结束语分别以对应 act 合成，不再整场一个腔调。
+
+### 各 Provider 的真实能力
+| Provider | SSML | instructions | style | pitch | 本机状态 |
+|---|---|---|---|---|---|
+| Azure Neural | ✅ 精确 `<break time>` + `prosody rate/pitch` + `emphasis` | ❌ | 仅显式配置时 | ✅ | 未配置密钥，已做 SSML 合法性与降级测试 |
+| OpenAI `gpt-4o-*-tts` | ❌（官方拒绝未知字段） | ✅ 按 act 分派 | ❌ | ❌ | 未配置密钥 |
+| OpenAI `tts-1/-hd` | ❌ | ❌ | ❌ | ❌ | — |
+| Kokoro 兼容 | ✅ `<break strength>` | ❌ | ❌ | ❌ | ✅ 实测可用 |
+| 浏览器 | ❌（用 rate/pitch 近似） | ❌ | ❌ | ✅ | 仅兜底 |
+
+**能力探测而非假设**：只给引擎发送它文档里支持的字段；Azure 的 `mstts:express-as` 仅在明确选择了 style 时发送，避免 400。请求了未配置的 provider 会返回明确错误（`502 … AZURE_SPEECH_KEY not configured`），**不会静默换成另一个声音**。
+
+### 缓存身份
+缓存 key = `provider` + `model` + `voice` + `language` + `speed` + `pitch` + `style` + `instructions` + `prosody` + `speechAct` + `format` + `text`。换音色 / 改语速 / 换 act 都会得到新 key，不可能读到上一次配置的音频。响应头带 `X-TTS-Provider / X-TTS-Voice / X-TTS-Act / X-TTS-Cache`，便于排查。
+
+### Voice Lab（设置页底部）
+同一句话、同一个 act，A/B 两个 profile 并排听：可切 Provider / 音色 / 语速 / 音高 / SpeechAct / 自定义文本，内置 7 句固定语料；每次合成显示**延迟、MIME、采样率、体积**，失败显示 Provider 原文错误。未配置的 provider 在下拉里标 `not configured` 且不可选。听到满意的，"Use for exams" 写入你的考试音色（只影响之后的新考试）。
+
+> 自然度只能靠耳朵判断，所以这一块刻意不做机器打分。
+
 ## 无 API Key 时的行为（真实，不做伪造）
 | 能力 | 默认 | 说明 |
 |---|---|---|
@@ -109,7 +158,7 @@ npm run build && npx next start -p 3100   # 生产；开发用 npm run dev -p 31
 
 ## 测试
 ```bash
-npx tsx --test tests/unit.test.ts                 # 单元测试（22 项）
+npx tsx --test tests/unit.test.ts                 # 单元测试（29 项）
 npm run build && npx next start -p 3100 &
 node tests/integration.mjs http://localhost:3100  # 端到端（含题库后台、组卷规则、未评分行为）
 ```
