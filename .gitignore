@@ -10,6 +10,7 @@ build/
 !.env.example
 
 # generated / local state
+.workbuddy/
 storage/
 tsconfig.tsbuildinfo
 *.tsbuildinfo

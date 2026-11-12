@@ -109,4 +109,4 @@ node tests/integration.mjs http://localhost:3100  # 端到端 API 测试（22 �
 - `docs/roadmap.md`：任务状态、阻塞项、后续三科计划
 
 ## 版本控制
-仓库已初始化，`.gitignore` 忽略 `node_modules/`、`.next/`、`.env*`（保留 `.env.example`）、`storage/`、`tsconfig.tsbuildinfo` 等生成物与本地密钥。**不要把包含密钥的 `.env` 提交进仓库。**
+仓库已初始化（`main` 分支）。`.gitignore` 忽略 `node_modules/`、`.next/`、`.env*`（保留 `.env.example`）、`storage/`、`.workbuddy/`、`tsconfig.tsbuildinfo` 等生成物与本地密钥。**不要把包含密钥的 `.env` 提交进仓库。**
