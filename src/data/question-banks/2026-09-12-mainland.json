@@ -134,8 +134,8 @@
    "examinees": 1106,
    "part1": [
     {
-     "text": "How often?",
-     "textZh": "你喜欢买鞋子吗？"
+     "text": "Do you like buying shoes? How often?",
+     "textZh": "你喜欢买鞋子吗？多久买一次？"
     },
     {
      "text": "Have you ever bought shoes online?",
@@ -292,6 +292,10 @@
     {
      "text": "What do you do when you feel tired?",
      "textZh": "你感到疲惫的时候会做什么？"
+    },
+    {
+     "text": "When you feel tired,do you still go out with your frineds？",
+     "textZh": "当你感到疲惫的时候，你还会和朋友出去吗？"
     }
    ],
    "part2": [],
@@ -316,6 +320,10 @@
     {
      "text": "Do you often ride a bicycle?",
      "textZh": "你经常骑自行车吗？"
+    },
+    {
+     "text": "What transport do you often use when travelling？",
+     "textZh": "你旅行时经常使用什么交通工具？"
     }
    ],
    "part2": [],
@@ -376,6 +384,42 @@
     {
      "text": "What work do u do?",
      "textZh": "你从事什么工作？"
+    },
+    {
+     "text": "Why did u choose to do that tpye of work for that job?",
+     "textZh": "为什么选择从事这种类型的工作？"
+    },
+    {
+     "text": "Do u want to change to another job?",
+     "textZh": "你想换一份工作吗？"
+    },
+    {
+     "text": "Do u like your job?",
+     "textZh": "你喜欢你的工作吗？"
+    },
+    {
+     "text": "What requirements did u need to meet to get your current job?",
+     "textZh": "你需要满足哪些条件才能获得目前的工作？"
+    },
+    {
+     "text": "What technology do u use at work?",
+     "textZh": "你在工作中使用哪些技术？"
+    },
+    {
+     "text": "What do u think is the most important at the moment?",
+     "textZh": "你认为目前最重要的是什么？"
+    },
+    {
+     "text": "Do u have any plans for your work in the next five years?",
+     "textZh": "你对未来五年的工作有什么计划？"
+    },
+    {
+     "text": "Do u miss being a student?",
+     "textZh": "你是否怀念学生时代？"
+    },
+    {
+     "text": "Who helps u the most？Why？",
+     "textZh": "谁对你帮助最大？为什么？"
     }
    ],
    "part2": [],
@@ -476,6 +520,18 @@
     {
      "text": "Is your hometown a good place for young people to pursue their careers?",
      "textZh": "你家乡是年轻人追求事业的好地方吗？"
+    },
+    {
+     "text": "Have u learned anything about the history of your hometown?",
+     "textZh": "你学过家乡的历史吗？"
+    },
+    {
+     "text": "Did u learn about the history of your hometown at school?",
+     "textZh": "你在学校里学过家乡的历史吗？"
+    },
+    {
+     "text": "Did u learn about the culture of your hometown in your childhood？",
+     "textZh": "你在童年时学过家乡的文化吗？"
     }
    ],
    "part2": [],
@@ -522,6 +578,10 @@
      "textZh": "你计划在这里住很长时间吗？"
     },
     {
+     "text": "Please describe the room u live in？",
+     "textZh": "描述你居住的房间？"
+    },
+    {
      "text": "What's your favourite room in your apartment or house?",
      "textZh": "你最喜欢的房间是公寓或房子里的哪个房间？"
     },
@@ -536,6 +596,22 @@
     {
      "text": "What do u usually do in your apartment?",
      "textZh": "你在公寓经常做什么？"
+    },
+    {
+     "text": "What makes u feel pleasant in your home？",
+     "textZh": "什么让你在家里感到愉快？"
+    },
+    {
+     "text": "What's the difference between where u live now and where u have lived in the past?",
+     "textZh": "你现在住的地方和过去住过的地方有什么不同？"
+    },
+    {
+     "text": "What kind of hourse or apartment do u want to live in the future?",
+     "textZh": "你未来想住什么样的房子或公寓？"
+    },
+    {
+     "text": "Do u think it is important to live in a comfortable environment?",
+     "textZh": "你认为住在一个舒适的环境中重要吗？"
     }
    ],
    "part2": [],
@@ -562,6 +638,10 @@
      "textZh": "天气怎样？"
     },
     {
+     "text": "Do u like this city? Why?",
+     "textZh": "你喜欢吗为什么？"
+    },
+    {
      "text": "Are there big change in this city?",
      "textZh": "城市有大的变化吗？"
     },
@@ -584,6 +664,10 @@
     {
      "text": "Is the city friendly to children and old people?",
      "textZh": "这座城市是否对儿童和老年人友好？"
+    },
+    {
+     "text": "Do u often see your neighbors?",
+     "textZh": "你是否经常见到你的邻居?"
     }
    ],
    "part2": [],
@@ -608,6 +692,10 @@
     {
      "text": "Why do some people wear expensive watches?",
      "textZh": "为什么有些人戴昂贵的手表？"
+    },
+    {
+     "text": "Do you think it is important to wear a watch? Why?",
+     "textZh": "你认为戴手表重要吗？为什么？"
     }
    ],
    "part2": [],
@@ -699,7 +787,7 @@
     },
     {
      "text": "Do you still like going to parks now?",
-     "textZh": "你现在依然喜欢去公园吗 ？"
+     "textZh": "你现在依然喜欢去公园吗？"
     },
     {
      "text": "Would you like to see more parks in your city?",
@@ -738,8 +826,8 @@
    "examinees": 406,
    "part1": [
     {
-     "text": "How often?",
-     "textZh": "你喜欢照镜子吗？"
+     "text": "Do you like looking at yourself in the mirror? How often?",
+     "textZh": "你喜欢照镜子吗？多久一次？"
     },
     {
      "text": "Have you ever bought mirrors?",
@@ -808,10 +896,6 @@
     {
      "text": "Do you like shopping?",
      "textZh": "你喜欢购物吗？"
-    },
-    {
-     "text": "Does this time work for you?",
-     "textZh": "这个时间适合你吗 • 反义词：doesn't fit/suit 不合适 / misfit 不适合 / doesn't match 不搭配 Do you like shopping? 你喜欢购物吗？"
     }
    ],
    "part2": [],
@@ -906,6 +990,14 @@
      "textZh": "你使用耳机吗？"
     },
     {
+     "text": "What type of headphones do you use？",
+     "textZh": "你用什么类型的耳机？"
+    },
+    {
+     "text": "When would you use headphones？",
+     "textZh": "你在什么时候使用耳机？"
+    },
+    {
      "text": "In what conditions would you not use headphones?",
      "textZh": "在什么情况下你不会用耳机？"
     }
@@ -958,6 +1050,10 @@
      "textZh": "你喜欢听别人唱歌吗？"
     },
     {
+     "text": "Do you like singing? Why?",
+     "textZh": "你喜欢唱歌吗？为什么？"
+    },
+    {
      "text": "Have you ever learnt how to sing?",
      "textZh": "你曾经学过唱歌吗？"
     },
@@ -988,6 +1084,10 @@
     {
      "text": "Have u ever learnt about outer space and stars?",
      "textZh": "你是否曾经了解过外太空和星星？"
+    },
+    {
+     "text": "Do u like science fiction movies? Why?",
+     "textZh": "你喜欢科幻电影吗？为什么？"
     },
     {
      "text": "Do u want to know more about outer space?",
@@ -1050,8 +1150,92 @@
      "textZh": "你通常早上做什么？"
     },
     {
+     "text": "What did you do in the morning when you were little? Why?",
+     "textZh": "你小时候早上都做什么？为什么？"
+    },
+    {
      "text": "Are there any differences between what you do in the morninng now and what you did in the past?",
      "textZh": "你现在的早晨做的事情和过去有什么不同？"
+    },
+    {
+     "text": "Do you spend your mornings doing the same things on both weekends and weekdays? Why?",
+     "textZh": "你周末和工作日早上都做同样的事情吗？为什么？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "websites",
+   "name": "Websites",
+   "nameZh": "网站",
+   "type": "retained",
+   "category": "part1",
+   "examinees": 665,
+   "part1": [
+    {
+     "text": "Do you prefer getting information from websites or books?",
+     "textZh": "你更喜欢从网站还是书籍获取信息？"
+    },
+    {
+     "text": "Would you like to have your own website?",
+     "textZh": "你想要拥有自己的网站吗？"
+    },
+    {
+     "text": "What kinds of websites do you often visit?",
+     "textZh": "你经常访问哪些类型的网站？"
+    },
+    {
+     "text": "What is your favourite website?",
+     "textZh": "你最喜欢的网站是什么？"
+    },
+    {
+     "text": "Are there any changes to the websites you often visit?",
+     "textZh": "你经常访问的网站有变化吗？"
+    },
+    {
+     "text": "What kind of websites are popular in your country?",
+     "textZh": "你们国家流行什么样的网站？"
+    },
+    {
+     "text": "What have you learned from websites that help with your life or studies?",
+     "textZh": "你从帮助生活或学习的网站上学到了什么？"
+    }
+   ],
+   "part2": [],
+   "part3": []
+  },
+  {
+   "key": "science",
+   "name": "Science",
+   "nameZh": "科学",
+   "type": "retained",
+   "category": "part1",
+   "examinees": 497,
+   "part1": [
+    {
+     "text": "Do you like science？",
+     "textZh": "你喜欢科学吗？"
+    },
+    {
+     "text": "When did you start to learn about science?",
+     "textZh": "你是什么时候开始学习科学的？"
+    },
+    {
+     "text": "Which science subject is interesting to you?",
+     "textZh": "你对哪个科学科目感兴趣？"
+    },
+    {
+     "text": "What kinds of interesting things have you done with science?",
+     "textZh": "你用科学做过哪些有趣的事？"
+    },
+    {
+     "text": "Do you like watching science TV programs?",
+     "textZh": "你喜欢看科学电视节目吗？"
+    },
+    {
+     "text": "Do Chinese people often visit science museums?",
+     "textZh": "中国人经常参观科学博物馆吗？"
     }
    ],
    "part2": [],

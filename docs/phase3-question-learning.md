@@ -63,7 +63,7 @@ $ grep -n "learningContent\|question_audio_url" src/db/schema.ts
 
 `exam-runner.tsx` 已有的判定是**原始 id 严格相等**（`questionVoiceProfile !== profileId`），我没有改它（禁改）。后台的"能否播放"按同一规则计算，另外用 `canonicalVoiceId` 标出"同一个音色、只是写法不同"的情况（`equivalentVoice`），后台会提示"仅需改标签"——这样后台不会承诺一个考试会拒绝的播放。
 
-> 真实覆盖率见第 8 节：**0 / 508**。这不是没做，而是没有可授权使用的录音，也没有伪造。
+> 真实覆盖率见第 8 节：**0 / 548**。这不是没做，而是没有可授权使用的录音，也没有伪造。
 
 ---
 
@@ -116,7 +116,7 @@ ReviewStatus = "draft" | "reviewed" | "rejected"
 
 从只读列表升级为可展开的资料库：
 
-- Part 1/2/3 筛选 + 主题/题干搜索 + 分页（默认 40 题，避免一次性平铺 508 题）。
+- Part 1/2/3 筛选 + 主题/题干搜索 + 分页（默认 40 题，避免一次性平铺 548 题）。
 - 折叠行只显示题干 + 素材状态（`草稿` / `已审核` / `仅题目`），展开后展示：
   - **Sample answer**：逐段文本 + 段级播放（服务端神经语音，无引擎时回退浏览器语音并明示）、逐段复制、来源与审核状态、来源链接。
   - **Idea notes**：Main idea / Reason / Example / Result / Contrast 五类固定骨架。
@@ -193,7 +193,7 @@ GET /                    200
 GET /speaking/questions  200 (265 KB)
 GET /speaking/practice   200
 GET /admin               200
-GET /api/admin/banks?id=3 → audio.total=508, ready=0, coveragePercent=0；learning 6/508 (1.2%)
+GET /api/admin/banks?id=3 → audio.total=548, ready=0, coveragePercent=0；learning 6/548 (1.1%)
 GET /api/learning/questions?topicKey=hometown&part=1 → 12 题，3 题有示范答案
 POST /api/learning/asr   → {"status":"unavailable", "reason":"未配置服务端语音识别…"}
 ```
@@ -204,7 +204,7 @@ POST /api/learning/asr   → {"status":"unavailable", "reason":"未配置服务�
 
 | 指标 | 数值 |
 |---|---|
-| 当季大陆题库题目总数 | **508**（Part 1 170 / Part 2 58 / Part 3 280） |
+| 当季大陆题库题目总数 | **548**（Part 1 210 / Part 2 58 / Part 3 280） |
 | 有预置考官音频的题目 | **0**（覆盖率 **0%**） |
 | 音色不匹配 / 未标注 / URL 无效 | 0 / 0 / 0（因为没有音频，不是"通过检查"） |
 | 有学习素材的题目 | **6**（1.2%） |
@@ -217,7 +217,7 @@ POST /api/learning/asr   → {"status":"unavailable", "reason":"未配置服务�
 
 ## 9. 仍需授权或人工提供的素材
 
-1. **考官题目音频 508 条**：需要与当前考官音色完全一致的录音；外部音频还必须 HTTPS 可访问。第三方题库自带的音轨授权不明，**没有**复制进来。
+1. **考官题目音频 548 条**：需要与当前考官音色完全一致的录音；外部音频还必须 HTTPS 可访问。第三方题库自带的音轨授权不明，**没有**复制进来。
 2. **示范答案人工审核**：现有 6 条是草稿；其余 502 题没有范文。批量生成前需要确定"谁审、按什么标准审"，否则只是把未核验内容放大 80 倍。
 3. **跟读音频**：建议随审校后的范文一起录制（同一音色），并在 JSON 里填 `followAudio.voiceProfile`。
 4. **内容来源合规**：`LearningSource.label` 必须写真实来源；`third-party` 需要可出示的授权说明。
@@ -240,3 +240,13 @@ POST /api/learning/asr   → {"status":"unavailable", "reason":"未配置服务�
 - 展开/收起 + 逐段播放的交互手感与移动端布局。
 
 这些没有做截图验证，因此本报告不对其观感作任何断言。
+
+## 附：题量修正（2026-11-13）
+
+Part 1 曾少导入 40 道**大陆**题（含 Websites、Science 两个主题整块缺失），已按文档重建：
+Part 1 由 170 题 / 31 主题变为 210 题 / 33 主题，题库总量 508 → 548。
+非大陆题（Feeling bored、Computers / tablets、Street market、Collecting things、
+Lost and found、Friends 共 31 题，以及 7 张非大陆 Part 2 卡）始终没有被导入，本次也未引入。
+
+核查过程、逐主题差异与根因见 [`docs/bank-audit.md`](./bank-audit.md)；
+解析器为 `scripts/parse-bank-doc.py`，带逐主题题数断言，可复跑。

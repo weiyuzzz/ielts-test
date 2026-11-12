@@ -29,7 +29,8 @@ npm run build && npx next start -p 3100   # 生产；开发用 npm run dev -p 31
 - 两类音频严格分开：`questions.questionAudioUrl`（考官朗读题干，音色必须等于本场考试音色，否则回退 TTS）与 `learning.followAudio`（跟读示范，永不进入考试）。
 - `/speaking/questions`：Part 筛选 / 搜索 / 展开示范答案、思路、关键词，逐段播放与复制。
 - `/speaking/practice`：听原音 → 录音 → 回放 → ASR 转写 → 词级差异对比。无 ASR 时仍可录音回放；录音只存在页面内，不写入考试成绩。
-- 内容诚信：AI 起草的素材强制 `reviewStatus = draft`，UI 标注「未审核草稿」；当前 508 题中仅 6 题有素材、0 题有授权录音，报告见 `docs/phase3-question-learning.md`。
+- 内容诚信：AI 起草的素材强制 `reviewStatus = draft`，UI 标注「未审核草稿」；当前 548 题中仅 6 题有素材、0 题有授权录音，报告见 `docs/phase3-question-learning.md`。
+- 题库只收**大陆**题：文档里 6 个非大陆 Part 1 主题（31 题）与 7 张非大陆卡一律不导入。当季大陆题库为 Part 1 210 题 / 33 主题、Part 2 58 卡、Part 3 280 题；对账方式与逐主题差异见 `docs/bank-audit.md`，解析脚本为 `scripts/parse-bank-doc.py`。
 
 ### 生产环境的 Sidecar 存储（必读）
 
