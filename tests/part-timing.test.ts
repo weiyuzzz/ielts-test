@@ -11,10 +11,10 @@ test("Part 1 answers are capped at 30s and may end after 5s", () => {
 
 test("part budgets use the upper bound of the official ranges", () => {
   const cfg = resolveConfig("full");
-  assert.equal(budgetForPart(cfg, 1), 300); // 4–5 min
+  assert.equal(budgetForPart(cfg, 1), 360); // official 4–5 min + 1 min practice extension
   assert.equal(budgetForPart(cfg, 2), 240); // 3–4 min
   assert.equal(budgetForPart(cfg, 3), 300); // 4–5 min
-  assert.deepEqual([OFFICIAL_RANGE[1], OFFICIAL_RANGE[2], OFFICIAL_RANGE[3]], ["4–5 min", "3–4 min", "4–5 min"]);
+  assert.deepEqual([OFFICIAL_RANGE[1], OFFICIAL_RANGE[2], OFFICIAL_RANGE[3]], ["5–6 min", "3–4 min", "4–5 min"]);
 });
 
 test("a session created before part2.budgetSeconds existed still resolves a budget", () => {

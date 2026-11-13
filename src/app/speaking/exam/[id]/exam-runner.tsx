@@ -1010,7 +1010,7 @@ export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, 
             <ul className="mt-4 space-y-2 text-sm text-zinc-600">
               <li>• Find a quiet place and use headphones if possible.</li>
               <li>• The examiner speaks each question aloud. Answer as soon as the recording starts.</li>
-              <li>• Full mock: 11–14 minutes — Part 1 4–5 min (3 topics, 10–11 short questions), Part 2 3–4 min (1 min notes + 2 min talk), Part 3 4–5 min.</li>
+              <li>• Full mock: 12–15 minutes — Part 1 5–6 min (3 topics, 10–11 short questions), Part 2 3–4 min (1 min notes + 2 min talk), Part 3 4–5 min.</li>
               {cfg?.part2.enabled && <li>• Part 2: you get {cfg.part2.prepSeconds}s to prepare (keep paper ready), then speak for up to {cfg.part2.answerSeconds / 60} minutes.</li>}
               <li>• {cfg?.allowRerecord ? "Practice mode: you can listen back and re-record each answer." : "Mock mode: one attempt per question, as in the real test."}</li>
               {answered > 0 && <li className="font-medium text-zinc-900">• {answered} answers are already saved. You will continue from question {(view?.session.currentStep ?? 0) + 1}.</li>}

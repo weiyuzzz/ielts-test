@@ -13,7 +13,8 @@ import type { SpeakingExamConfig } from "./config";
 
 /** Official range as printed in the exam requirements. */
 export const OFFICIAL_RANGE: Record<number, string> = {
-  1: "4–5 min",
+  // Part 1 shows the extended practice budget (official upper bound +1 min).
+  1: "5–6 min",
   2: "3–4 min",
   3: "4–5 min",
 };
@@ -24,9 +25,11 @@ export const PART_TITLE: Record<number, string> = {
   3: "Discussion",
 };
 
-/** Hard cap for a part, in seconds. */
+/** Hard cap for a part, in seconds. Part 1 deliberately extends the official
+ *  4–5 min window by one minute (practice comfort; the examiner still closes
+ *  the part when the clock runs out). */
 export function budgetForPart(cfg: SpeakingExamConfig, part: number): number {
-  if (part === 1) return cfg.part1?.budgetSeconds || 300;
+  if (part === 1) return cfg.part1?.budgetSeconds || 360;
   if (part === 2) {
     // Older snapshots have no budget fields; derive it from prep + talk plus a
     // small transition allowance so it never lands below the official 3 min.

@@ -23,9 +23,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui";
-import { AudioPlayer } from "@/components/audio-player";
-import { RecordingSession } from "@/lib/audio/recording-session";
-import { browserAsrSupported, speak } from "@/lib/audio/speech";
+import { browserAsrSupported } from "@/lib/audio/speech";
 import { ExaminerAvatar3D, webglSupport, type AvatarProbeInfo } from "@/components/examiner/examiner-avatar-3d";
 import type { ExaminerGender } from "@/lib/avatar/models";
 import {
@@ -36,7 +34,6 @@ import {
 } from "@/lib/diagnostics/types";
 
 const TTS_TEST_LINE = "Hello. My name is Sarah, and I will be your examiner today.";
-const RECORD_MS = 5000; // 4–6 s per the spec; long enough for a real ASR/P probe
 const RETRYABLE_BROWSER = new Set<string>([
   DIAGNOSTIC_IDS.browserEnvironment, DIAGNOSTIC_IDS.browserWebSpeech, DIAGNOSTIC_IDS.gpuWebgl,
   DIAGNOSTIC_IDS.gpuThree, DIAGNOSTIC_IDS.gpuModelDownload, DIAGNOSTIC_IDS.gpuModelRender,
@@ -62,9 +59,6 @@ type ItemMap = Record<string, DiagnosticItem>;
 
 const GROUPS: { id: DiagnosticGroup; title: string; hint: string }[] = [
   { id: "application", title: "Application & Database", hint: "Next.js API, PostgreSQL, session, question bank, audio storage." },
-  { id: "speech", title: "Speech & Recording", hint: "Examiner voice, microphone, recording playback, speech recognition." },
-  { id: "ai", title: "AI Services", hint: "Scoring LLM — a small paid request is made when probed." },
-  { id: "pronunciation", title: "Pronunciation", hint: "P-criterion provider — needs the microphone test recording." },
   { id: "digital-human", title: "Digital Human & GPU", hint: "Browser-side GPU/WebGL/3D model checks — no server cost." },
 ];
 
@@ -131,11 +125,6 @@ export function SystemDiagnostics({ caps, initialDigitalHuman3d }: Props) {
   const [digitalHuman3d, setDigitalHuman3d] = useState(initialDigitalHuman3d);
   const [probeKey, setProbeKey] = useState(0);
   const [probeMounted, setProbeMounted] = useState(false);
-  const [recording, setRecording] = useState(false);
-  const [testWav, setTestWav] = useState<Blob | null>(null);
-  const [testBlob, setTestBlob] = useState<Blob | null>(null);
-  const [testClipUrl, setTestClipUrl] = useState<string | null>(null);
-  const [auditioning, setAuditioning] = useState(false);
   const [restartNote, setRestartNote] = useState<string | null>(null);
   const ranOnceRef = useRef(false);
 
@@ -240,161 +229,13 @@ export function SystemDiagnostics({ caps, initialDigitalHuman3d }: Props) {
     }
   }, [items, runServerChecks, SERVER_ALL, upsert]);
 
-  // ---- microphone recording test (the ASR/P source audio) ------------------
-  async function runRecordTest() {
-    setRecording(true);
-    upsert([{
-      id: DIAGNOSTIC_IDS.browserMicrophone, group: "speech", name: "Microphone permission & capture", scope: "browser",
-      status: "degraded", required: true, message: "Requesting microphone…", testedAt: nowIso(),
-    }]);
-    const rs = new RecordingSession({});
-    try {
-      await rs.acquire(localStorage.getItem("mic-device") || undefined);
-      upsert([{
-        id: DIAGNOSTIC_IDS.browserMicrophone, group: "speech", name: "Microphone permission & capture", scope: "browser",
-        status: "ready", required: true, message: `Microphone acquired (${rs.captureMode}).`, testedAt: nowIso(),
-      }]);
-      // Recorder + AudioContext capability follow from the capture mode.
-      upsert([
-        {
-          id: DIAGNOSTIC_IDS.browserRecorder, group: "speech", name: "MediaRecorder", scope: "browser",
-          status: rs.captureMode === "media-recorder-only" && !testBlob ? "degraded" : "ready", required: true,
-          message: rs.captureMode === "media-recorder-only" ? "Web Audio unavailable — MediaRecorder-only capture." : `Recorder + ${rs.captureMode} PCM capture available.`,
-          testedAt: nowIso(),
-        },
-        {
-          id: DIAGNOSTIC_IDS.browserAudioContext, group: "speech", name: "AudioContext", scope: "browser",
-          status: rs.captureMode === "media-recorder-only" ? "not_configured" : "ready", required: true,
-          message: rs.captureMode === "media-recorder-only" ? "Web Audio unavailable in this browser." : "AudioContext created and resumed for capture.",
-          testedAt: nowIso(),
-        },
-      ]);
-      setRecording(true);
-      rs.startAnswer();
-      await new Promise((r) => setTimeout(r, RECORD_MS));
-      const rec = await rs.stopAnswer();
-      const wav = rec.wav;
-      const blob = rec.blob ?? wav;
-      if (!blob || !blob.size) throw new Error("No audio was captured — check the input device.");
-      setTestWav(wav);
-      setTestBlob(blob);
-      if (testClipUrl) URL.revokeObjectURL(testClipUrl);
-      setTestClipUrl(URL.createObjectURL(blob));
-      upsert([{
-        id: DIAGNOSTIC_IDS.browserRecordPlayback, group: "speech", name: `Record & playback test (${RECORD_MS / 1000} s)`, scope: "browser",
-        status: "ready", required: true,
-        message: `Captured ${(rec.durationMs / 1000).toFixed(1)} s (${blob.type || "audio"}${wav ? " + 16 kHz mono WAV" : ""}). Play it back below.`,
-        detail: "This recording stays on this device and is only uploaded if you run the ASR / pronunciation probes.",
-        testedAt: nowIso(),
-      }]);
-    } catch (e) {
-      const msg = (e as Error).message;
-      const denied = /permission/i.test(msg);
-      upsert([{
-        id: DIAGNOSTIC_IDS.browserMicrophone, group: "speech", name: "Microphone permission & capture", scope: "browser",
-        status: "failed", required: true, message: msg, testedAt: nowIso(),
-        repairActions: denied ? [
-          { id: "perm-fix", label: "Permission fix", description: "Click the lock/camera icon in the address bar → Microphone → Allow, then reload the page and run this check again.", available: false },
-          { id: "perm-chrome", label: "Chrome settings", description: "chrome://settings/content/microphone — make sure this site is not blocked.", available: false },
-        ] : undefined,
-      }]);
-    } finally {
-      rs.dispose();
-      setRecording(false);
-    }
-  }
-
-  // ---- examiner voice audition (real playback path) -------------------------
-  async function runAudition() {
-    setAuditioning(true);
-    try {
-      const r = await speak(TTS_TEST_LINE, {
-        serverTts: caps.serverTts,
-        voice: caps.examinerVoice,
-        act: "greeting",
-        profileId: caps.examinerVoice,
-      });
-      upsert([{
-        id: DIAGNOSTIC_IDS.ttsAudition, group: "speech", name: "Speaker & playback audition", scope: "browser",
-        status: r.outcome.status === "ended" ? "ready" : r.outcome.status === "interrupted" ? "not_tested" : "failed",
-        required: true,
-        message: r.outcome.status === "ended"
-          ? `Played through the ${r.via} path — if you heard it, the output chain is fine.`
-          : `Playback did not complete (${r.outcome.status} via ${r.via}).`,
-        testedAt: nowIso(),
-      }]);
-    } finally {
-      setAuditioning(false);
-    }
-  }
-
-  // ---- ASR transcription probe ----------------------------------------------
-  async function runAsrProbe() {
-    if (!testWav && !testBlob) return;
-    const body = new FormData();
-    body.append("audio", testWav ?? testBlob!, "probe.wav");
-    body.append("mime", (testWav ?? testBlob)!.type || "audio/wav");
-    setRunningFor([DIAGNOSTIC_IDS.asrTranscribe], true);
-    try {
-      const res = await fetch("/api/diagnostics/asr", { method: "POST", body });
-      const j = await res.json();
-      upsert([{
-        id: DIAGNOSTIC_IDS.asrTranscribe, group: "speech", name: "ASR transcription probe", scope: "provider",
-        status: j.status ?? "failed", required: false,
-        provider: j.provider ?? null, model: j.model ?? null,
-        message: j.message ?? "Probe failed.",
-        detail: j.detail ?? (j.text ? undefined : undefined),
-        latencyMs: j.latencyMs,
-        testedAt: nowIso(),
-        repairActions: j.status === "not_configured" ? [
-          { id: "asr-config", label: "Open AI settings", description: "Configure ASR_PROVIDER on /admin.", available: true, href: "/admin" },
-        ] : undefined,
-      }]);
-    } catch (e) {
-      upsert([{
-        id: DIAGNOSTIC_IDS.asrTranscribe, group: "speech", name: "ASR transcription probe", scope: "provider",
-        status: "failed", required: false, message: `Probe request failed: ${(e as Error).message}`, testedAt: nowIso(),
-      }]);
-    } finally {
-      setRunningFor([DIAGNOSTIC_IDS.asrTranscribe], false);
-    }
-  }
-
-  // ---- pronunciation assessment probe ---------------------------------------
-  async function runPronProbe() {
-    if (!testWav) return;
-    const body = new FormData();
-    body.append("wav", testWav, "probe.wav");
-    body.append("referenceText", TTS_TEST_LINE);
-    setRunningFor([DIAGNOSTIC_IDS.pronAssess], true);
-    try {
-      const res = await fetch("/api/diagnostics/pronunciation", { method: "POST", body });
-      const j = await res.json();
-      const metrics = j.metrics ? `Accuracy ${j.metrics.accuracy} · Fluency ${j.metrics.fluency}${j.metrics.prosody != null ? ` · Prosody ${j.metrics.prosody}` : ""}${j.metrics.completeness != null ? ` · Completeness ${j.metrics.completeness}` : ""} · ${j.words?.length ?? 0} word scores` : undefined;
-      upsert([{
-        id: DIAGNOSTIC_IDS.pronAssess, group: "pronunciation", name: "Pronunciation assessment probe", scope: "provider",
-        status: j.status ?? "failed", required: false,
-        provider: j.provider ?? null,
-        message: j.message ?? "Probe failed.",
-        detail: [j.detail, metrics, j.formatOk === false ? j.formatDetail : undefined].filter(Boolean).join(" — ") || undefined,
-        latencyMs: j.latencyMs,
-        testedAt: nowIso(),
-        repairActions: j.status === "not_configured" ? [
-          { id: "pron-config", label: "Open AI settings", description: "Configure Azure Speech / Tencent SOE on /admin.", available: true, href: "/admin" },
-        ] : undefined,
-      }]);
-    } catch (e) {
-      upsert([{
-        id: DIAGNOSTIC_IDS.pronAssess, group: "pronunciation", name: "Pronunciation assessment probe", scope: "provider",
-        status: "failed", required: false, message: `Probe request failed: ${(e as Error).message}`, testedAt: nowIso(),
-      }]);
-    } finally {
-      setRunningFor([DIAGNOSTIC_IDS.pronAssess], false);
-    }
-  }
-
   // ---- 3D pipeline probe -----------------------------------------------------
   const onProbe = useCallback((info: AvatarProbeInfo) => {
+    // The probe mounts VISIBLE (a small corner window): the avatar skips its
+    // whole frame loop when offscreen, so an offscreen probe would never
+    // render and never report. After reporting we unmount — GPU resources
+    // released, no idle loop left on the page.
+    setProbeMounted(false);
     if (info.error) {
       upsert([
         { id: DIAGNOSTIC_IDS.gpuModelDownload, group: "digital-human", name: "GLB model download", scope: "browser", status: "failed", required: false, message: `The examiner model failed to load: ${info.error}`, testedAt: nowIso(),
@@ -557,50 +398,8 @@ export function SystemDiagnostics({ caps, initialDigitalHuman3d }: Props) {
             ))}
           </div>
         )}
-        {/* ASR / P probes live in their rows: they need the mic recording. */}
-        {it.id === DIAGNOSTIC_IDS.asrTranscribe && (
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => void runAsrProbe()}
-              disabled={(!testWav && !testBlob) || running.has(it.id)}
-              className="rounded bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
-            >
-              {running.has(it.id) ? "Transcribing…" : "Run transcription probe"}
-            </button>
-            <span className="text-[11px] text-zinc-400">
-              {testWav || testBlob ? "Uploads the 5 s test recording to the ASR provider. It is never stored in exam records." : "Record the microphone test above first."}
-            </span>
-          </div>
-        )}
-        {it.id === DIAGNOSTIC_IDS.pronAssess && (
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => void runPronProbe()}
-              disabled={!testWav || running.has(it.id)}
-              className="rounded bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
-            >
-              {running.has(it.id) ? "Assessing…" : "Run assessment probe"}
-            </button>
-            <span className="text-[11px] text-zinc-400">
-              {testWav ? "Reuses the same 16 kHz mono WAV — provider 0–100 scores are availability evidence only, never IELTS bands, and the sample is not stored as a result." : "Record the microphone test above first."}
-            </span>
-          </div>
-        )}
-        {it.id === DIAGNOSTIC_IDS.ttsAudition && (
-          <div className="mt-2">
-            <button onClick={() => void runAudition()} disabled={auditioning} className="rounded bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40">
-              {auditioning ? "Speaking…" : "Play the test line"}
-            </button>
-          </div>
-        )}
       </li>
     );
-  };
-
-  const micRow: DiagnosticItem = items[DIAGNOSTIC_IDS.browserRecordPlayback] ?? {
-    id: DIAGNOSTIC_IDS.browserRecordPlayback, group: "speech", name: `Record & playback test (${RECORD_MS / 1000} s)`, scope: "browser",
-    status: "not_tested", required: true,
-    message: recording ? "Recording…" : "Record 5 s and play it back — the exact capture path the exam uses, and the source audio for the ASR / pronunciation probes.",
   };
 
   return (
@@ -696,34 +495,6 @@ export function SystemDiagnostics({ caps, initialDigitalHuman3d }: Props) {
                 </p>
               ) : (
                 <ul className="px-4">
-                  {/* Recording test row lives at the top of Speech & Recording */}
-                  {g.id === "speech" && (
-                    <li className="border-b border-zinc-100 py-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-medium">{micRow.name}</span>
-                        {statusPill(micRow.status)}
-                      </div>
-                      <p className="mt-1 text-xs leading-5 text-zinc-500">{micRow.message}</p>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <button
-                          onClick={() => void runRecordTest()}
-                          disabled={recording}
-                          className="rounded bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
-                        >
-                          {recording ? `Recording ${RECORD_MS / 1000} s…` : `Record ${RECORD_MS / 1000} s test`}
-                        </button>
-                        <span className="text-[11px] text-zinc-400">
-                          The browser asks for microphone permission only when you click. The audio stays on this device.
-                        </span>
-                      </div>
-                      {testClipUrl && (
-                        <div className="mt-2 max-w-sm">
-                          <p className="mb-1 text-[11px] text-zinc-400">Playback — if you hear yourself, the capture path works:</p>
-                          <AudioPlayer src={testClipUrl} className="w-full" />
-                        </div>
-                      )}
-                    </li>
-                  )}
                   {g.id === "digital-human" && !probeMounted && (
                     <li className="border-b border-zinc-100 py-3">
                       <button
@@ -736,20 +507,6 @@ export function SystemDiagnostics({ caps, initialDigitalHuman3d }: Props) {
                     </li>
                   )}
                   {groupItems.map(renderItem)}
-                  {g.id === "speech" && !items[DIAGNOSTIC_IDS.ttsAudition] && (
-                    <li className="py-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-medium">Speaker & playback audition</span>
-                        {statusPill("not_tested")}
-                      </div>
-                      <p className="mt-1 text-xs text-zinc-500">Play the examiner&apos;s test line through the real playback path and confirm you hear it.</p>
-                      <div className="mt-2">
-                        <button onClick={() => void runAudition()} disabled={auditioning} className="rounded bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40">
-                          {auditioning ? "Speaking…" : "Play the test line"}
-                        </button>
-                      </div>
-                    </li>
-                  )}
                   {!groupItems.length && g.id === "digital-human" && probeMounted && null}
                 </ul>
               )}
@@ -758,9 +515,10 @@ export function SystemDiagnostics({ caps, initialDigitalHuman3d }: Props) {
         })}
       </div>
 
-      {/* hidden offscreen mount of the REAL 3D examiner for the probe */}
+      {/* Brief visible mount of the REAL 3D examiner for the probe: bottom-right
+          corner, auto-unmounts once the probe reports. */}
       {probeMounted && digitalHuman3d && (
-        <div className="pointer-events-none fixed -left-[9999px] top-0 h-40 w-40" aria-hidden>
+        <div className="pointer-events-none fixed bottom-4 right-4 z-50 h-44 w-44 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-lg">
           <ExaminerAvatar3D
             key={probeKey}
             gender={caps.examinerGender}
@@ -771,7 +529,7 @@ export function SystemDiagnostics({ caps, initialDigitalHuman3d }: Props) {
             probe
             onLifecycle={onProbeLifecycle}
             onProbe={onProbe}
-            className="h-40 w-40"
+            className="h-44 w-44"
           />
         </div>
       )}
