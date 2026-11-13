@@ -18,22 +18,24 @@ export default async function Settings() {
     <>
       <PageHeader title="Settings" subtitle="Your goal, examiner voice, microphone and environment diagnostics." />
       <div className="space-y-6">
-        <SystemDiagnostics
-          caps={{
-            serverTts: tts.location === "server",
-            tts: { id: tts.id, model: tts.model, location: tts.location, format: tts.format },
-            asr: caps.asr ? { id: caps.asr.id, model: caps.asr.model, location: caps.asr.location } : null,
-            llm: caps.llm ? { id: caps.llm.id, model: caps.llm.model } : null,
-            pronunciation: caps.pronunciation,
-            examinerVoice: saved,
-            examinerGender: gender,
-            examinerModelId: modelId,
-          }}
-          initialDigitalHuman3d={user?.digitalHuman3d ?? true}
-        />
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
             <SettingsForm
+              diagnosticsSlot={
+                <SystemDiagnostics
+                  caps={{
+                    serverTts: tts.location === "server",
+                    tts: { id: tts.id, model: tts.model, location: tts.location, format: tts.format },
+                    asr: caps.asr ? { id: caps.asr.id, model: caps.asr.model, location: caps.asr.location } : null,
+                    llm: caps.llm ? { id: caps.llm.id, model: caps.llm.model } : null,
+                    pronunciation: caps.pronunciation,
+                    examinerVoice: saved,
+                    examinerGender: gender,
+                    examinerModelId: modelId,
+                  }}
+                  initialDigitalHuman3d={user?.digitalHuman3d ?? true}
+                />
+              }
               initial={{ displayName: user?.displayName ?? "Candidate", targetBand: user?.targetBand ?? 7, examDate: user?.examDate ?? "", examinerVoice: saved, examinerGender: gender, examinerModel: modelId, digitalHuman3d: user?.digitalHuman3d ?? true, showSubtitles: user?.showSubtitles ?? true }}
               serverTts={tts.location === "server"}
               ttsVoice={tts.voice}

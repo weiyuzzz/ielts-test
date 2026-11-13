@@ -34,6 +34,17 @@ import {
 } from "@/lib/diagnostics/types";
 
 const TTS_TEST_LINE = "Hello. My name is Sarah, and I will be your examiner today.";
+const CHECK_LABELS: Record<string, string> = {
+  "app.db": "PostgreSQL",
+  "app.session": "Session & exam API",
+  "app.bank": "Question bank",
+  "app.storage": "Audio storage",
+  "tts.config": "Examiner voice configuration",
+  "tts.synth": "Examiner voice synthesis (real audio)",
+  "llm.probe": "Scoring LLM",
+  "pron.config": "Pronunciation provider",
+  "asr.config": "Speech recognition",
+};
 const RETRYABLE_BROWSER = new Set<string>([
   DIAGNOSTIC_IDS.browserEnvironment, DIAGNOSTIC_IDS.browserWebSpeech, DIAGNOSTIC_IDS.gpuWebgl,
   DIAGNOSTIC_IDS.gpuThree, DIAGNOSTIC_IDS.gpuModelDownload, DIAGNOSTIC_IDS.gpuModelRender,
@@ -126,6 +137,9 @@ export function SystemDiagnostics({ caps, initialDigitalHuman3d }: Props) {
   const [probeKey, setProbeKey] = useState(0);
   const [probeMounted, setProbeMounted] = useState(false);
   const [restartNote, setRestartNote] = useState<string | null>(null);
+  /** Live progress of a running diagnostics pass (5.2-style feedback: the user
+   *  must never wonder whether the page is stuck). */
+  const [progress, setProgress] = useState<{ done: number; total: number; label: string } | null>(null);
   const ranOnceRef = useRef(false);
 
   const upsert = useCallback((next: DiagnosticItem[]) => {
@@ -142,6 +156,60 @@ export function SystemDiagnostics({ caps, initialDigitalHuman3d }: Props) {
       for (const id of ids) { if (on) s.add(id); else s.delete(id); }
       return s;
     });
+  }, []);
+
+  // Explicit list — a prefix match used to sweep in ids with no server-side
+  // implementation (e.g. app.api), which then reported a phantom failure.
+  const SERVER_ALL = useMemo<string[]>(() => [
+    DIAGNOSTIC_IDS.appDb, DIAGNOSTIC_IDS.appSession, DIAGNOSTIC_IDS.appBank, DIAGNOSTIC_IDS.appStorage,
+    DIAGNOSTIC_IDS.ttsConfig, DIAGNOSTIC_IDS.ttsSynth, DIAGNOSTIC_IDS.llmProbe,
+    DIAGNOSTIC_IDS.pronConfig, DIAGNOSTIC_IDS.asrConfig,
+  ], []);
+
+  // ---- persistence: the last run survives a page refresh -------------------
+  useEffect(() => {
+    if (!Object.keys(items).length) return;
+    try { localStorage.setItem("b9:diag:items", JSON.stringify(Object.values(items))); } catch { /* private mode */ }
+  }, [items]);
+  useEffect(() => {
+    if (!services.length) return;
+    try { localStorage.setItem("b9:diag:services", JSON.stringify(services)); } catch { /* private mode */ }
+  }, [services]);
+
+  // ---- restore the previous run BEFORE the free checks overwrite theirs ----
+  useEffect(() => {
+    // Deferred (same pattern as the form's stored-mic restore): setState in an
+    // effect body triggers cascading renders, so restore happens on a task.
+    const t = setTimeout(() => {
+      try {
+        const raw = localStorage.getItem("b9:diag:items");
+        if (raw) {
+          let arr = JSON.parse(raw) as DiagnosticItem[];
+          if (Array.isArray(arr)) {
+            // Keep only entries for checks that STILL have an implementation —
+            // removed/renamed ids would otherwise linger forever as phantom
+            // failures (app.api in particular has an id but no server check).
+            const known = new Set<string>([
+              ...SERVER_ALL,
+              DIAGNOSTIC_IDS.browserEnvironment, DIAGNOSTIC_IDS.browserWebSpeech,
+              DIAGNOSTIC_IDS.browserRecordPlayback, DIAGNOSTIC_IDS.browserMicrophone,
+              DIAGNOSTIC_IDS.browserRecorder, DIAGNOSTIC_IDS.browserAudioContext,
+              DIAGNOSTIC_IDS.ttsAudition, DIAGNOSTIC_IDS.asrTranscribe, DIAGNOSTIC_IDS.pronAssess,
+              DIAGNOSTIC_IDS.gpuThree, DIAGNOSTIC_IDS.gpuModelDownload, DIAGNOSTIC_IDS.gpuModelRender,
+            ]);
+            arr = arr.filter((x) => known.has(x.id));
+            if (arr.length) upsert(arr);
+          }
+        }
+        const rawS = localStorage.getItem("b9:diag:services");
+        if (rawS) {
+          const s = JSON.parse(rawS);
+          if (Array.isArray(s) && s.length) setServices(s);
+        }
+      } catch { /* corrupt storage → start blank */ }
+    }, 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ---- live sync with the Examiner card's 3D toggle ------------------------
@@ -173,33 +241,43 @@ export function SystemDiagnostics({ caps, initialDigitalHuman3d }: Props) {
   // ---- server probes --------------------------------------------------------
   const runServerChecks = useCallback(async (ids: string[]) => {
     setRunningFor(ids, true);
+    // ONE REQUEST PER CHECK, sequentially: the server runs them serially
+    // anyway, and per-check responses give the UI a live progress bar plus
+    // results that stream in one by one instead of a silent 8 s freeze.
+    const failedAll: DiagnosticItem[] = [];
     try {
-      const res = await fetch("/api/diagnostics", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ checks: ids }),
-      });
-      const j = (await res.json()) as ServerDiagnosticsResponse & { error?: string };
-      if (j.items) upsert(j.items);
-      if (j.services) setServices(j.services);
-      if (j.error) {
-        upsert(ids.map((id) => ({
-          id, group: "application" as DiagnosticGroup, name: id, scope: "server" as const,
-          status: "failed" as const, required: false, message: j.error ?? "Diagnostics request failed.", testedAt: nowIso(),
-        })));
+      for (let idx = 0; idx < ids.length; idx++) {
+        const id = ids[idx];
+        setProgress({ done: idx, total: ids.length, label: CHECK_LABELS[id] ?? id });
+        const res = await fetch("/api/diagnostics", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ checks: [id] }),
+        });
+        const j = (await res.json()) as ServerDiagnosticsResponse & { error?: string };
+        if (j.services) setServices(j.services);
+        if (j.items?.length) {
+          upsert(j.items);
+        } else {
+          failedAll.push({
+            id, group: "application", name: CHECK_LABELS[id] ?? id, scope: "server",
+            status: "failed", required: false, message: j.error ?? "Diagnostics request failed.", testedAt: nowIso(),
+          });
+        }
       }
     } catch (e) {
-      upsert(ids.map((id) => ({
-        id, group: "application" as DiagnosticGroup, name: id, scope: "server" as const,
-        status: "failed" as const, required: false, message: `Diagnostics request failed: ${(e as Error).message}`, testedAt: nowIso(),
-      })));
+      failedAll.push({
+        id: ids[Math.min(1, ids.length - 1)], group: "application", name: "Diagnostics", scope: "server",
+        status: "failed", required: false, message: `Diagnostics request failed: ${(e as Error).message}`, testedAt: nowIso(),
+      });
     } finally {
+      if (failedAll.length) upsert(failedAll);
       setRunningFor(ids, false);
+      setProgress(null);
       ranOnceRef.current = true;
     }
   }, [setRunningFor, upsert]);
 
-  const SERVER_ALL = useMemo<string[]>(() => Object.values(DIAGNOSTIC_IDS).filter((id) => ["app.", "tts.config", "tts.synth", "llm.", "pron.config", "asr.config"].some((p) => id.startsWith(p))), []);
 
   const runFull = useCallback(async () => {
     setConfirmCost(false);
@@ -280,8 +358,8 @@ export function SystemDiagnostics({ caps, initialDigitalHuman3d }: Props) {
       render = {
         id: DIAGNOSTIC_IDS.gpuModelRender, group: "digital-human", name: "3D examiner render", scope: "browser",
         status: "ready", required: false,
-        message: `Rendered at ${fps ?? "?"} FPS with all ${info.visemesFound}/${info.visemesRequired} visemes.`,
-        detail: `Three.js loaded dynamically · load ${info.loadMs ?? 0} ms${info.renderer ? ` · GPU (browser-reported): ${info.renderer}` : ""}. GPU resources are released when the component unmounts (geometry/materials disposed, context lost).`,
+        message: fps != null ? `Rendered at ${fps} FPS with all ${info.visemesFound}/${info.visemesRequired} visemes.` : `Rendered with all ${info.visemesFound}/${info.visemesRequired} visemes (FPS not sampled — the browser is throttling background rendering).`,
+        detail: `Three.js loaded dynamically · load ${info.loadMs ?? 0} ms${info.renderer ? ` · GPU (browser-reported): ${info.renderer}` : ""}. GPU resources are released on unmount/unmount-like reruns (geometry, materials and textures disposed).`,
         latencyMs: info.loadMs,
         testedAt: nowIso(),
       };
@@ -428,6 +506,17 @@ export function SystemDiagnostics({ caps, initialDigitalHuman3d }: Props) {
           </button>
         </div>
       </div>
+
+      {progress && (
+        <div aria-live="polite">
+          <div className="h-1.5 overflow-hidden rounded-full bg-zinc-200">
+            <div className="h-1.5 rounded-full bg-zinc-900 transition-all" style={{ width: `${Math.max(5, Math.round((progress.done / progress.total) * 100))}%` }} />
+          </div>
+          <p className="mt-1.5 text-xs text-zinc-400">
+            Running diagnostics — {progress.label} ({progress.done}/{progress.total})… LLM / TTS probes take a few seconds each.
+          </p>
+        </div>
+      )}
 
       {/* ---- readiness summary ---------------------------------------------- */}
       <div className="grid gap-2 sm:grid-cols-4" aria-label="Capability readiness">
