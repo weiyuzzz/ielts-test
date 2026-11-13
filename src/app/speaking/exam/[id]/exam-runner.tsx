@@ -655,8 +655,14 @@ export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, 
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     const signal = ctrl.signal;
-    // unlock audio output on iOS/Safari inside the user gesture
-    try { if ("speechSynthesis" in window) speechSynthesis.speak(new SpeechSynthesisUtterance("")); } catch { /* ignore */ }
+    // unlock audio output on iOS/Safari inside the user gesture. iOS ONLY:
+    // this hack exists for WebKit's autoplay unlock; on Windows/desktop an
+    // empty utterance can occasionally wedge the SAPI queue and cost the
+    // first examiner line (observed as a playback_blocked panel).
+    const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (/Mac/.test(navigator.userAgent) && "ontouchend" in document);
+    if (isIOS || /Safari\//.test(navigator.userAgent)) {
+      try { if ("speechSynthesis" in window) speechSynthesis.speak(new SpeechSynthesisUtterance("")); } catch { /* ignore */ }
+    }
     primeEnvelope(); // unlock the lip-sync analyser while we still have the gesture
     try {
       let v = await load();
