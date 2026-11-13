@@ -2,6 +2,125 @@
 import { useCallback, useEffect, useState } from "react";
 import { Card, Badge } from "@/components/ui";
 
+interface ServiceUsage {
+  calls: number;
+  ok: number;
+  failed: number;
+  avgLatencyMs: number | null;
+  tokensIn: number;
+  tokensOut: number;
+  units: number;
+  unitLabel: string | null;
+}
+interface UsageEvent {
+  service: string;
+  provider: string;
+  model: string | null;
+  status: string;
+  latencyMs: number | null;
+  tokensIn: number | null;
+  tokensOut: number | null;
+  units: number | null;
+  unitLabel: string | null;
+  createdAt: string;
+}
+interface UsageSummary {
+  totals: Record<"llm" | "asr" | "tts" | "pronunciation", ServiceUsage>;
+  recent: UsageEvent[];
+}
+
+const SERVICE_LABELS: Record<string, string> = {
+  llm: "评分 LLM",
+  asr: "语音转写",
+  tts: "考官语音",
+  pronunciation: "发音评测",
+};
+
+/** Consumption panel: real per-call ledger for the four outbound AI services. */
+function UsagePanel({ token }: { token: string | null }) {
+  const [data, setData] = useState<UsageSummary | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setBusy(true);
+    try {
+      const r = await fetch("/api/admin/ai/usage", { cache: "no-store", headers: token ? { "x-admin-token": token } : undefined });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "加载失败");
+      setData(j as UsageSummary);
+      setErr(null);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    const t = setTimeout(() => { void load(); }, 0);
+    return () => clearTimeout(t);
+  }, [load]);
+
+  const fmt = (n: number | null | undefined, suffix = "") => (typeof n === "number" ? `${n.toLocaleString()}${suffix}` : "–");
+
+  return (
+    <Card className="p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-semibold">AI 用量监控（真实调用计数）</h2>
+        <button onClick={load} disabled={busy} className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm disabled:opacity-50">
+          {busy ? "刷新中…" : "刷新"}
+        </button>
+      </div>
+      <p className="mt-1 text-xs leading-5 text-zinc-500">
+        记录每一次出站 AI 调用：token 数（LLM）、音频毫秒数（转写/发音评测）、字符数（TTS）。ASR 的 1000 audio ms ≈ 计费 1/60 音频小时。
+      </p>
+      {err && <p className="mt-2 text-xs text-red-600">{err}</p>}
+      {!data && !err && <p className="mt-2 text-sm text-zinc-400">加载用量…</p>}
+      {data && (
+        <>
+          <table className="mt-3 w-full text-xs">
+            <thead>
+              <tr className="text-left text-zinc-400">
+                <th className="py-1">服务</th><th>调用</th><th>成功</th><th>失败</th><th>平均耗时</th><th>tokens 进</th><th>tokens 出</th><th>用量单位</th>
+              </tr>
+            </thead>
+            <tbody className="tabular-nums">
+              {(["llm", "asr", "tts", "pronunciation"] as const).map((k) => {
+                const t = data.totals[k];
+                return (
+                  <tr key={k} className="border-t border-zinc-100">
+                    <td className="py-1.5 font-medium">{SERVICE_LABELS[k]}</td>
+                    <td>{fmt(t.calls)}</td>
+                    <td className="text-emerald-700">{fmt(t.ok)}</td>
+                    <td className={t.failed ? "text-red-600" : ""}>{fmt(t.failed)}</td>
+                    <td>{fmt(t.avgLatencyMs, " ms")}</td>
+                    <td>{fmt(t.tokensIn)}</td>
+                    <td>{fmt(t.tokensOut)}</td>
+                    <td>{t.units ? `${fmt(t.units)} ${t.unitLabel ?? ""}` : "–"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {data.recent.length > 0 && (
+            <div className="mt-4">
+              <div className="text-xs font-medium text-zinc-500">最近 20 次调用</div>
+              <ul className="mt-1 space-y-0.5 text-[11px] leading-4 text-zinc-500 tabular-nums">
+                {data.recent.map((e, i) => (
+                  <li key={i}>
+                    {new Date(e.createdAt).toLocaleTimeString()} · {SERVICE_LABELS[e.service] ?? e.service} · {e.provider}{e.model ? ` · ${e.model}` : ""} · {e.status === "ok" ? "✓" : "✗ 失败"} · {fmt(e.latencyMs, " ms")}{e.tokensOut ? ` · ${e.tokensOut} tokens` : ""}{e.units ? ` · ${e.units} ${e.unitLabel ?? ""}` : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
+
 type ProviderKey = "llm" | "tts" | "asr" | "pronunciation";
 
 interface Prov {
@@ -243,6 +362,9 @@ export function AiSettings() {
             </div>
           );
         })}
+      </div>
+      <div className="mt-6">
+        <UsagePanel token={typeof window !== "undefined" ? localStorage.getItem("admin-token") : null} />
       </div>
     </Card>
   );

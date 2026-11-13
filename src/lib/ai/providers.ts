@@ -80,9 +80,12 @@ export function openAILLM(): LLMProvider {
         }),
         "openai-llm",
       );
-      const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+      const j = (await res.json()) as { choices?: { message?: { content?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
       const c = j.choices?.[0]?.message?.content;
       if (typeof c !== "string") throw new ProviderError("openai-llm", "invalid_response", "no content");
+      if (opts?.onUsage && j.usage?.prompt_tokens !== undefined) {
+        opts.onUsage({ promptTokens: j.usage.prompt_tokens, completionTokens: j.usage.completion_tokens });
+      }
       return c;
     },
   };
@@ -127,9 +130,12 @@ export function deepseekLLM(): LLMProvider {
         }),
         "deepseek",
       );
-      const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+      const j = (await res.json()) as { choices?: { message?: { content?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
       const c = j.choices?.[0]?.message?.content;
       if (typeof c !== "string") throw new ProviderError("deepseek", "invalid_response", "no content");
+      if (opts?.onUsage && j.usage?.prompt_tokens !== undefined) {
+        opts.onUsage({ promptTokens: j.usage.prompt_tokens, completionTokens: j.usage.completion_tokens });
+      }
       return c;
     },
   };
@@ -164,9 +170,12 @@ export function qwenLLM(): LLMProvider {
         }),
         "qwen",
       );
-      const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+      const j = (await res.json()) as { choices?: { message?: { content?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
       const c = j.choices?.[0]?.message?.content;
       if (typeof c !== "string") throw new ProviderError("qwen", "invalid_response", "no content");
+      if (opts?.onUsage && j.usage?.prompt_tokens !== undefined) {
+        opts.onUsage({ promptTokens: j.usage.prompt_tokens, completionTokens: j.usage.completion_tokens });
+      }
       return c;
     },
   };
@@ -202,9 +211,12 @@ export function geminiLLM(): LLMProvider {
         }),
         "gemini",
       );
-      const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+      const j = (await res.json()) as { choices?: { message?: { content?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
       const c = j.choices?.[0]?.message?.content;
       if (typeof c !== "string") throw new ProviderError("gemini", "invalid_response", "no content");
+      if (opts?.onUsage && j.usage?.prompt_tokens !== undefined) {
+        opts.onUsage({ promptTokens: j.usage.prompt_tokens, completionTokens: j.usage.completion_tokens });
+      }
       return c;
     },
   };
@@ -235,7 +247,7 @@ export function anthropicLLM(): LLMProvider {
         }),
         "anthropic",
       );
-      const j = (await res.json()) as { content?: { type: string; text?: string }[] };
+      const j = (await res.json()) as { content?: { type: string; text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
       const t = j.content?.find((c) => c.type === "text")?.text;
       if (typeof t !== "string") throw new ProviderError("anthropic", "invalid_response", "no text");
       return t;

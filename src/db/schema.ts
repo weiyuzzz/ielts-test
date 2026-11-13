@@ -312,3 +312,30 @@ export const examReports = pgTable("exam_reports", {
   nextSteps: jsonb("next_steps").$type<string[]>().notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * One row per outbound AI call (scoring / ASR / TTS / pronunciation) — the
+ * consumption ledger behind the /admin usage panel. Bookkeeping is
+ * best-effort and never blocks an AI call.
+ */
+export const aiUsageEvents = pgTable(
+  "ai_usage_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** llm | asr | tts | pronunciation */
+    service: text("service").notNull(),
+    provider: text("provider").notNull(),
+    model: text("model"),
+    /** ok | failed */
+    status: text("status").notNull(),
+    latencyMs: integer("latency_ms"),
+    tokensIn: integer("tokens_in"),
+    tokensOut: integer("tokens_out"),
+    /** Service units: ASR = audio ms, TTS = characters, pronunciation = sessions. */
+    units: integer("units"),
+    unitLabel: text("unit_label"),
+    meta: jsonb("meta").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("ai_usage_service_created_idx").on(t.service, t.createdAt)],
+);

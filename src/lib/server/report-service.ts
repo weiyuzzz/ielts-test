@@ -15,6 +15,8 @@ import {
 } from "@/lib/speaking/audio-analysis";
 import { overallBand, DIMENSION_LABELS } from "@/lib/speaking/bands";
 import { DESCRIPTOR_SOURCE } from "@/lib/speaking/band-descriptors";
+import { readAiConfig } from "./ai-config";
+import { recordUsage } from "./ai-usage";
 import { readAudio } from "./storage";
 
 async function setStage(id: string, stage: string, status = "running") {
@@ -50,12 +52,16 @@ export async function runScoring(assessmentId: string): Promise<void> {
       // (re)transcribe on the server when needed and possible
       if (!t && ans.status !== "no_response" && asr?.location === "server" && asrAsset) {
         const started = Date.now();
+        let status: "ok" | "failed" = "failed";
         try {
           const r = await withTimeout(asr.id, TIMEOUTS.asrMs, async (signal) => asr.transcribe(await readAudio(asrAsset.storageKey), asrAsset.mimeType, { signal, prompt: st.promptText }));
+          status = "ok";
           [t] = await db.insert(transcripts).values({ answerId: ans.id, provider: asr.id, model: asr.model, status: "completed", text: r.text, words: r.words ?? null, latencyMs: Date.now() - started }).returning();
         } catch (e) {
           await db.insert(transcripts).values({ answerId: ans.id, provider: asr.id, model: asr.model, status: "failed", error: (e as Error).message.slice(0, 500), latencyMs: Date.now() - started });
           notes.push(`Transcription failed for answer #${idx}: ${(e as Error).message.slice(0, 120)}`);
+        } finally {
+          recordUsage({ service: "asr", provider: asr.id, model: asr.model ?? null, status, latencyMs: Date.now() - started, units: ans.durationMs, unitLabel: "audio ms" });
         }
       }
       if (!t && ans.status !== "no_response") notes.push(`Answer #${idx} has no transcript and was excluded from language scoring.`);
@@ -142,9 +148,11 @@ export async function runScoring(assessmentId: string): Promise<void> {
           const r = await withTimeout(pron.id, TIMEOUTS.pronMs, async (signal) => pron.assess(await readAudio(inp.wavKey!), inp.text, { signal, words: inp.words ?? undefined }));
           await db.insert(pronunciationResults).values({ answerId: inp.answerId, provider: pron.id, status: "completed", accuracy: r.accuracy, fluency: r.fluency, prosody: r.prosody ?? null, completeness: r.completeness ?? null, overall: r.overall, words: r.words });
           pronRows.push({ answerIndex: inp.index, answerId: inp.answerId, overall: r.overall, accuracy: r.accuracy, fluency: r.fluency, prosody: r.prosody, completeness: r.completeness, durationMs: inp.durationMs, words: r.words });
+          recordUsage({ service: "pronunciation", provider: pron.id, status: "ok", units: inp.durationMs, unitLabel: "audio ms" });
         } catch (e) {
           await db.insert(pronunciationResults).values({ answerId: inp.answerId, provider: pron.id, status: "failed", error: (e as Error).message.slice(0, 500) });
           notes.push(`Pronunciation assessment failed for answer #${inp.index}.`);
+          recordUsage({ service: "pronunciation", provider: pron.id, status: "failed", units: inp.durationMs, unitLabel: "audio ms" });
         }
       }
     }
@@ -184,15 +192,25 @@ export async function runScoring(assessmentId: string): Promise<void> {
       const attempts: { llm: NonNullable<typeof llm>; kind: "primary" | "fallback" }[] = [{ llm: llm!, kind: "primary" }];
       const fb = getLLMFallback();
       if (fb && fb.id !== llm!.id) attempts.push({ llm: fb, kind: "fallback" });
+      const usageHolder: { v: { promptTokens?: number; completionTokens?: number } | null } = { v: null };
       for (const attempt of attempts) {
         // The multimodal output (per-criterion evidence, strengths/weaknesses)
-        // is far larger than a plain-band response: request a generous token
-        // budget so providers never truncate the JSON mid-structure, and give
-        // slow providers time to emit it.
+        // is far larger than a plain-band response: the token budget must stay
+        // above a safe floor (truncated JSON = unusable output), while still
+        // honouring the admin/env maxTokens when it is HIGHER than the floor.
+        const adminMaxTokens = readAiConfig().llm.maxTokens ?? 0;
+        const scoringMaxTokens = Math.max(adminMaxTokens, 8000);
+        const scoringTimeout = Math.max(TIMEOUTS.llmMs, 150_000);
         for (let tryNo = 1; tryNo <= 2 && !lang; tryNo++) {
+          const attemptStart = Date.now();
           try {
-            const raw = await withTimeout(attempt.llm.id, Math.max(TIMEOUTS.llmMs, 150_000), (signal) =>
-              attempt.llm.complete([{ role: "system", content: system }, { role: "user", content: user }], { json: true, maxTokens: 8000, signal }));
+            const raw = await withTimeout(attempt.llm.id, scoringTimeout, (signal) =>
+              attempt.llm.complete([{ role: "system", content: system }, { role: "user", content: user }], {
+                json: true,
+                maxTokens: scoringMaxTokens,
+                signal,
+                onUsage: (u) => { usageHolder.v = u; },
+              }));
             const v = validateLanguageScore(extractJson(raw), scorable, { allowPronunciation: pronEvidence !== null });
             lang = v.score;
             usedLLM = attempt.llm;
@@ -202,6 +220,14 @@ export async function runScoring(assessmentId: string): Promise<void> {
             if (v.droppedEvidence) notes.push(`${v.droppedEvidence} evidence item(s) were discarded: unknown answer indices, quotes that never appeared, or audio timestamps without word timings.`);
           } catch (e) {
             notes.push(`AI scoring attempt ${tryNo} on ${attempt.llm.id} (${attempt.kind}) failed: ${(e as Error).message.slice(0, 160)}`);
+          } finally {
+            recordUsage({
+              service: "llm", provider: attempt.llm.id, model: attempt.llm.model ?? null,
+              status: lang ? "ok" : "failed", latencyMs: Date.now() - attemptStart,
+              tokensIn: usageHolder.v?.promptTokens, tokensOut: usageHolder.v?.completionTokens,
+              meta: { attempt: tryNo, kind: attempt.kind, purpose: "scoring" },
+            });
+            usageHolder.v = null;
           }
         }
         if (lang) break;

@@ -27,8 +27,22 @@ export interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string;
 }
+
+/** Token usage reported by the provider for one completion. */
+export interface UsageInfo {
+  promptTokens?: number;
+  completionTokens?: number;
+}
+
 export interface LLMProvider extends ProviderInfo {
-  complete(messages: ChatMessage[], opts?: { json?: boolean; temperature?: number; maxTokens?: number; signal?: AbortSignal }): Promise<string>;
+  complete(messages: ChatMessage[], opts?: {
+    json?: boolean;
+    temperature?: number;
+    maxTokens?: number;
+    signal?: AbortSignal;
+    /** Called with the provider's usage numbers when the API reports them. */
+    onUsage?: (usage: UsageInfo) => void;
+  }): Promise<string>;
 }
 
 export interface TTSStream {

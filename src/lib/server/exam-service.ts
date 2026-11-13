@@ -17,6 +17,7 @@ import { activeBank } from "./bank-service";
 import { projectExamStep } from "@/lib/content/projection";
 import { HttpError } from "./user";
 import { runScoring } from "./report-service";
+import { recordUsage } from "./ai-usage";
 
 type User = typeof users.$inferSelect;
 type QuestionRow = typeof questions.$inferSelect;
@@ -233,18 +234,22 @@ export async function getSessionView(user: User, id: string) {
   };
 }
 
-async function transcribeAnswer(answerId: string, audioKey: string, mime: string, prompt: string) {
+async function transcribeAnswer(answerId: string, audioKey: string, mime: string, prompt: string, audioDurationMs?: number) {
   const asr = getASR();
   if (!asr || asr.location !== "server") return null;
   const started = Date.now();
+  let status: "ok" | "failed" = "failed";
   try {
     const buf = await readAudio(audioKey);
     const r = await withTimeout(asr.id, TIMEOUTS.asrMs, (signal) => asr.transcribe(buf, mime, { signal, prompt }));
+    status = "ok";
     const [row] = await db.insert(transcripts).values({ answerId, provider: asr.id, model: asr.model, status: "completed", text: r.text, words: r.words ?? null, confidence: r.confidence ?? null, latencyMs: Date.now() - started }).returning();
     return row;
   } catch (e) {
     await db.insert(transcripts).values({ answerId, provider: asr.id, model: asr.model, status: "failed", error: (e as Error).message.slice(0, 500), latencyMs: Date.now() - started });
     return null;
+  } finally {
+    recordUsage({ service: "asr", provider: asr.id, model: asr.model ?? null, status, latencyMs: Date.now() - started, units: audioDurationMs, unitLabel: "audio ms" });
   }
 }
 
@@ -325,7 +330,7 @@ export async function submitAnswer(user: User, id: string, form: FormData) {
     // Server ASR prefers the 16 kHz mono WAV asset: the correct container for
     // every provider, and its timeline matches the pronunciation slicer.
     const asrAsset = wavRow ?? main!;
-    const work = () => transcribeAnswer(answer.id, asrAsset.storageKey, asrAsset.mimeType, prompt).then(() => undefined);
+    const work = () => transcribeAnswer(answer.id, asrAsset.storageKey, asrAsset.mimeType, prompt, durationMs).then(() => undefined);
     if (timing === "sync") {
       const asrStart = Date.now();
       await work();
@@ -370,11 +375,14 @@ export async function advance(user: User, id: string, fromStep: number) {
   let text: string | null = null;
   let generator = "template";
   if (llm && summary?.text) {
+    const fuStart = Date.now();
     try {
       text = await generateFollowUp(llm, { question: step!.promptText, answer: summary.text, topic: step!.topic }, TIMEOUTS.llmFollowUpMs);
       if (text) generator = "llm";
+      recordUsage({ service: "llm", provider: llm.id, model: llm.model ?? null, status: "ok", latencyMs: Date.now() - fuStart, meta: { purpose: "follow_up" } });
     } catch {
       text = null;
+      recordUsage({ service: "llm", provider: llm.id, model: llm.model ?? null, status: "failed", latencyMs: Date.now() - fuStart, meta: { purpose: "follow_up" } });
     }
   }
   if (!text) {

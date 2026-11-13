@@ -6,6 +6,7 @@ import {
   withInflightPriority, activeJobPriority, cancelPrefetchJob, type CachedClip,
 } from "@/lib/server/tts-cache";
 import { isSpeechAct, type ExaminerSpeechAct } from "@/lib/speaking/speech-act";
+import { recordUsage } from "@/lib/server/ai-usage";
 import { profileFingerprint, resolveVoiceProfile, sanitizeProfile, type VoiceProfile } from "@/lib/speaking/voice-profile";
 
 /**
@@ -85,6 +86,11 @@ function ttsHeaders(extra: Record<string, string>, tts: TTSProvider, p: TtsParam
 }
 
 function audioResponse(clip: CachedClip, cache: string, tts: TTSProvider, p: TtsParams, synthesisMs = 0): Response {
+  void recordUsage({
+    service: "tts", provider: tts.id, model: tts.model ?? null, status: "ok",
+    latencyMs: Math.round(synthesisMs), units: p.text.length, unitLabel: "chars",
+    meta: { cache, act: p.act },
+  });
   const headers: Record<string, string> = {
     "Content-Type": clip.mimeType,
     "Content-Length": String(clip.audio.byteLength),

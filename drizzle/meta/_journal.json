@@ -36,6 +36,13 @@
       "when": 1794527256460,
       "tag": "0004_crazy_vampiro",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794527771241,
+      "tag": "0005_ai_usage",
+      "breakpoints": true
     }
   ]
 }
