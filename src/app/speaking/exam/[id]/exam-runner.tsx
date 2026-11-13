@@ -1303,6 +1303,7 @@ export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, 
                   listening={phase === "recording"}
                   preparing={phase === "examiner" || phase === "prep"}
                   name={view.session.examinerName ?? "Examiner"}
+                  gender={examinerGender}
                 />
               )}
               <div className="text-sm font-medium">{view.session.examinerName}</div>

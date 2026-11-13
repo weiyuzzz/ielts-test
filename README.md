@@ -4,7 +4,9 @@ Next.js 16 (App Router) + PostgreSQL (Drizzle ORM) + Tailwind 4。默认运行�
 
 | 模块 | 状态 |
 |---|---|
-| Speaking | ✅ 完整模考 + Part 1/2/3 专项、当季题库、录音/转写、声学证据评估（停顿/语速/MLR/填充词）、DeepSeek 评分、报告 |
+| Speaking | ✅ 完整模考 + Part 1/2/3 专项、当季题库、录音/转写、声学证据评估（停顿/语速/MLR/填充词）、LLM 评分（中文报告）、报告 |
+| 考试环境诊断 `/settings` | ✅ System Diagnostics：数据库/题库/存储/TTS 实合成/LLM/ASR/发音/浏览器与 GPU 全链路检测，四项就绪状态 + 修复建议 |
+| 数字考官 | ✅ 3D 数字人（Three.js + GLB + 15 Viseme 词级口型）与轻量 2D SVG 考官可切换，按会话冻结 |
 | 题库后台 `/admin` | ✅ 导入季度题库、切换启用季度、查看题库内容与音频覆盖率 |
 | 学习资料 `/speaking/questions` | ✅ 示范答案 / 思路拆解 / 关键词组 / 跟读入口 |
 | 跟读训练 `/speaking/practice` | ✅ Shadowing：听原音 → 录音 → 回放 → 转写对比 |
@@ -215,6 +217,39 @@ Part 1 超时不会再问你 Part 1 的题，Part 3 超时直接收尾并进入�
 | 考官语音 | 浏览器 speechSynthesis | 配置任一 TTS 服务后自动切换 |
 | 评分 | **不评分** | 未接入 AI 时只走完整考试流程，录音/转写/回放照常可用 |
 | Pronunciation | **不评估** | 不会根据文本估算发音 |
+
+## 考试环境诊断中心（`/settings` → System Diagnostics）
+
+开考前一键体检整条链路，**每个检测项都是真实执行，不是 HTTP 200 就算通过**：
+
+- **Application & Database**：PostgreSQL 真实 `SELECT 1`、当前会话、启用题库的真实数量查询、音频存储写入/读回/清理探针。
+- **Digital Human & GPU**：WebGL/WebGL2 能力、Three.js 动态加载、GLB 下载与解析、真实 `ExaminerAvatar3D` 管线渲染（加载耗时 / FPS / 15 Viseme 形态键完整性）。
+- 服务端探针还包括：TTS 实际合成一句考官语音并校验音频字节数与格式、LLM 小型 JSON 探测（区分 Key 无效 / 模型不可用 / 限流 / 超时 / 格式异常）、ASR 与发音 Provider 配置。
+- 顶部四项就绪状态：**Exam environment / Scoring / Complete band (FC/LR/GRA+P) / Digital human**，并给出考试模式建议；Run Full 与 Retry Failed 两个入口，逐项进度条与单项重试。
+- 所有付费探测（LLM/TTS）在运行前明确提示；ASR/发音探测的录音只存在于页面内存，不写入考试记录。
+- 本地引擎（Kokoro）需要 `ALLOW_LOCAL_AI_ENDPOINTS=1` 放行 SSRF 护栏；在配置了 `TTS_SERVICE_MANAGER=nssm|launchd` 的主机上可从页面安全重启引擎（固定命令白名单 + 审计日志，绝不伪造成功）。
+
+## 3D / 2D 数字考官
+
+- **3D**：Three.js + GLB 数字人，15 Viseme 词级口型同步（Kokoro `captioned_speech` 时间戳），离屏自动停帧、WebGL 上下文丢失自动降级、卸载时完整释放 GPU 资源。
+- **2D**：中年考官风格的轻量 SVG（零 GPU/零下载），口型由音频包络驱动；3D 加载失败自动回退。
+- 开关在 `/settings` 的 Examiner 卡（`users.digital_human_3d`，默认开启），**创建考试时冻结**进会话快照——考试中途修改设置不会改变正在进行的考试。
+- 检测到 3D 性能不足（低 FPS）时诊断中心会建议使用 2D，但不强制修改用户偏好。
+
+## 考官语音（本地 Kokoro 部署）
+
+生产推荐本机 [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI)（GPU 优先，`/dev/captioned_speech` 提供词级时间戳驱动口型），完整部署/保活步骤见 [`docs/tts-engine-deployment.md`](./docs/tts-engine-deployment.md)。应用侧最小配置：
+
+```ini
+TTS_PROVIDER=openai
+TTS_BASE_URL=http://localhost:8880/v1
+TTS_MODEL=kokoro
+TTS_VOICE=af_heart          # 男声 bm_george
+TTS_STREAM=0                # 禁用流式（引擎分块流式对长句丢前半段）
+ALLOW_LOCAL_AI_ENDPOINTS=1  # 放行 SSRF 护栏以连接本机引擎
+```
+
+评分报告的面向用户文本（rationale / strengths / weaknesses / limitations）默认使用简体中文；引语、Band 数字、descriptor id 保持英文。
 
 ## AI 服务配置（后台 `/admin`）
 

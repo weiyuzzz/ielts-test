@@ -241,7 +241,7 @@ export function ExaminerAvatar3D(props: Props) {
         // produce broken-looking arms on another (different bone axes).
         const headBone = bones.Head;
         let headPos = new THREE.Vector3(0, 1.62, 0);
-        let frameScale = 0.68;
+        let frameScale = 0.92;
         if (headBone) {
           headBone.updateWorldMatrix(true, false);
           headBone.getWorldPosition(headPos);
@@ -250,10 +250,13 @@ export function ExaminerAvatar3D(props: Props) {
           const size = box.getSize(new THREE.Vector3());
           const center = box.getCenter(new THREE.Vector3());
           headPos = new THREE.Vector3(center.x, box.max.y - size.y * 0.05, center.z);
-          frameScale = 0.68;
+          frameScale = 0.92;
         }
-        camera.position.set(headPos.x, headPos.y + 0.02, frameScale);
-        camera.lookAt(headPos.x, headPos.y - 0.03, headPos.z);
+        // Head-and-shoulders portrait with headroom: the camera looks at the
+        // upper head and sits far enough back that the crown and hair never
+        // clip against the top edge (user-reported truncation at 0.68).
+        camera.position.set(headPos.x, headPos.y + 0.06, frameScale);
+        camera.lookAt(headPos.x, headPos.y + 0.045, headPos.z);
 
         rig = { renderer, scene, camera, meshes, bones, baseRotations };
       } catch (e) {
@@ -299,7 +302,10 @@ export function ExaminerAvatar3D(props: Props) {
         }
         if (can.jaw) {
           const vowelOpen = Math.max(channels[visemeIndex("aa")], channels[visemeIndex("E")], channels[visemeIndex("oh")], channels[visemeIndex("ih")], channels[visemeIndex("ou")]);
-          setMorph("jawOpen", Math.min(0.55, vowelOpen * 0.32 + jawBoost * 0.18));
+          // Conservative jaw: the GLB rigs ship no inner-mouth geometry, so a
+          // wide-open jaw shows an empty black cavity. Cap the opening well
+          // below that point — lip-sync stays readable via the lip shapes.
+          setMorph("jawOpen", Math.min(0.32, vowelOpen * 0.24 + jawBoost * 0.10));
         }
       };
 
@@ -540,7 +546,7 @@ export function ExaminerAvatar3D(props: Props) {
   }, [props.gender, props.modelId]);
 
   if (failed) {
-    return <ExaminerAvatar speaking={props.speaking} listening={props.listening} preparing={props.preparing} name={props.name} />;
+    return <ExaminerAvatar speaking={props.speaking} listening={props.listening} preparing={props.preparing} name={props.name} gender={props.gender} />;
   }
   return (
     <div className={`relative select-none ${props.className ?? "h-40 w-40 sm:h-48 sm:w-48"}`} aria-label={`${props.name}, your examiner`} role="img">
