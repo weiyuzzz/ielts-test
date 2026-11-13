@@ -250,6 +250,7 @@ export function buildScoringMessages(
     "- `confidence` (0–1) is your judgement of how well the EVIDENCE supports the band you chose (thin transcripts, missing audio, ASR noise → lower). It is not an IELTS band.",
     "- Be specific, avoid generic repeated comments, and never invent content the candidate did not say.",
     "- `strengths`/`weaknesses` are short rubric-anchored statements; `limitations` lists evidence gaps (e.g. 'no word timings for answer #2', 'low-audio-quality answer #4').",
+    "LANGUAGE OF THE REPORT (hard rule): the candidate reads the report in Simplified Chinese. ALL human-readable text — `rationale`, `explanation`, `quote` context around quotes, `strengths`, `weaknesses`, `limitations`, findings — MUST be written in natural, encouraging Simplified Chinese. EXCEPTIONS that stay in English: the candidate's quoted transcript words, band numbers, descriptor ids (verbatim), and IELTS terms like FC/LR/GRA/P.",
     "Return ONLY JSON matching this TypeScript type:",
     `{"dimensions":{"FC":Criterion,"LR":Criterion,"GRA":Criterion${pronunciation ? ',"P":Criterion' : ""}},"findings":[{"dimension":"FC"|"LR"|"GRA"${pronunciation ? '|"P"' : ''},"answer":number,"kind":"error"|"strength"|"issue","category":string,"quote":string,"suggestion":string|null,"explanation":string,"possibleAsrError":boolean,"descriptorRefs":string[]}],"summary":string,"nextSteps":string[],"limitations":string[]}`,
     `where Criterion = {"band":number,"confidence":number,"rationale":string,"descriptorRefs":string[],"strengths":string[],"weaknesses":string[],"evidence":[{"answer":number,"evidenceType":"transcript"|"audio"|"metric","quote":string|null,"startMs":number|null,"endMs":number|null,"explanation":string}]}`,
@@ -330,13 +331,41 @@ export function extractJson(raw: string): unknown {
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
   const body = fenced ? fenced[1] : raw;
   const start = body.indexOf("{");
-  const end = body.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new ScoringValidationError("no JSON object in model output");
+  if (start < 0) throw new ScoringValidationError("no JSON object in model output");
+  // Models (DeepSeek in particular) sometimes append prose or a SECOND object
+  // after the scoring JSON. lastIndexOf("}") would slice both and JSON.parse
+  // would fail with "non-whitespace character after JSON". Balance the braces
+  // instead and take the FIRST complete top-level object; string/escape aware.
+  const balanced = balancedJsonAt(body, start);
+  const candidate = balanced ?? `${body.slice(start, body.lastIndexOf("}") + 1)}`;
   try {
-    return JSON.parse(body.slice(start, end + 1));
+    return JSON.parse(candidate);
   } catch (e) {
     throw new ScoringValidationError(`invalid JSON: ${(e as Error).message}`);
   }
+}
+
+/** Scan from `start` for the first fully balanced {...} (string-aware). */
+function balancedJsonAt(body: string, start: number): string | null {
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < body.length; i++) {
+    const c = body[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === "{" || c === "[") depth++;
+    else if (c === "}" || c === "]") {
+      depth--;
+      if (depth === 0) return body.slice(start, i + 1);
+    }
+  }
+  return null; // unterminated (truncation) — caller reports the parse error
 }
 
 /**
