@@ -19,7 +19,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ExaminerAvatar3D } from "@/components/examiner/examiner-avatar-3d";
-import { speak, stopSpeaking, disposeAudio, warmupSpeech, configureTtsIdentity, waitForTTS } from "@/lib/audio/speech";
+import { speak, stopSpeaking, disposeAudio, warmupSpeech, configureTtsIdentity, waitForTTS, rearmAudio } from "@/lib/audio/speech";
 import { primeEnvelope } from "@/lib/audio/examiner-envelope";
 import { lipSync } from "@/lib/lipsync/controller";
 import { VISEME_CHANNELS } from "@/lib/lipsync/types";
@@ -146,6 +146,11 @@ export function LipSyncLab({ serverTts, profiles, defaultProfileId, gender, mode
 
   async function play() {
     if (playing || waiting) return;
+    // Defensive: the scheduler is a page-global singleton; if ANY component on
+    // this page disposed it (exam cleanup, hot reload, future refactor), a
+    // disposed scheduler resolves every request with null and the Lab would
+    // silently fail to synthesise. rearm() is idempotent and cheap.
+    rearmAudio();
     setError(null);
     if (!useBrowserVoice) {
       // Wait for the REAL synthesis — the lab exists to audition voices, so a
