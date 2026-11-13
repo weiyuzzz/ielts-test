@@ -8,6 +8,7 @@ import {
 import { isSpeechAct, type ExaminerSpeechAct } from "@/lib/speaking/speech-act";
 import { recordUsage } from "@/lib/server/ai-usage";
 import { profileFingerprint, resolveVoiceProfile, sanitizeProfile, type VoiceProfile } from "@/lib/speaking/voice-profile";
+import { readAiConfig, envOverridesFor, withEnvOverrides } from "@/lib/server/ai-config";
 
 /**
  * Examiner TTS proxy (keeps API keys on the server).
@@ -229,12 +230,14 @@ export async function GET(req: Request): Promise<Response> {
   try {
     await requireUser();
     const u = new URL(req.url);
-    const p = buildParams({
+    // Resolve the voice INSIDE the admin-config override scope: the sidecar's
+    // tts.voice must win over the preset default exactly like env TTS_VOICE.
+    const p = withEnvOverrides(envOverridesFor(readAiConfig(), "tts"), () => buildParams({
       text: u.searchParams.get("text"),
       voice: u.searchParams.get("voice"),
       act: u.searchParams.get("act"),
       profile: u.searchParams.get("profile") ?? undefined,
-    });
+    }));
     const tts = providerFor(p);
     if (tts.location !== "server") throw new HttpError(501, "Server TTS not configured; use browser speech synthesis", "browser_tts");
     const key = keyFor(tts, p);
@@ -254,12 +257,12 @@ export async function POST(req: Request): Promise<Response> {
   try {
     await requireUser();
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-    const p = buildParams({
+    const p = withEnvOverrides(envOverridesFor(readAiConfig(), "tts"), () => buildParams({
       text: typeof body.text === "string" ? body.text : null,
       voice: typeof body.voice === "string" ? body.voice : null,
       act: typeof body.act === "string" ? body.act : null,
       profile: body.profile,
-    });
+    }));
     const tts = providerFor(p);
     if (tts.location !== "server") throw new HttpError(501, "Server TTS not configured; use browser speech synthesis", "browser_tts");
     const key = keyFor(tts, p);

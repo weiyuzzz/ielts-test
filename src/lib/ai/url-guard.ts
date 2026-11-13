@@ -96,8 +96,11 @@ export async function assertSafeEndpoint(rawUrl: string, path = ""): Promise<str
   if (deny && !allowLocal) {
     throw new Error(`endpoint host is not allowed: ${host} (set ALLOW_LOCAL_AI_ENDPOINTS=1 to permit self-hosted engines)`);
   }
-  // DNS layer: a hostname may still resolve into a private range.
-  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(host) && !host.includes(":")) {
+  // DNS layer: a hostname may still resolve into a private range. Deployments
+  // that opted into local engines SKIP this layer entirely — a self-hosted
+  // engine address (localhost / LAN IP) resolves to loopback/private BY DESIGN,
+  // so honouring the opt-out here is the whole point of the flag.
+  if (!allowLocal && !/^\d{1,3}(\.\d{1,3}){3}$/.test(host) && !host.includes(":")) {
     const cached = dnsCache.get(host);
     if (cached && cached.expires > Date.now()) {
       if (!cached.ok) throw new Error(`endpoint host resolves to a forbidden address: ${host}`);
