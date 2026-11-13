@@ -8,7 +8,8 @@ import { managedServices, probeServiceHealth } from "@/lib/server/managed-servic
 import { getTTS, getLLM, getPronunciation, getASR, TIMEOUTS } from "@/lib/ai/registry";
 import { withTimeout, type LLMProvider, type TTSProvider } from "@/lib/ai/types";
 import { recordUsage } from "@/lib/server/ai-usage";
-import { envDefaultProfile, resolveVoiceProfile } from "@/lib/speaking/voice-profile";
+import { resolveVoiceProfile } from "@/lib/speaking/voice-profile";
+import { readAiConfig } from "@/lib/server/ai-config";
 import {
   DIAGNOSTIC_IDS, classifyProviderFailure,
   type DiagnosticItem, type ServerDiagnosticsResponse, type ManagedServiceStatus,
@@ -150,7 +151,11 @@ function probeTtsConfig(): DiagnosticItem {
 async function probeTtsSynthesis(): Promise<DiagnosticItem> {
   const { tts, isBrowser } = ttsProviderOf();
   if (isBrowser) return probeTtsConfig(); // nothing to synth server-side
-  const profile = envDefaultProfile();
+  // Probe with EXACTLY the voice the exam would use (same resolution as
+  // capabilities()), not a detached env default — otherwise a sidecar-configured
+  // Kokoro voice would be probed with the Azure preset's voice id and fail.
+  const aiCfg = readAiConfig();
+  const profile = resolveVoiceProfile(process.env.EXAMINER_PROFILE || aiCfg.tts.voice || process.env.TTS_VOICE);
   const t0 = Date.now();
   try {
     const r = await withTimeout(tts.id, TIMEOUTS.ttsMs, (signal) => tts.synthesize(TTS_TEST_LINE, { speechAct: "greeting", profile, signal }));
