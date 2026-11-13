@@ -84,7 +84,7 @@ test("diag: readiness — broken server TTS blocks examReady even with browser a
     item(DIAGNOSTIC_IDS.appSession, "ready"),
     item(DIAGNOSTIC_IDS.ttsSynth, "failed"),
     item(DIAGNOSTIC_IDS.ttsAudition, "ready", "speech"),
-    item(DIAGNOSTIC_IDS.browserRecordPlayback, "ready", "speech"),
+    item(DIAGNOSTIC_IDS.browserEnvironment, "ready", "speech"),
     item(DIAGNOSTIC_IDS.llmProbe, "ready", "ai"),
     item(DIAGNOSTIC_IDS.asrTranscribe, "ready", "speech"),
     item(DIAGNOSTIC_IDS.appStorage, "ready"),
@@ -92,6 +92,22 @@ test("diag: readiness — broken server TTS blocks examReady even with browser a
   const r = computeReadiness(items, { digitalHuman3d: false, deploymentTtsLocation: "server" });
   assert.equal(r.examReady, false);
   assert.ok(r.notes.some((n) => n.includes("examiner voice")));
+});
+
+test("diag: readiness — browser environment alone satisfies the mic requirement (exam has its own mic check)", () => {
+  const items: DiagnosticItem[] = [
+    item(DIAGNOSTIC_IDS.appDb, "ready"),
+    item(DIAGNOSTIC_IDS.appBank, "ready"),
+    item(DIAGNOSTIC_IDS.appSession, "ready"),
+    item(DIAGNOSTIC_IDS.ttsSynth, "ready"),
+    item(DIAGNOSTIC_IDS.browserEnvironment, "ready", "speech"),
+    item(DIAGNOSTIC_IDS.appStorage, "ready"),
+    item(DIAGNOSTIC_IDS.llmProbe, "ready", "ai"),
+    item(DIAGNOSTIC_IDS.asrTranscribe, "ready", "speech"),
+  ];
+  const r = computeReadiness(items, { digitalHuman3d: false, deploymentTtsLocation: "server" });
+  assert.equal(r.examReady, true);
+  assert.equal(r.scoringReady, true);
 });
 
 test("diag: readiness — browser deployment accepts the browser audition", () => {
@@ -179,6 +195,24 @@ test("diag: readiness — low FPS render (degraded) recommends 2d with a note", 
 });
 
 // ------------------------------------------------------------------ inspectWavHeader
+
+test("diag: readiness — configured ASR/Pronunciation count without a live audio probe", () => {
+  const items: DiagnosticItem[] = [
+    item(DIAGNOSTIC_IDS.appDb, "ready"),
+    item(DIAGNOSTIC_IDS.appBank, "ready"),
+    item(DIAGNOSTIC_IDS.appSession, "ready"),
+    item(DIAGNOSTIC_IDS.ttsSynth, "ready"),
+    item(DIAGNOSTIC_IDS.browserEnvironment, "ready", "speech"),
+    item(DIAGNOSTIC_IDS.appStorage, "ready"),
+    item(DIAGNOSTIC_IDS.llmProbe, "ready", "ai"),
+    item(DIAGNOSTIC_IDS.asrConfig, "ready", "speech"),
+    item(DIAGNOSTIC_IDS.pronConfig, "ready", "pronunciation"),
+  ];
+  const r = computeReadiness(items, { digitalHuman3d: false, deploymentTtsLocation: "server" });
+  assert.equal(r.examReady, true);
+  assert.equal(r.scoringReady, true);
+  assert.equal(r.completeBandReady, true);
+});
 
 test("diag: inspectWavHeader accepts 16 kHz mono PCM (the exam capture format)", () => {
   const wav = encodeWav(new Float32Array(16000), 16000);

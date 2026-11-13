@@ -200,7 +200,13 @@ export function computeReadiness(
   const dbOk = ok(st(DIAGNOSTIC_IDS.appDb));
   const bankOk = ok(st(DIAGNOSTIC_IDS.appBank));
   const sessionOk = ok(st(DIAGNOSTIC_IDS.appSession));
-  const micOk = ok(st(DIAGNOSTIC_IDS.browserRecordPlayback)) || (ok(st(DIAGNOSTIC_IDS.browserMicrophone)) && ok(st(DIAGNOSTIC_IDS.browserRecorder)));
+  // The exam runs a MANDATORY mic check (MicCheck) before the first question,
+  // so recording capability is verified there regardless of this page. Here the
+  // browser environment check is sufficient — a never-run recording test must
+  // not keep the readiness pill permanently amber.
+  const micOk = ok(st(DIAGNOSTIC_IDS.browserEnvironment))
+    || ok(st(DIAGNOSTIC_IDS.browserRecordPlayback))
+    || (ok(st(DIAGNOSTIC_IDS.browserMicrophone)) && ok(st(DIAGNOSTIC_IDS.browserRecorder)));
   const serverVoiceOk = ok(st(DIAGNOSTIC_IDS.ttsSynth));
   const browserVoiceOk = ok(st(DIAGNOSTIC_IDS.ttsAudition));
   const voiceOk = opts.deploymentTtsLocation === "server" ? serverVoiceOk : browserVoiceOk || serverVoiceOk;
@@ -211,14 +217,17 @@ export function computeReadiness(
       ? "The examiner voice engine is not answering — questions can be read on screen, but spoken audio is unavailable."
       : "This browser cannot play the built-in examiner voice — check audio output.");
   }
+  if (!micOk) {
+    notes.push("This browser cannot run the exam recording environment (secure context / microphone API) — see the Application & Database checks.");
+  }
 
   const llmSt = st(DIAGNOSTIC_IDS.llmProbe);
-  const asrSt = st(DIAGNOSTIC_IDS.asrTranscribe);
   const webSpeechSt = st(DIAGNOSTIC_IDS.browserWebSpeech);
   const storageOk = ok(st(DIAGNOSTIC_IDS.appStorage));
-  // Server ASR OR a working browser SpeechRecognition — either can supply the
-  // transcripts the scorer needs.
-  const asrOk = ok(asrSt) || ok(webSpeechSt);
+  // Config-level readiness: a configured provider counts even when the live
+  // audio upload probe has not run (it needs a user recording, which lives in
+  // the exam's own mic check). A running transcription probe still wins.
+  const asrOk = ok(st(DIAGNOSTIC_IDS.asrConfig)) || ok(st(DIAGNOSTIC_IDS.asrTranscribe)) || ok(webSpeechSt);
   const llmOk = ok(llmSt);
 
   const scoringReady = llmOk && asrOk && storageOk;
@@ -229,7 +238,8 @@ export function computeReadiness(
   }
   if (!asrOk && ok(webSpeechSt)) notes.push("Server ASR is unavailable; browser speech recognition will transcribe instead.");
 
-  const pronOk = ok(st(DIAGNOSTIC_IDS.pronAssess));
+  // Configured provider counts (see asrOk); a live assessment probe wins when present.
+  const pronOk = ok(st(DIAGNOSTIC_IDS.pronConfig)) || ok(st(DIAGNOSTIC_IDS.pronAssess));
   const completeBandReady = scoringReady && pronOk;
   if (!pronOk) {
     notes.push(st(DIAGNOSTIC_IDS.pronConfig) === "not_configured"

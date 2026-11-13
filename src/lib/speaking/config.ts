@@ -47,7 +47,7 @@ const BASE: Omit<SpeakingExamConfig, "mode"> = {
   // topics), Part 2 3–4 min (1 min prep + 2 min talk), Part 3 4–5 min (3–6 questions).
   // `budgetSeconds` is the UPPER bound of each part's official range: when it runs
   // out the examiner moves to the next part (the real test is strictly timed).
-  part1: { enabled: true, seasonalTopics: 2, evergreenQuestions: 3, questionsPerTopic: 4, answerSeconds: 30, budgetSeconds: 300 },
+  part1: { enabled: true, seasonalTopics: 2, evergreenQuestions: 3, questionsPerTopic: 4, answerSeconds: 30, budgetSeconds: 360 },
   part2: { enabled: true, prepSeconds: 60, answerSeconds: 120, budgetSeconds: 240 },
   part3: {
     enabled: true,

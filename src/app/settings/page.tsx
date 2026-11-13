@@ -3,7 +3,6 @@ import { capabilities } from "@/lib/ai/registry";
 import { PageHeader, Card } from "@/components/ui";
 import { normalizeGender, normalizeModelId, type ExaminerGender } from "@/lib/avatar/models";
 import { SettingsForm } from "./settings-form";
-import { VoiceLab } from "./voice-lab";
 import { SystemDiagnostics } from "./diagnostics";
 
 export const dynamic = "force-dynamic";
@@ -41,14 +40,6 @@ export default async function Settings() {
               ttsStreaming={tts.streaming}
               profiles={tts.profiles}
               defaultProfileId={tts.defaultProfileId}
-            />
-            <VoiceLab
-              serverTts={tts.location === "server"}
-              profiles={tts.profiles}
-              availability={tts.availability}
-              speechActs={tts.speechActs}
-              defaultProfileId={tts.defaultProfileId}
-              activeProfileId={saved !== "auto" ? saved : tts.activeProfile.id}
             />
           </div>
           <Card className="h-fit p-5">
