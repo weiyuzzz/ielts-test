@@ -159,26 +159,15 @@ export function ExaminerAvatar3D(props: Props) {
           }
         });
 
-        // T-pose → relaxed A-pose: bring the upper arms (and forearms) down
-        // beside the torso so the exam framing shows natural shoulders.
-        const restArms: [string, number][] = [
-          ["LeftArm", -1.15], ["RightArm", 1.15],
-          ["LeftForeArm", -0.12], ["RightForeArm", 0.12],
-        ];
-        for (const [name, rz] of restArms) {
-          const found: import("three").Object3D[] = [];
-          root.traverse((obj) => { if (obj.name === name) found.push(obj); });
-          for (const arm of found) arm.rotation.z += rz;
-        }
-
-        // Frame head-and-shoulders like the reference portraits. The camera
-        // targets the Head BONE's world position (robust across model rigs —
-        // bbox proportions break on half-body or differently-proportioned
-        // models). GLB humanoids arrive in T-pose, so the upper arms are also
-        // rotated down into an A-pose.
+        // Frame a tight HEAD-AND-NECK portrait. The camera targets the Head
+        // BONE's world position (robust across model rigs — bbox proportions
+        // break on half-body or differently-proportioned models). The frame is
+        // deliberately narrow: arms stay out of view entirely — GLB humanoids
+        // arrive in T-pose, and arm pose fixes that work on one skeleton
+        // produce broken-looking arms on another (different bone axes).
         const headBone = bones.Head;
         let headPos = new THREE.Vector3(0, 1.62, 0);
-        let frameScale = 0.95;
+        let frameScale = 0.68;
         if (headBone) {
           headBone.updateWorldMatrix(true, false);
           headBone.getWorldPosition(headPos);
@@ -186,11 +175,11 @@ export function ExaminerAvatar3D(props: Props) {
           const box = new THREE.Box3().setFromObject(root);
           const size = box.getSize(new THREE.Vector3());
           const center = box.getCenter(new THREE.Vector3());
-          headPos = new THREE.Vector3(center.x, box.max.y - size.y * 0.075, center.z);
-          frameScale = Math.max(0.45, size.y * 0.42);
+          headPos = new THREE.Vector3(center.x, box.max.y - size.y * 0.05, center.z);
+          frameScale = 0.68;
         }
         camera.position.set(headPos.x, headPos.y + 0.02, frameScale);
-        camera.lookAt(headPos.x, headPos.y - 0.06, headPos.z);
+        camera.lookAt(headPos.x, headPos.y - 0.03, headPos.z);
 
         rig = { renderer, scene, camera, meshes, bones, baseRotations };
       } catch {
