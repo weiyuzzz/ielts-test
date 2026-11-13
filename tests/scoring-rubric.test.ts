@@ -23,7 +23,7 @@ import {
 } from "../src/lib/speaking/band-descriptors";
 import {
   buildScoringMessages, validateLanguageScore, checkDescriptorRefs,
-  SCORING_PROMPT_VERSION, buildDiagnosticReport, ScoringValidationError,
+  SCORING_PROMPT_VERSION, buildDiagnosticReport, ScoringValidationError, extractJson,
 } from "../src/lib/speaking/scoring";
 import { aggregate, type AnswerInput } from "../src/lib/speaking/metrics";
 import type { WordTiming } from "../src/db/schema";
@@ -423,4 +423,24 @@ test("12e. prompt: P required only with pronunciation evidence; part rules alway
   assert.match(withPron.system, /"P":Criterion/);
   assert.match(withPron.user, /azure-pronunciation-assessment/);
   assert.match(withPron.user, /schedule=42/);
+});
+
+
+// ------------------------------------------------------------------ extractJson robustness (Part 2 incident)
+test("extractJson tolerates trailing prose after the scoring JSON", () => {
+  const raw = '{"dimensions":{"FC":{"band":6}}}\n\nNote: this candidate shows strong cohesion overall. 中文备注。';
+  const parsed = extractJson(raw) as { dimensions: { FC: { band: number } } };
+  assert.equal(parsed.dimensions.FC.band, 6);
+});
+
+test("extractJson takes the FIRST object when a second one trails", () => {
+  const raw = '{"dimensions":{"FC":{"band":7}}}\n{"summary":"extra object appended by the model"}';
+  const parsed = extractJson(raw) as { dimensions: { FC: { band: number } } };
+  assert.equal(parsed.dimensions.FC.band, 7);
+});
+
+test("extractJson keeps braces inside string values balanced", () => {
+  const raw = '{"dimensions":{"FC":{"band":6,"rationale":"used {and} many quotes"}}}\ntrailing text';
+  const parsed = extractJson(raw) as { dimensions: { FC: { band: number } } };
+  assert.equal(parsed.dimensions.FC.band, 6);
 });
