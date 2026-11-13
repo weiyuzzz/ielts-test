@@ -127,6 +127,9 @@ export function ExaminerAvatar3D(props: Props) {
     refs.current = { speaking: props.speaking, listening: props.listening, preparing: !!props.preparing, probe: !!props.probe };
   }, [props.speaking, props.listening, props.preparing, props.probe]);
 
+  // Cleanup handles for the probe's rAF-throttling fallback timer.
+  const probeFallbackStopRef = useRef<(() => void)[]>([]);
+
   // Callbacks live in refs so a parent's inline handler never restarts the
   // pipeline effect (which would re-download the model).
   const lifecycleCb = useRef(props.onLifecycle);
@@ -492,8 +495,17 @@ export function ExaminerAvatar3D(props: Props) {
       setLifecycle("ready"); // real pipeline (loader + renderer + loop) is live
       // Non-probe mounts report the load once too (no FPS sampling cost).
       if (!refs.current.probe) setTimeout(() => reportProbeInfo(undefined), 0);
+      // FPS sampling relies on requestAnimationFrame, which browsers suspend
+      // entirely for throttled/occluded pages (embedded panes, background
+      // tabs). A fallback timer guarantees the probe ALWAYS reports — with
+      // fps when rAF ran, without it otherwise.
+      const probeFallback = setTimeout(() => maybeReportProbe(), 6000);
+      const stopProbeFallback = () => clearTimeout(probeFallback);
+      if (refs.current.probe) probeFallbackStopRef.current.push(stopProbeFallback);
+      else stopProbeFallback();
       cleanup = () => {
         cancelAnimationFrame(raf);
+        for (const stop of probeFallbackStopRef.current.splice(0)) stop();
         ro.disconnect();
         io.disconnect();
         canvas.removeEventListener("webglcontextlost", onContextLost);
@@ -512,9 +524,12 @@ export function ExaminerAvatar3D(props: Props) {
           }
         });
         renderer.dispose();
-        // Release the WebGL context itself so repeated exam mounts cannot
-        // accumulate dead contexts (browsers cap live contexts per page).
-        renderer.forceContextLoss();
+        // NOTE: deliberately NO forceContextLoss() here — it permanently kills
+        // the canvas' context, which breaks model/gender switches (the SAME
+        // canvas element is reused for the next pipeline run and could never
+        // create a WebGL context again → instant 2D fallback). dispose()
+        // releases all GL resources; the context itself is freed when the
+        // canvas element leaves the DOM on unmount.
       };
     })().catch((e) => { failOver(`pipeline error (${(e as Error).message})`); });
 

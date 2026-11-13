@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Card } from "@/components/ui";
 import { MicCheck } from "@/components/mic-check";
 import { LipSyncLab } from "@/app/speaking/lipsync-lab/lip-sync-lab";
@@ -27,9 +27,11 @@ function voiceFamily(voice: string): string {
   return "kokoro"; // "auto" and unknown: the deployment default family
 }
 
-export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profiles, defaultProfileId }: { initial: S; serverTts: boolean; ttsVoice: string; ttsStreaming: boolean; profiles: ProfileOption[]; defaultProfileId: string }) {
+export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profiles, defaultProfileId, diagnosticsSlot }: { initial: S; serverTts: boolean; ttsVoice: string; ttsStreaming: boolean; profiles: ProfileOption[]; defaultProfileId: string; diagnosticsSlot?: ReactNode }) {
   const [s, setS] = useState(initial);
   const [saved, setSaved] = useState<string | null>(null);
+  /** Transient feedback for the instantly-persisted 3D toggle. */
+  const [dhSaved, setDhSaved] = useState<string | null>(null);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [mic, setMic] = useState("");
 
@@ -94,6 +96,41 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
   const examinerName = examinerModelById(s.examinerModel)?.displayName ?? GENDER_NAME[s.examinerGender];
   return (
     <div className="space-y-6">
+      {/* ---- Profile --------------------------------------------------------- */}
+      <Card className="space-y-4 p-6">
+        <div>
+          <h2 className="font-semibold">Profile</h2>
+          <p className="mt-0.5 text-xs text-zinc-400">Your candidate details and test preferences.</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <label className="text-sm">Display name<input className={field} value={s.displayName} onChange={(e) => setS({ ...s, displayName: e.target.value })} /></label>
+          <label className="text-sm">Target band
+            <select className={field} value={s.targetBand} onChange={(e) => setS({ ...s, targetBand: Number(e.target.value) })}>
+              {[5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9].map((b) => <option key={b} value={b}>{b.toFixed(1)}</option>)}
+            </select>
+          </label>
+          <label className="text-sm">Exam date<input type="date" className={field} value={s.examDate} onChange={(e) => setS({ ...s, examDate: e.target.value })} /></label>
+        </div>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={s.showSubtitles} onChange={(e) => setS({ ...s, showSubtitles: e.target.checked })} /> Show examiner subtitles during the test</label>
+        <div className="flex items-center gap-3 border-t border-zinc-100 pt-4">
+          <button onClick={save} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700">Save</button>
+          {saved && <span className="text-sm text-zinc-500">{saved}</span>}
+        </div>
+      </Card>
+
+      {/* ---- Microphone ------------------------------------------------------ */}
+      <Card className="p-6">
+        <MicCheck
+          deviceId={mic}
+          onDeviceChange={(id) => { setMic(id); localStorage.setItem("mic-device", id); }}
+          title="Microphone test"
+          hint="Record for 3 seconds and play it back — if you can hear yourself, this capture path works. It is the exact same path the exam uses."
+        />
+      </Card>
+
+      {/* ---- System diagnostics (slot rendered by the page) ------------------ */}
+      {diagnosticsSlot}
+
       {/* ---- Examiner: look + voice, one person ------------------------------ */}
       <Card className="space-y-4 p-6">
         <div>
@@ -162,14 +199,20 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
                 type="checkbox"
                 checked={s.digitalHuman3d}
                 onChange={(e) => {
-                  const next = { ...s, digitalHuman3d: e.target.checked };
-                  setS(next);
-                  // The diagnostics card tracks this preference live; a plain
-                  // window event avoids lifting state across the two cards.
-                  window.dispatchEvent(new CustomEvent("b9:digital-human", { detail: e.target.checked }));
+                  const v = e.target.checked;
+                  setS((cur) => ({ ...cur, digitalHuman3d: v }));
+                  // Persist IMMEDIATELY (a refresh must keep the choice) and
+                  // notify the diagnostics card via the shared event.
+                  window.dispatchEvent(new CustomEvent("b9:digital-human", { detail: v }));
+                  setDhSaved("Saving…");
+                  void fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ digitalHuman3d: v }) })
+                    .then(() => setDhSaved("Saved ✓"))
+                    .catch(() => setDhSaved("Save failed — check your connection"))
+                    .finally(() => setTimeout(() => setDhSaved(null), 2500));
                 }}
               />
               Enable 3D digital examiner
+              {dhSaved && <span className="text-[11px] font-normal text-zinc-400">{dhSaved}</span>}
             </span>
             <span className="text-xs text-zinc-400">
               {s.digitalHuman3d
@@ -182,38 +225,6 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
           <button onClick={() => speak(`Good morning. My name is ${examinerName}. Could I see your identification, please?`, { serverTts, voice: s.examinerVoice, act: "greeting", profileId: s.examinerVoice })} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm">Test voice</button>
           <span className="text-xs text-zinc-400">Hear the current examiner speak a greeting.</span>
         </div>
-      </Card>
-
-      {/* ---- Profile --------------------------------------------------------- */}
-      <Card className="space-y-4 p-6">
-        <div>
-          <h2 className="font-semibold">Profile</h2>
-          <p className="mt-0.5 text-xs text-zinc-400">Your candidate details and test preferences.</p>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <label className="text-sm">Display name<input className={field} value={s.displayName} onChange={(e) => setS({ ...s, displayName: e.target.value })} /></label>
-          <label className="text-sm">Target band
-            <select className={field} value={s.targetBand} onChange={(e) => setS({ ...s, targetBand: Number(e.target.value) })}>
-              {[5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9].map((b) => <option key={b} value={b}>{b.toFixed(1)}</option>)}
-            </select>
-          </label>
-          <label className="text-sm">Exam date<input type="date" className={field} value={s.examDate} onChange={(e) => setS({ ...s, examDate: e.target.value })} /></label>
-        </div>
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={s.showSubtitles} onChange={(e) => setS({ ...s, showSubtitles: e.target.checked })} /> Show examiner subtitles during the test</label>
-        <div className="flex items-center gap-3 border-t border-zinc-100 pt-4">
-          <button onClick={save} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700">Save</button>
-          {saved && <span className="text-sm text-zinc-500">{saved}</span>}
-        </div>
-      </Card>
-
-      {/* ---- Microphone ------------------------------------------------------ */}
-      <Card className="p-6">
-        <MicCheck
-          deviceId={mic}
-          onDeviceChange={(id) => { setMic(id); localStorage.setItem("mic-device", id); }}
-          title="Microphone test"
-          hint="Record for 3 seconds and play it back — if you can hear yourself, this capture path works. It is the exact same path the exam uses."
-        />
       </Card>
 
       {/* ---- Lip Sync Lab: previews the examiner chosen above. With the 3D
