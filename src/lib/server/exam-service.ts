@@ -4,6 +4,7 @@ import { examSessions, examQuestions, questions, answerRecords, audioAssets, tra
 import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { resolveConfig, EXAMINER_NAMES_BY_GENDER, type SpeakingExamConfig, type SpeakingMode } from "@/lib/speaking/config";
 import { resolveVoiceProfile, sanitizeProfile, type VoiceProfile } from "@/lib/speaking/voice-profile";
+import { readAiConfig, envOverridesFor, withEnvOverrides } from "@/lib/server/ai-config";
 import { normalizeGender, normalizeModelId, examinerModelById } from "@/lib/avatar/models";
 import { asrTimingFromConfig } from "@/lib/speaking/asr-policy";
 import { canSubmitAnswer, canRepeat, decideAdvance, canFinish, type MachineState, type MachineError } from "@/lib/speaking/exam-machine";
@@ -169,7 +170,7 @@ export async function createSession(user: User, mode: SpeakingMode) {
   return db.transaction(async (tx) => {
     const [s] = await tx
       .insert(examSessions)
-      .values({ userId: user.id, module: "speaking", mode, examinerName, configSnapshot: { ...config, bankSeason: bank.season, bankRegion: bank.region, examinerGender, examinerModel: examinerModelId, voiceProfile: resolveVoiceProfile(user.examinerVoice), digitalHuman3d: user.digitalHuman3d !== false } as unknown as Record<string, unknown>, totalSteps: steps.length })
+      .values({ userId: user.id, module: "speaking", mode, examinerName, configSnapshot: { ...config, bankSeason: bank.season, bankRegion: bank.region, examinerGender, examinerModel: examinerModelId, voiceProfile: withEnvOverrides(envOverridesFor(readAiConfig(), "tts"), () => resolveVoiceProfile(user.examinerVoice)), digitalHuman3d: user.digitalHuman3d !== false } as unknown as Record<string, unknown>, totalSteps: steps.length })
       .returning();
     await tx.insert(examQuestions).values(steps.map((st, i) => ({ ...st, sessionId: s.id, stepIndex: i })));
     return s;

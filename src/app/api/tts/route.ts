@@ -7,7 +7,8 @@ import {
 } from "@/lib/server/tts-cache";
 import { isSpeechAct, type ExaminerSpeechAct } from "@/lib/speaking/speech-act";
 import { recordUsage } from "@/lib/server/ai-usage";
-import { profileFingerprint, resolveVoiceProfile, sanitizeProfile, type VoiceProfile } from "@/lib/speaking/voice-profile";
+import { envDefaultProfile, profileFingerprint, resolveVoiceProfile, sanitizeProfile, type VoiceProfile } from "@/lib/speaking/voice-profile";
+import { ProviderError } from "@/lib/ai/types";
 import { readAiConfig, envOverridesFor, withEnvOverrides } from "@/lib/server/ai-config";
 
 /**
@@ -40,6 +41,11 @@ interface TtsParams {
   /** True when the caller chose a profile explicitly (Voice Lab / a session
    *  snapshot), which also selects the provider instead of the deployment default. */
   explicitProfile: boolean;
+  /** Set when a session-frozen profile's provider is NOT configured on this
+   *  deployment (e.g. a session frozen on azure-sonia now played on a Kokoro
+   *  deployment). The synthesis falls back to the deployment default voice and
+   *  DISCLOSES it here — never a silent person swap. */
+  voiceFallback?: string;
 }
 
 function parseText(text?: string | null): string {
@@ -57,7 +63,27 @@ function buildParams(input: { text?: string | null; voice?: string | null; act?:
       : sanitizeProfile(input.profile)
     : resolveVoiceProfile(input.voice);
   const act: ExaminerSpeechAct = isSpeechAct(input.act) ? input.act : "question";
-  return { text, profile, act, explicitProfile };
+  const params: TtsParams = { text, profile, act, explicitProfile };
+  return effectiveParams(params);
+}
+
+/**
+ * A session-frozen profile whose provider is NOT configured on this deployment
+ * (deployment changed mid-flight, or the freeze happened under an earlier
+ * resolution bug) used to hard-fail every synthesis with no way out. Fall back
+ * to the deployment's ACTUAL default voice and disclose it on the response —
+ * a disclosed voice change beats a dead examiner.
+ */
+function effectiveParams(p: TtsParams): TtsParams {
+  if (!p.explicitProfile) return p;
+  try {
+    getTTSFor(p.profile.provider);
+    return p;
+  } catch (e) {
+    if ((e as { code?: string }).code !== "config") throw e; // real engine errors still surface
+    const def = envDefaultProfile();
+    return { ...p, profile: def, voiceFallback: `${p.profile.id} unavailable on this deployment -> ${def.voice}` };
+  }
 }
 
 /** Output format actually requested from the engine (part of the cache identity). */
@@ -82,6 +108,7 @@ function ttsHeaders(extra: Record<string, string>, tts: TTSProvider, p: TtsParam
     "X-TTS-Provider": tts.id,
     "X-TTS-Voice": p.profile.voice,
     "X-TTS-Act": p.act,
+    ...(p.voiceFallback ? { "X-TTS-Voice-Fallback": p.voiceFallback } : {}),
     ...extra,
   };
 }
@@ -90,7 +117,7 @@ function audioResponse(clip: CachedClip, cache: string, tts: TTSProvider, p: Tts
   void recordUsage({
     service: "tts", provider: tts.id, model: tts.model ?? null, status: "ok",
     latencyMs: Math.round(synthesisMs), units: p.text.length, unitLabel: "chars",
-    meta: { cache, act: p.act },
+    meta: { cache, act: p.act, ...(p.voiceFallback ? { voiceFallback: p.voiceFallback } : {}) },
   });
   const headers: Record<string, string> = {
     "Content-Type": clip.mimeType,
