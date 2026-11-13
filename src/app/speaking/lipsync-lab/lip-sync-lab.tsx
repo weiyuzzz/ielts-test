@@ -7,8 +7,14 @@
  * live 15-channel viseme weights, so mouth/audio alignment can be judged
  * directly (spec 第七阶段). No exam state is touched.
  *
- * The readout is written straight to the DOM from one RAF loop — no React
- * state per frame, same rule as the avatar.
+ * The readout is written straight to the DOM — no React state per frame.
+ * While a line is playing it samples at RAF (60 fps); when idle it drops to
+ * a 300 ms interval, so an open settings page does not burn a render loop.
+ *
+ * 3D is strictly click-to-load: the GLB is NOT preloaded and ExaminerAvatar3D
+ * is NOT mounted until the user activates it. With `show3D={false}` (the
+ * settings page while the 3D digital human is switched off) the lab is a
+ * voice audition only — no three.js import, no WebGL, no GLB, no 3D RAF.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -32,9 +38,15 @@ interface Props {
   initialVoice?: string;
   /** Embedded in the settings page: no page chrome of its own. */
   embedded?: boolean;
+  /**
+   * false → the 3D digital human is switched off: voice audition only, the
+   * 3D pipeline never mounts and the GLB never downloads. Default true
+   * (standalone lab page), still click-to-activate.
+   */
+  show3D?: boolean;
 }
 
-export function LipSyncLab({ serverTts, profiles, defaultProfileId, gender, modelId, name, initialVoice, embedded = false }: Props) {
+export function LipSyncLab({ serverTts, profiles, defaultProfileId, gender, modelId, name, initialVoice, embedded = false, show3D = true }: Props) {
   const examinerName = name ?? examinerModelById(modelId ?? "")?.displayName ?? (gender === "female" ? "Sarah" : "James");
   const sampleLine = useMemo(
     () => `Hello. My name is ${examinerName}, and I will be your examiner today. Could I see your identification, please?`,
@@ -57,6 +69,8 @@ export function LipSyncLab({ serverTts, profiles, defaultProfileId, gender, mode
   const tierRef = useRef<HTMLSpanElement | null>(null);
   /** Cancels the in-flight synthesis wait (Stop button during preparing). */
   const cancelWaitRef = useRef<(() => void) | null>(null);
+  /** 3D pipeline activation — nothing Three.js-related exists before this. */
+  const [avatar3dOn, setAvatar3dOn] = useState(false);
 
   // Follow the examiner chosen in the form above: when its greeting line
   // changes, reset the text; when the form's voice changes, follow it
@@ -74,8 +88,16 @@ export function LipSyncLab({ serverTts, profiles, defaultProfileId, gender, mode
     warmupSpeech();
     configureTtsIdentity(null, null);
     primeEnvelope();
-    preloadExaminerModel(modelId ?? (gender === "female" ? "f1" : "m1"));
+    // Deliberately NO preloadExaminerModel() here: the GLB downloads only when
+    // the user activates the 3D examiner (see activate3D below).
   }, [gender, modelId]);
+
+  /** Click-to-load: warm the HTTP cache and mount the real 3D pipeline. */
+  function activate3D() {
+    if (avatar3dOn) return;
+    preloadExaminerModel(modelId ?? (gender === "female" ? "f1" : "m1"));
+    setAvatar3dOn(true);
+  }
 
   // Warm the current line while the page sits idle: if synthesis is still
   // running when Play is clicked, the long wait outlives the browser's user
@@ -86,11 +108,11 @@ export function LipSyncLab({ serverTts, profiles, defaultProfileId, gender, mode
     return () => clearTimeout(t);
   }, [text, voice, useBrowserVoice]);
 
-  // One readout loop: current viseme, clock, tier + channel bars.
+  // One readout: current viseme, clock, tier + channel bars. Full RAF cadence
+  // only while a line is playing/waiting; idle it samples at 300 ms so an
+  // open settings page never keeps a busy render loop alive.
   useEffect(() => {
-    let raf = 0;
-    const loop = () => {
-      raf = requestAnimationFrame(loop);
+    const draw = () => {
       const s = lipSync.sample(0, performance.now());
       let maxV = "sil";
       let maxW = 0;
@@ -104,9 +126,23 @@ export function LipSyncLab({ serverTts, profiles, defaultProfileId, gender, mode
       if (timeRef.current) timeRef.current.textContent = `${s.time.toFixed(2)}s`;
       if (tierRef.current) tierRef.current.textContent = s.tier;
     };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, []);
+    let raf = 0;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    if (playing || waiting) {
+      const loop = () => {
+        raf = requestAnimationFrame(loop);
+        draw();
+      };
+      raf = requestAnimationFrame(loop);
+    } else {
+      timer = setInterval(draw, 300);
+      draw();
+    }
+    return () => {
+      cancelAnimationFrame(raf);
+      if (timer) clearInterval(timer);
+    };
+  }, [playing, waiting]);
 
   async function play() {
     if (playing || waiting) return;
@@ -184,7 +220,24 @@ export function LipSyncLab({ serverTts, profiles, defaultProfileId, gender, mode
       )}
 
       <div className="flex items-start gap-5 rounded-2xl border border-zinc-200 bg-white p-5">
-        <ExaminerAvatar3D gender={gender} modelId={modelId} speaking={playing} listening={false} preparing={false} name={examinerName} className="h-44 w-44 shrink-0" />
+        {show3D && avatar3dOn && (
+          <ExaminerAvatar3D gender={gender} modelId={modelId} speaking={playing} listening={false} preparing={false} name={examinerName} className="h-44 w-44 shrink-0" />
+        )}
+        {show3D && !avatar3dOn && (
+          <div className="grid h-44 w-44 shrink-0 place-items-center rounded-2xl border border-dashed border-zinc-300 text-center">
+            <div className="px-3">
+              <p className="text-xs leading-4 text-zinc-400">The 3D examiner is not loaded yet — nothing downloads until you ask for it.</p>
+              <button onClick={activate3D} className="mt-2 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700">
+                Load 3D examiner
+              </button>
+            </div>
+          </div>
+        )}
+        {!show3D && (
+          <div className="grid h-44 w-44 shrink-0 place-items-center rounded-2xl border border-dashed border-zinc-300 text-center">
+            <p className="px-3 text-xs leading-4 text-zinc-400">3D examiner is off — voice audition only. No Three.js, no WebGL, no model download.</p>
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="rounded bg-zinc-100 px-2 py-1 font-medium text-zinc-600">{examinerName} · {gender === "female" ? "Female" : "Male"} examiner</span>

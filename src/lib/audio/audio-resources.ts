@@ -17,10 +17,10 @@
  * `ensureOpeningAndFirst()` is the only awaitable gate and it waits for at most
  * two resources. It NEVER waits for the whole script or the backup voices.
  */
-import { TTS_PRIORITY, type TtsPriority, type TtsTaskSnapshot } from "./tts-scheduler";
+import { TTS_PRIORITY, type TtsPriority, type TtsTaskSnapshot, type TtsTaskStatus } from "./tts-scheduler";
 import type { ExaminerSpeechAct } from "@/lib/speaking/speech-act";
 import {
-  configureTtsIdentity, prefetchManyTTSWithPriorities, waitForTTS,
+  configureTtsIdentity, prefetchManyTTSWithPriorities, waitForTTS, keyOf,
   preloadPresetAudio, loadVoices, subscribeTts, ttsSnapshot, disposeAudio, rearmAudio,
 } from "./speech";
 import { audioMetrics } from "./metrics";
@@ -48,6 +48,26 @@ export interface ReadinessSnapshot {
   readyCount: number;
   totalCount: number;
   openingReady: boolean;
+}
+
+/**
+ * REAL preparation result (5.2): derived from the scheduler's task statuses
+ * after the gate — never a blanket "true because the timeout fired".
+ */
+export interface PreparationResult {
+  /** Every opening line ready (and the preset clip, when one is used). */
+  ok: boolean;
+  /** True only when the bounded gate elapsed without everything ready. */
+  timedOut: boolean;
+  elapsedMs: number;
+  total: number;
+  readyCount: number;
+  /** Per-line actual scheduler status: ready | queued | running | failed | cancelled. */
+  lines: { text: string; act: string; status: TtsTaskStatus; ready: boolean }[];
+  /** The bank clip's readiness when a preset audio is used for question 1. */
+  presetReady: boolean | null;
+  /** Human-readable first failure reason (failed/cancelled task, if any). */
+  firstFailure: string | null;
 }
 
 const OPENING_TIMEOUT_MS = 12_000;
@@ -83,42 +103,79 @@ export class AudioPreloader {
   /**
    * Gate before the exam starts: only the opening utterance (one or more lines)
    * and the first question's resources. Backup voices are explicitly NOT awaited.
-   * `timeoutMs` overrides the constructor default — the exam start uses a long
-   * one because the candidate explicitly asked for "everything ready before
-   * the exam begins" (a local CPU engine can take ~30s per line).
+   * `timeoutMs` overrides the constructor default. The default is bounded
+   * (~90–120 s, operator-tunable via TTS_START_GATE_MS on the server) — a slow
+   * engine surfaces as a REAL PreparationResult with per-line statuses instead
+   * of a 10-minute silent wait, and `ok` is only true when the audio is
+   * ACTUALLY ready (never because a timeout elapsed).
    */
   async ensureOpeningAndFirst(
     opening: ScriptLineLike | ScriptLineLike[],
     firstQuestionAudioUrl: string | null,
     act: ExaminerSpeechAct = "question",
     timeoutMs?: number,
-  ): Promise<ReadinessSnapshot> {
-    if (this.disposed) return this.snapshot();
+  ): Promise<PreparationResult> {
+    const t0 = performance.now();
+    if (this.disposed) return { ok: false, timedOut: false, elapsedMs: 0, total: 0, readyCount: 0, lines: [], presetReady: null, firstFailure: "Audio preloader was disposed (exam exit)." };
     const gate = timeoutMs ?? this.readyTimeoutMs;
+    const openingLines = toLines(opening).filter((l) => l.text.trim());
     const jobs: Promise<unknown>[] = [];
+    // The bank clip does NOT go through the TTS scheduler; its readiness is
+    // the preload promise resolving to a blob URL (≠ the original URL — the
+    // original URL is returned when the fetch failed).
+    let presetDone = false;
+    let presetOk = false;
+    if (firstQuestionAudioUrl) {
+      const p = preloadPresetAudio(firstQuestionAudioUrl).then((resolved) => {
+        presetDone = true;
+        presetOk = !!resolved && resolved !== firstQuestionAudioUrl;
+        return resolved;
+      });
+      jobs.push(p);
+    }
     if (this.serverTts) {
-      const openingLines = toLines(opening);
-      jobs.push(...openingLines
-        .filter((l) => l.text.trim())
-        .map((l) => waitForTTS(l.text, this.voice, gate, l.act ?? act, this.profile)));
+      jobs.push(...openingLines.map((l) => waitForTTS(l.text, this.voice, gate, l.act ?? act, this.profile)));
       if (!openingLines.length) jobs.push(loadVoices());
     } else {
       jobs.push(loadVoices()); // browser fallback voice list
     }
-    if (firstQuestionAudioUrl) jobs.push(preloadPresetAudio(firstQuestionAudioUrl));
 
-    const t0 = performance.now();
     let timer: ReturnType<typeof setTimeout> | undefined;
-    await Promise.race([
-      Promise.allSettled(jobs),
-      new Promise<void>((r) => { timer = setTimeout(r, gate + 1000); }),
-    ]);
+    const gateExpired = new Promise<void>((r) => { timer = setTimeout(r, gate + 1000); });
+    await Promise.race([Promise.allSettled(jobs), gateExpired]);
     if (timer) clearTimeout(timer); // do not keep the event loop / exam alive
-    audioMetrics.record("audio_ready_ms", performance.now() - t0, this.serverTts ? "cache-miss" : "browser", "opening gate");
-    this.openingReady = true;
-    const s = this.snapshot();
+    const elapsedMs = performance.now() - t0;
+
+    // Inspect ACTUAL task statuses instead of assuming readiness on timeout.
+    // keyOf() is the SAME identity the scheduler and speech.ts use, so a ready
+    // line is only counted when its real clip exists.
+    const wanted = new Map<string, { text: string; act: string }>();
+    for (const l of openingLines) {
+      wanted.set(keyOf(l.text, this.voice, l.act ?? act, this.profile), { text: l.text, act: l.act ?? act });
+    }
+    const snap = ttsSnapshot();
+    const lines: PreparationResult["lines"] = [];
+    for (const [key, meta] of wanted) {
+      const task = snap.find((t) => t.key === key);
+      const status = task?.status ?? "cancelled";
+      lines.push({ ...meta, status, ready: status === "ready" && !!task?.hasResource });
+    }
+    const readyCount = lines.filter((l) => l.ready).length;
+    // presetReady: true (blob cached) / false (fetch definitively failed) /
+    // null (still downloading — never treated as a failure on its own).
+    const presetReady: boolean | null = firstQuestionAudioUrl ? (presetDone ? presetOk : null) : null;
+    const failedLine = lines.find((l) => l.status === "failed" || l.status === "cancelled");
+    const firstFailure = failedLine
+      ? `Opening line not available (status: ${failedLine.status}): "${failedLine.text.slice(0, 60)}"`
+      : presetReady === false
+        ? "The first question's recorded audio did not finish loading."
+        : null;
+    const ok = (lines.length === 0 || lines.every((l) => l.ready)) && presetReady !== false;
+    if (ok) this.openingReady = true; // only a REAL readiness flips this
+    audioMetrics.record("audio_ready_ms", elapsedMs, this.serverTts ? "cache-miss" : "browser", ok ? "opening gate ok" : "opening gate incomplete");
+    const result: PreparationResult = { ok, timedOut: !ok && elapsedMs >= gate, elapsedMs, total: lines.length, readyCount, lines, presetReady, firstFailure };
     this.emit();
-    return s;
+    return result;
   }
 
   /** Prepare the next question while the candidate is answering the current one. */

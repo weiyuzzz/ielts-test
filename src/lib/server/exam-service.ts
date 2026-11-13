@@ -169,7 +169,7 @@ export async function createSession(user: User, mode: SpeakingMode) {
   return db.transaction(async (tx) => {
     const [s] = await tx
       .insert(examSessions)
-      .values({ userId: user.id, module: "speaking", mode, examinerName, configSnapshot: { ...config, bankSeason: bank.season, bankRegion: bank.region, examinerGender, examinerModel: examinerModelId, voiceProfile: resolveVoiceProfile(user.examinerVoice) } as unknown as Record<string, unknown>, totalSteps: steps.length })
+      .values({ userId: user.id, module: "speaking", mode, examinerName, configSnapshot: { ...config, bankSeason: bank.season, bankRegion: bank.region, examinerGender, examinerModel: examinerModelId, voiceProfile: resolveVoiceProfile(user.examinerVoice), digitalHuman3d: user.digitalHuman3d !== false } as unknown as Record<string, unknown>, totalSteps: steps.length })
       .returning();
     await tx.insert(examQuestions).values(steps.map((st, i) => ({ ...st, sessionId: s.id, stepIndex: i })));
     return s;
@@ -215,7 +215,7 @@ export async function getSessionView(user: User, id: string) {
   const ts = answers.length ? await db.select().from(transcripts).where(inArray(transcripts.answerId, answers.map((a) => a.id))).orderBy(desc(transcripts.createdAt)) : [];
   const [assessment] = await db.select({ id: assessments.id, status: assessments.status }).from(assessments).where(eq(assessments.sessionId, s.id)).orderBy(desc(assessments.startedAt)).limit(1);
   return {
-    session: { id: s.id, mode: s.mode, status: s.status, currentStep: s.currentStep, examinerName: s.examinerName, startedAt: s.startedAt, completedAt: s.completedAt, config: s.configSnapshot as unknown as SpeakingExamConfig, voiceProfile: resolveSessionVoice(s.configSnapshot), examinerGender: normalizeGender((s.configSnapshot as { examinerGender?: unknown }).examinerGender), examinerModel: normalizeModelId((s.configSnapshot as { examinerModel?: unknown }).examinerModel, normalizeGender((s.configSnapshot as { examinerGender?: unknown }).examinerGender)) },
+    session: { id: s.id, mode: s.mode, status: s.status, currentStep: s.currentStep, examinerName: s.examinerName, startedAt: s.startedAt, completedAt: s.completedAt, config: s.configSnapshot as unknown as SpeakingExamConfig, voiceProfile: resolveSessionVoice(s.configSnapshot), examinerGender: normalizeGender((s.configSnapshot as { examinerGender?: unknown }).examinerGender), examinerModel: normalizeModelId((s.configSnapshot as { examinerModel?: unknown }).examinerModel, normalizeGender((s.configSnapshot as { examinerGender?: unknown }).examinerGender)), digitalHuman3d: (s.configSnapshot as { digitalHuman3d?: unknown }).digitalHuman3d !== false },
     steps: steps.map((st) => {
       const a = answers.find((x) => x.examQuestionId === st.id);
       const t = a ? ts.find((x) => x.answerId === a.id) : undefined;

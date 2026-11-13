@@ -1,4 +1,4 @@
-import { mkdir, writeFile, readFile, stat } from "node:fs/promises";
+import { mkdir, writeFile, readFile, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 
@@ -36,4 +36,27 @@ export function extForMime(mime: string) {
   if (mime.includes("wav")) return "wav";
   if (mime.includes("mpeg")) return "mp3";
   return "bin";
+}
+
+/**
+ * Non-destructive storage probe for the diagnostics centre: write a tiny marker
+ * file under diagnostics/, read it back, verify the bytes and delete it. Real
+ * exam audio is never touched. Throws nothing — the caller maps the result to a
+ * DiagnosticItem.
+ */
+export async function probeAudioStorage(): Promise<{ ok: boolean; detail: string }> {
+  const marker = `diagnostics/probe-${crypto.randomUUID()}.txt`;
+  const payload = `band-nine storage probe ${new Date().toISOString()}`;
+  try {
+    const full = safe(marker);
+    await mkdir(path.dirname(full), { recursive: true });
+    await writeFile(full, payload, "utf8");
+    const back = await readFile(full, "utf8");
+    if (back !== payload) return { ok: false, detail: "read-back content mismatch" };
+    await unlink(full);
+    return { ok: true, detail: `write/read/cleanup ok (${ROOT})` };
+  } catch (e) {
+    try { await unlink(safe(marker)); } catch { /* nothing to clean */ }
+    return { ok: false, detail: (e as Error).message };
+  }
 }

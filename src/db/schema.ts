@@ -28,6 +28,8 @@ export const users = pgTable("users", {
   examinerGender: text("examiner_gender").notNull().default("female"),
   /** Which examiner look (avatar model id, e.g. "f1"…"f5"/"m1"…"m5"). */
   examinerModel: text("examiner_model"),
+  /** false → the lightweight 2D SVG examiner is used (low-end devices / user preference). */
+  digitalHuman3d: boolean("digital_human_3d").notNull().default(true),
   showSubtitles: boolean("show_subtitles").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

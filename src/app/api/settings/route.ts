@@ -7,7 +7,7 @@ import { normalizeGender, normalizeModelId } from "@/lib/avatar/models";
 export async function PUT(req: Request) {
   try {
     const user = await requireUser();
-    const b = (await req.json().catch(() => ({}))) as { displayName?: string; targetBand?: number; examDate?: string | null; examinerVoice?: string; examinerGender?: string; examinerModel?: string; showSubtitles?: boolean };
+    const b = (await req.json().catch(() => ({}))) as { displayName?: string; targetBand?: number; examDate?: string | null; examinerVoice?: string; examinerGender?: string; examinerModel?: string; digitalHuman3d?: boolean; showSubtitles?: boolean };
     const patch: Partial<typeof users.$inferInsert> = {};
     if (b.displayName !== undefined) patch.displayName = String(b.displayName).slice(0, 60) || "Candidate";
     if (b.targetBand !== undefined) {
@@ -22,9 +22,10 @@ export async function PUT(req: Request) {
       const gender = patch.examinerGender ?? user.examinerGender;
       patch.examinerModel = normalizeModelId(b.examinerModel, normalizeGender(gender));
     }
+    if (b.digitalHuman3d !== undefined) patch.digitalHuman3d = !!b.digitalHuman3d;
     if (b.showSubtitles !== undefined) patch.showSubtitles = !!b.showSubtitles;
     const [u] = await db.update(users).set(patch).where(eq(users.id, user.id)).returning();
-    return Response.json({ ok: true, user: { displayName: u.displayName, targetBand: u.targetBand, examDate: u.examDate, examinerVoice: u.examinerVoice, examinerGender: u.examinerGender, examinerModel: u.examinerModel, showSubtitles: u.showSubtitles } });
+    return Response.json({ ok: true, user: { displayName: u.displayName, targetBand: u.targetBand, examDate: u.examDate, examinerVoice: u.examinerVoice, examinerGender: u.examinerGender, examinerModel: u.examinerModel, digitalHuman3d: u.digitalHuman3d, showSubtitles: u.showSubtitles } });
   } catch (e) {
     return errorResponse(e);
   }

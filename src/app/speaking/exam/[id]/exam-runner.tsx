@@ -8,10 +8,10 @@ import { RecorderError, listInputDevices, type Recording } from "@/lib/audio/rec
 import { RecordingSession } from "@/lib/audio/recording-session";
 import {
   BrowserTranscriber, browserAsrSupported, speak, speakPreset, disposeAudio,
-  warmupSpeech, promoteTTS, waitForTTS, ttsScheduler, keyOf, audioMetrics, type ScriptLine,
+  warmupSpeech, promoteTTS, waitForTTS, configureTtsConcurrency, ttsScheduler, keyOf, audioMetrics, type ScriptLine,
 } from "@/lib/audio/speech";
-import { AudioPreloader, classifyScriptLines, type PreloadEntry } from "@/lib/audio/audio-resources";
-import { outcomeOf, type PlaybackOutcome } from "@/lib/audio/audio-lifecycle";
+import { AudioPreloader, classifyScriptLines, type PreloadEntry, type PreparationResult } from "@/lib/audio/audio-resources";
+import { outcomeOf, classifyAudioFailure, type PlaybackOutcome } from "@/lib/audio/audio-lifecycle";
 import { uploadWithRetry, postJson, UploadError } from "@/lib/audio/upload";
 import { LINES } from "@/lib/speaking/examiner";
 import type { SpeakingExamConfig } from "@/lib/speaking/config";
@@ -19,6 +19,7 @@ import type { ExaminerSpeechAct } from "@/lib/speaking/speech-act";
 import { budgetForPart, formatClock, OFFICIAL_RANGE, PART_TITLE, partProgress, partRemaining } from "@/lib/speaking/part-timing";
 import { primeEnvelope } from "@/lib/audio/examiner-envelope";
 import { ExaminerAvatar3D } from "@/components/examiner/examiner-avatar-3d";
+import { ExaminerAvatar } from "./examiner-avatar";
 import { normalizeGender, normalizeModelId, preloadExaminerModel, type ExaminerGender } from "@/lib/avatar/models";
 import { fetchVisemeTrack } from "@/lib/lipsync/controller";
 
@@ -39,6 +40,8 @@ interface SessionView {
     /** Frozen visual identity (digital human), pairs with the frozen voice. */
     examinerGender?: "male" | "female";
     examinerModel?: string;
+    /** Frozen 3D preference. Sessions created before the toggle existed default to true. */
+    digitalHuman3d?: boolean;
   };
   steps: StepView[];
 }
@@ -57,11 +60,28 @@ interface Props {
   browserAsr: boolean; asrAvailable: boolean;
   /** Examiner look from the user's saved preference; the session snapshot wins once loaded. */
   gender: ExaminerGender; modelId?: string;
+  /** false → the lightweight 2D SVG examiner (no WebGL, no GLB download). */
+  digitalHuman3d: boolean;
   /** Engine identity for the TTS cache key (model/format changes must not reuse old audio). */
   ttsModel?: string | null; ttsFormat?: string | null;
+  /** Server-derived synthesis parallelism (TTS_CONCURRENCY / engine type). */
+  ttsConcurrency?: number;
+  /** Bounded opening-preparation gate (TTS_START_GATE_MS, default 120 s). */
+  ttsStartGateMs?: number;
 }
 
 const uid = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+
+// ---- exam audio wait budgets (see say() for the pipelining rationale) ------
+/** First line of a turn — gates the UI switch. Generous: a cold CPU engine
+ *  can take ~30–60 s to synthesise one long line. */
+const FIRST_LINE_WAIT_MS = 180_000;
+/** Later lines of a turn — usually already synthesised while earlier ones played. */
+const PER_LINE_WAIT_MS = 120_000;
+/** Default opening gate when the server did not send TTS_START_GATE_MS. */
+const START_GATE_MS_DEFAULT = 120_000;
+/** Bounded auto-retries per turn for retryable audio failures (5.4). */
+const MAX_AUDIO_RETRIES = 2;
 
 /**
  * Exact examiner utterance for a step — one source of truth for speaking AND
@@ -159,7 +179,7 @@ function buildScriptPlan(v: SessionView, profileId: string): ScriptPlan {
   };
 }
 
-export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDefault, serverTts, browserAsr, asrAvailable, ttsModel, ttsFormat }: Props) {
+export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, showSubtitlesDefault, serverTts, browserAsr, asrAvailable, ttsModel, ttsFormat, ttsConcurrency, ttsStartGateMs }: Props) {
   const router = useRouter();
   const [view, setView] = useState<SessionView | null>(null);
   const [phase, setPhase] = useState<Phase>("loading");
@@ -189,8 +209,13 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
   const [readiness, setReadiness] = useState<{ ready: number; total: number; tts: { priority: number; status: string }[] } | null>(null);
   /** Session acquired during setup, handed to the mic check before the exam starts. */
   const [micSession, setMicSession] = useState<RecordingSession | null>(null);
-  /** True while the opening audio is being warmed after the start click. */
-  const [preparing, setPreparing] = useState(false);
+  /** Real preparation state for the start gate (5.2): stage, progress, failure. */
+  const [prep, setPrep] = useState<{ stage: "health" | "synth"; detail: string; result: PreparationResult | null } | null>(null);
+  /** Preparation failure panel: the user chooses retry / re-check / read-along. */
+  const [prepIssue, setPrepIssue] = useState<{ detail: string; timedOut: boolean } | null>(null);
+  /** Read-along mode: the user chose to continue without examiner audio. */
+  const [readAlong, setReadAlong] = useState(false);
+  const readAlongRef = useRef(false);
 
   const abortRef = useRef<AbortController | null>(null);
   const recSessionRef = useRef<RecordingSession | null>(null);
@@ -208,6 +233,8 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
   /** Visual examiner identity, frozen with the session snapshot once loaded. */
   const [examinerGender, setExaminerGender] = useState<ExaminerGender>(gender);
   const [examinerModel, setExaminerModel] = useState<string | undefined>(modelId);
+  /** 3D preference frozen with the session snapshot once loaded (user pref before that). */
+  const [digitalHumanEnabled, setDigitalHumanEnabled] = useState(digitalHuman3d);
   /** Which part is being timed, and when it started. Reset on every part change. */
   const partClock = useRef<{ part: number; startedAt: number } | null>(null);
   /** The part whose time ran out (null when none). The loop closes it at a safe point. */
@@ -244,7 +271,10 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
           const frozenModel = normalizeModelId(v.session.examinerModel ?? modelId, frozenGender);
           setExaminerGender(frozenGender);
           setExaminerModel(frozenModel);
-          preloadExaminerModel(frozenModel); // warm the HTTP cache while the setup screen shows
+          // The 3D preference is frozen the same way: flipping the settings
+          // toggle in another tab must not change a running exam's renderer.
+          setDigitalHumanEnabled(v.session.digitalHuman3d !== false);
+          if (digitalHuman3d && v.session.digitalHuman3d !== false) preloadExaminerModel(frozenModel); // warm the HTTP cache while the setup screen shows
           // One coordinator for TTS + preset bank audio + fixed examiner lines.
           const preloader = new AudioPreloader({ voice: profileId, profile: profileId, serverTts, model: ttsModel, format: ttsFormat });
           preloaderRef.current = preloader;
@@ -282,7 +312,7 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
       preloaderRef.current = null;
       disposeAudio();
     };
-  }, [load, router, sessionId, serverTts, voice, gender, modelId, ttsModel, ttsFormat]);
+  }, [load, router, sessionId, serverTts, voice, gender, modelId, digitalHuman3d, ttsModel, ttsFormat]);
 
   // Warn before leaving while the exam is running (state is saved server-side, but the current answer would be lost)
   useEffect(() => {
@@ -348,66 +378,115 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
   /**
    * Play one examiner line. Returns an EXPLICIT lifecycle outcome so a failed
    * or interrupted play can never be mistaken for a completed one.
-   * On failure we keep the on-screen subtitle (the original degradation) but
-   * require the candidate to acknowledge before recording starts — the exam
-   * must not silently advance on broken audio.
+   *
+   * SINGLE WAIT RESPONSIBILITY (5.1): say() owns ALL waiting.
+   *   1. promote EVERY line first — synthesis runs in parallel (deployment-
+   *      derived concurrency, 5.3);
+   *   2. switch the UI as soon as the FIRST line's audio exists;
+   *   3. before each line, one bounded waitForTTS (later lines usually finish
+   *      while earlier ones play);
+   *   4. the resulting clip is handed to speak() as prewarmedClip — speak()
+   *      plays it immediately and NEVER re-waits or re-promotes (a duplicate
+   *      wait can only come from a clip that was evicted between the two
+   *      steps, in which case speak() makes ONE buffered attempt).
+   * Failures are classified (5.4), retried in place a bounded number of times
+   * when retryable, and otherwise surface in the blocked panel with explicit
+   * actions. In read-along mode the audio is skipped entirely and the question
+   * text is revealed instead — no silent degradation to a robotic voice.
    */
-  async function say(lines: ScriptLine[] | string, signal: AbortSignal, audioUrl?: string | null, presetText?: string): Promise<PlaybackOutcome> {
+  async function say(lines: ScriptLine[] | string, signal: AbortSignal, audioUrl?: string | null, presetText?: string, attempt = 0): Promise<PlaybackOutcome> {
     const queue: ScriptLine[] = typeof lines === "string" ? [{ text: lines, act: "question" }] : lines;
     const full = lineText(queue);
     if (signal.aborted || !full.trim()) return outcomeOf("interrupted", "none", { aborted: true });
-    // EVERYTHING READY BEFORE THE SWITCH: wait until every line's real audio
-    // exists BEFORE the UI moves to the new question. This runs while the
-    // "Next question…" progress is still showing, so the user never sees a
-    // switched screen with missing audio (the "lost audio" complaint). The
-    // bank-clip path skips this — its own fallback chain handles failure.
-    if (serverTts && !audioUrl) {
-      for (const l of queue) {
-        if (signal.aborted) return outcomeOf("interrupted", "none", { aborted: true });
-        if (!l.text.trim()) continue;
-        await waitForTTS(l.text, voiceRef.current, 180_000, l.act, voiceRef.current);
-      }
+    const profileId = voiceRef.current;
+    const silentTurn = readAlongRef.current;
+    // EVERYTHING IN FLIGHT BEFORE THE SWITCH: promote all lines so they
+    // synthesise in parallel while the previous screen is still showing.
+    for (const l of queue) promoteTTS(l.text, profileId, l.act, profileId);
+    const first = queue.find((l) => l.text.trim());
+    if (!silentTurn && serverTts && !audioUrl && first) {
+      await waitForTTS(first.text, profileId, FIRST_LINE_WAIT_MS, first.act, profileId, signal);
     }
+    if (signal.aborted) return outcomeOf("interrupted", "none", { aborted: true });
     setSubtitle(full);
     setSpeaking(true);
     setPhase("examiner");
-    // If any line still needs synthesis, say so — silence would look like a
-    // hang. speak() itself waits for the real voice (never the OS fallback).
-    if (serverTts && queue.some((l) => l.text.trim() && !ttsScheduler.get(keyOf(l.text, voiceRef.current, l.act, voiceRef.current)))) {
+    // Metric: how much of THIS turn's audio was already cached at switch time.
+    if (serverTts && !audioUrl && !silentTurn) {
+      const speakable = queue.filter((l) => l.text.trim());
+      const ready = speakable.filter((l) => ttsScheduler.get(keyOf(l.text, profileId, l.act, profileId))).length;
+      if (speakable.length) {
+        audioMetrics.record("current_question_ready_ratio", ready / speakable.length, ready === speakable.length ? "cache-hit" : "cache-miss", `${ready}/${speakable.length} at switch`);
+      }
+    }
+    // If any LATER line still needs synthesis, say so — silence would look like
+    // a hang. speak() itself never falls back to the OS voice mid-exam.
+    if (!silentTurn && serverTts && !audioUrl && queue.some((l) => l.text.trim() && !ttsScheduler.get(keyOf(l.text, profileId, l.act, profileId)))) {
       setNotice("The examiner is preparing the audio for this part…");
     }
-    const profileId = voiceRef.current;
-    for (const l of queue) promoteTTS(l.text, profileId, l.act, profileId);
     try {
       let outcome: PlaybackOutcome | null = null;
-      if (audioUrl) {
+      let failure: ReturnType<typeof classifyAudioFailure> | null = null;
+      if (!silentTurn && audioUrl) {
         // The bank clip contains the QUESTION text, not the whole turn: the
         // lip-sync track must be built from the words the clip actually speaks.
         const preset = await speakPreset(audioUrl, signal, presetText ?? full);
         if (preset.status === "ended" || preset.status === "interrupted") outcome = preset;
         // failed → fall through to TTS (pre-recorded audio is optional)
       }
-      if (!outcome) {
-        // Speak each part with its own delivery: the acknowledgement stays short
-        // and warm, the lead-in is an introduction, the question itself rises naturally.
-        // noBrowserFallback: a robotic OS voice mid-exam destroys the illusion —
-        // synthesis failure surfaces as the "audio unavailable" panel instead.
+      if (!outcome && !silentTurn) {
         for (const l of queue) {
           if (signal.aborted) return outcomeOf("interrupted", "none", { aborted: true });
           if (!l.text.trim()) continue;
-          const r = await speak(l.text, { serverTts, voice: profileId, act: l.act, profileId, noBrowserFallback: true, signal });
+          // THE one wait for this line; earlier lines already played and bought
+          // synthesis time, so this is usually an instant cache hit.
+          const clip = await waitForTTS(l.text, profileId, PER_LINE_WAIT_MS, l.act, profileId, signal);
+          if (signal.aborted) return outcomeOf("interrupted", "none", { aborted: true });
+          let r = await speak(l.text, { serverTts, voice: profileId, act: l.act, profileId, noBrowserFallback: true, signal, prewarmedClip: clip });
+          let f = classifyAudioFailure({ outcome: r.outcome });
+          // Bounded in-place retry for retryable failures only (5.4) — a config
+          // error or a user cancellation never retries.
+          let tries = 0;
+          while (!r.ok && f.retryable && tries < MAX_AUDIO_RETRIES && !signal.aborted) {
+            tries++;
+            setNotice(`Voice problem (${f.message}) — retrying (${tries}/${MAX_AUDIO_RETRIES})…`);
+            const retryClip = await waitForTTS(l.text, profileId, PER_LINE_WAIT_MS, l.act, profileId, signal);
+            if (signal.aborted) return outcomeOf("interrupted", "none", { aborted: true });
+            r = await speak(l.text, { serverTts, voice: profileId, act: l.act, profileId, noBrowserFallback: true, signal, prewarmedClip: retryClip });
+            f = classifyAudioFailure({ outcome: r.outcome });
+          }
           outcome = r.outcome;
-          if (!r.ok) break;
+          if (!r.ok) { failure = f; break; }
         }
       }
-      if (!outcome) outcome = outcomeOf("failed", "none");
+      if (!outcome) {
+        if (silentTurn) {
+          // Read-along: no audio exists by the user's explicit choice. The exam
+          // advances on the same rules; the question text is revealed by run().
+          setNotice("Read-along mode: the examiner's voice is unavailable — read the question on screen, then continue.");
+          return outcomeOf("ended", "read-along");
+        }
+        outcome = outcomeOf("failed", "none");
+      }
       if (outcome.status === "failed" && !signal.aborted) {
-        setNotice("The examiner voice is unavailable in this browser. Read the question on screen instead.");
-        setBlocked({ title: "Examiner audio unavailable", message: "The examiner voice could not be played. Read the question in the subtitles, then continue when you are ready.", action: "continue-anyway" });
+        const f = failure ?? classifyAudioFailure({ outcome });
+        setNotice(f.message);
+        setBlocked({ title: "Examiner audio problem", message: `${f.message} ${f.retryable ? "Retrying did not help." : ""} Choose how to continue — your recording flow is not affected.`, action: "audio-fail" });
         setPhase("blocked");
-        await waitUser();
+        const choice = await waitUser();
         setBlocked(null);
         if (signal.aborted) return outcomeOf("interrupted", outcome.via, { aborted: true });
+        if (choice === "audio-retry" && attempt < MAX_AUDIO_RETRIES + 1) {
+          setNotice(null);
+          return say(lines, signal, audioUrl, presetText, attempt + 1);
+        }
+        if (choice === "audio-read") {
+          readAlongRef.current = true;
+          setReadAlong(true);
+          audioMetrics.record("read_along_mode", 1, "none", "chosen mid-exam");
+          return say(lines, signal, audioUrl, presetText, attempt); // same turn, now read-along
+        }
+        // "audio-continue" → proceed; the candidate reads the subtitles/text.
       }
       return outcome;
     } finally {
@@ -620,6 +699,9 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
         if (step.status !== "answered" && step.status !== "skipped") {
           const lines = examinerLines(step, { first, noResponse: prevNoResponse.current });
           first = false;
+          // Read-along mode (user choice): without a voice the candidate must
+          // be able to READ the question — reveal it automatically.
+          if (readAlongRef.current && step.kind !== "cue_card") setRevealedStepId(step.id);
           // A bank clip may only be used when it was recorded with THIS voice.
           const preset = presetAudioFor(step, voiceRef.current);
           if (step.kind === "cue_card") {
@@ -701,6 +783,16 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
 
         v = result.view; // no extra GET /sessions/:id round trip
         setView(v);
+        // Metric: did the NEXT question's audio finish prefetching while the
+        // candidate answered? (0/1 sample — rate = mean over the trace.)
+        if (serverTts) {
+          const nextStep = v.steps.find((s) => s.stepIndex === v.session.currentStep && s.status !== "answered" && s.status !== "skipped");
+          const nextLines = nextStep ? examinerLines(nextStep, { first: false, noResponse: prevNoResponse.current }).filter((l) => l.text.trim()) : [];
+          if (nextLines.length) {
+            const ready = nextLines.filter((l) => ttsScheduler.get(keyOf(l.text, voiceRef.current, l.act, voiceRef.current))).length;
+            audioMetrics.record("next_question_prefetch_success", ready === nextLines.length ? 1 : 0, ready === nextLines.length ? "cache-hit" : "cache-miss", `${ready}/${nextLines.length} after submit`);
+          }
+        }
         // A Part 3 follow-up can be inserted by the state machine at advance
         // time. Queue any newly-appeared lines so they can stream immediately.
         const plan = buildScriptPlan(v, voiceRef.current);
@@ -734,29 +826,83 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
     }
   }
 
-  async function startFromSetup() {
+  /** Apply the deployment-derived synthesis concurrency once at setup (5.3). */
+  useEffect(() => { configureTtsConcurrency(ttsConcurrency); }, [ttsConcurrency]);
+
+  const listInputDevicesCache = () => listInputDevices().catch(() => [] as MediaDeviceInfo[]);
+
+  /** Shared tail of the preparation: device list → mic check. */
+  function proceedToMiccheck() {
+    setDevices([]);
+    void listInputDevicesCache().then(setDevices);
+    setNotice(readAlongRef.current ? "Read-along mode: questions appear as text; the examiner's voice is unavailable." : null);
+    setPhase("miccheck");
+  }
+
+  /** Inline TTS re-check (user-initiated): one small real synthesis probe. */
+  async function recheckVoiceService(): Promise<string> {
     try {
-      setPreparing(true);
-      const plan = planRef.current;
-      // Warm the opening line + first question and WAIT for them: the user
-      // explicitly wants everything ready before the exam can start (a local
-      // CPU engine can take ~30s per line — the progress bar shows movement).
-      await preloaderRef.current?.ensureOpeningAndFirst(
-        plan?.firstLines ?? [],
-        plan?.firstQuestionAudioUrl ?? null,
-        plan?.firstLines[0]?.act ?? "greeting",
-        600_000,
-      );
-      setDevices(await listInputDevices().catch(() => []));
-      setNotice(null);
-      // The mic check acquires the microphone (getUserMedia + AudioContext once)
-      // and hands the session back when the candidate confirms.
-      setPhase("miccheck");
+      const res = await fetch("/api/diagnostics", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ checks: ["tts.config", "tts.synth"] }),
+      });
+      const j = await res.json();
+      const synth = j.items?.find((i: { id: string }) => i.id === "tts.synth");
+      const cfg = j.items?.find((i: { id: string }) => i.id === "tts.config");
+      const line = (i?: { status: string; message: string }) => (i ? `[${i.status}] ${i.message}` : "check did not run");
+      return `${line(cfg)} — ${line(synth)}`;
     } catch (e) {
+      return `Voice check failed: ${(e as Error).message}`;
+    }
+  }
+
+  async function startFromSetup() {
+    const gateMs = ttsStartGateMs ?? START_GATE_MS_DEFAULT;
+    setPrepIssue(null);
+    setNotice(null);
+    const prepStart = performance.now();
+    try {
+      if (serverTts) {
+        // Stage 1 — FREE engine health check: an engine that is down fails
+        // fast here instead of silently burning the whole synthesis gate.
+        setPrep({ stage: "health", detail: "Checking the examiner voice engine…", result: null });
+        try {
+          const res = await fetch("/api/diagnostics", { cache: "no-store" });
+          const j = await res.json();
+          const svc = j.services?.[0];
+          if (svc?.healthUrl && svc.healthy === false) {
+            audioMetrics.record("exam_start_preparation_ms", performance.now() - prepStart, "none", "failed-health");
+            setPrep(null);
+            setPrepIssue({ detail: `The examiner voice engine is not answering (${svc.detail ?? "health check unreachable"}). You can retry, re-check the service, or continue by reading the questions.`, timedOut: false });
+            return;
+          }
+        } catch { /* snapshot is best-effort; the synthesis gate still runs */ }
+
+        // Stage 2 — bounded synthesis gate with REAL per-line statuses.
+        setPrep({ stage: "synth", detail: "Synthesising the opening lines…", result: null });
+        const plan = planRef.current;
+        const result = await preloaderRef.current?.ensureOpeningAndFirst(
+          plan?.firstLines ?? [],
+          plan?.firstQuestionAudioUrl ?? null,
+          plan?.firstLines[0]?.act ?? "greeting",
+          gateMs,
+        );
+        audioMetrics.record("exam_start_preparation_ms", performance.now() - prepStart, "none", result?.ok ? "ok" : "incomplete");
+        if (!result?.ok) {
+          setPrep(null);
+          setPrepIssue({
+            detail: result?.firstFailure ?? (result ? `Only ${result.readyCount}/${result.total} opening lines are ready.` : "Audio preparation could not start."),
+            timedOut: !!result?.timedOut,
+          });
+          return;
+        }
+      }
+      setPrep(null);
+      proceedToMiccheck();
+    } catch (e) {
+      setPrep(null);
       setDevices(await listInputDevices().catch(() => []));
       setNotice((e as Error).message);
-    } finally {
-      setPreparing(false);
     }
   }
 
@@ -866,19 +1012,41 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
             {!asrAvailable && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">No speech recognition is configured. Your answers will be recorded, but they cannot be transcribed or scored.</p>}
             {browserAsr && !browserAsrSupported() && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">This browser does not support built-in speech recognition. Use Chrome, Edge or Safari, or ask the administrator to configure server ASR. Recordings will still be saved.</p>}
             <p className="mt-6 text-xs text-zinc-400">On the next step the browser asks for microphone permission, and you can test your mic and pick a device before the exam starts. The exam itself starts only after you pass the microphone check.</p>
+            {prepIssue && (
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4" role="alert">
+                <p className="text-sm font-medium text-amber-800">Examiner audio is not ready</p>
+                <p className="mt-1 text-xs leading-5 text-amber-800">{prepIssue.detail}{prepIssue.timedOut ? " The preparation window elapsed." : ""}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button onClick={() => void startFromSetup()} className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white">Retry preparation</button>
+                  <button
+                    onClick={async () => { setNotice("Re-checking the voice service…"); setNotice(await recheckVoiceService()); }}
+                    className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs text-amber-800"
+                  >
+                    Re-check the voice service
+                  </button>
+                  <button
+                    onClick={() => { readAlongRef.current = true; setReadAlong(true); audioMetrics.record("read_along_mode", 1, "none", "chosen at preparation"); proceedToMiccheck(); }}
+                    className="rounded-lg border border-amber-300 px-3 py-1.5 text-xs text-amber-800"
+                    title="Start without examiner audio — questions are shown as text"
+                  >
+                    Continue by reading (no voice)
+                  </button>
+                </div>
+              </div>
+            )}
             <button
-              disabled={preparing}
+              disabled={!!prep}
               onClick={startFromSetup}
               className="mt-3 w-full rounded-xl bg-zinc-900 py-3 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-60"
             >
-              {preparing ? "Preparing examiner voice…" : "Continue to microphone check"}
+              {prep ? "Preparing examiner voice…" : "Continue to microphone check"}
             </button>
-            {preparing && readiness && (() => {
+            {prep && (() => {
               // The gate waits ONLY for the opening lines (CURRENT priority);
               // show their progress so the bar matches when the page advances.
-              const current = readiness.tts.filter((t) => t.priority === 0);
+              const current = readiness?.tts.filter((t) => t.priority === 0) ?? [];
               const ready = current.filter((t) => t.status === "ready").length;
-              const total = current.length;
+              const total = current.length || prep.result?.total || 0;
               const pct = total > 0 ? Math.round((ready / total) * 100) : 0;
               return (
                 <div className="mt-3" aria-label="Examiner voice preparation progress">
@@ -886,9 +1054,11 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
                     <div className="h-1.5 rounded-full bg-zinc-900 transition-all" style={{ width: `${Math.max(4, pct)}%` }} />
                   </div>
                   <p className="mt-1.5 text-center text-xs text-zinc-400">
-                    {total > 0
-                      ? `Synthesising the opening lines — ${ready}/${total} ready. The microphone check opens when they are done.`
-                      : "Synthesising the opening lines…"}
+                    {prep.stage === "health"
+                      ? prep.detail
+                      : total > 0
+                        ? `Synthesising the opening lines — ${ready}/${total} ready (gate: ${Math.round((ttsStartGateMs ?? START_GATE_MS_DEFAULT) / 1000)} s). The microphone check opens when they are done.`
+                        : prep.detail}
                   </p>
                 </div>
               );
@@ -910,8 +1080,10 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
           />
         )}
         {/* Warm the opening line's viseme track while the candidate checks the
-            mic, so the first spoken sentence is lip-synced from word one. */}
-        {phase === "miccheck" && planRef.current?.firstLines.length ? (
+            mic, so the first spoken sentence is lip-synced from word one.
+            Skipped when the 2D examiner is active — it drives the mouth from
+            the audio envelope and never reads viseme tracks. */}
+        {phase === "miccheck" && digitalHumanEnabled && planRef.current?.firstLines.length ? (
           <MicWarmUp lines={planRef.current.firstLines} />
         ) : null}
 
@@ -925,9 +1097,20 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
                 {devices.map((d, i) => <option key={d.deviceId || i} value={d.deviceId}>{d.label || `Microphone ${i + 1}`}</option>)}
               </select>
             )}
-            <button onClick={() => act("retry")} className="mt-4 rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">
-              {blocked.action === "retry-mic" ? "Try again" : "Continue"}
-            </button>
+            {blocked.action === "audio-fail" ? (
+              // 5.4 failure actions: retry / check / read-along. Cancelling the
+              // playback stays available through the exam's End control.
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button onClick={() => act("audio-retry")} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white">Retry playback</button>
+                <button onClick={async () => { setNotice("Checking the voice service…"); setNotice(await recheckVoiceService()); }} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm">Check the voice service</button>
+                <button onClick={() => act("audio-read")} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm">Continue by reading (no voice)</button>
+                <button onClick={() => act("audio-continue")} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm">Continue</button>
+              </div>
+            ) : (
+              <button onClick={() => act("retry")} className="mt-4 rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">
+                {blocked.action === "retry-mic" ? "Try again" : "Continue"}
+              </button>
+            )}
           </div>
         )}
 
@@ -1086,17 +1269,36 @@ export function ExamRunner({ sessionId, voice, gender, modelId, showSubtitlesDef
           >
             {/* Mounted from the mic check onward so the model never reloads
                 mid-exam (a reload would stall the first question and desync
-                the mouth). Sits under the part countdown, larger than before. */}
+                the mouth). Sits under the part countdown, larger than before.
+                TRUE conditional rendering: with the 3D examiner frozen off,
+                the SVG avatar mounts INSTEAD — no three.js import, no WebGL
+                context, no GLB download, no render loop, nothing hidden by
+                CSS. If the 3D pipeline fails mid-exam it degrades itself to
+                this same 2D component without touching audio or recording. */}
             <div className="flex flex-col items-center rounded-2xl border border-zinc-200 bg-white p-4">
-              <ExaminerAvatar3D
-                gender={examinerGender}
-                modelId={examinerModel}
-                speaking={speaking}
-                listening={phase === "recording"}
-                preparing={phase === "examiner" || phase === "prep"}
-                name={view.session.examinerName ?? "Examiner"}
-                className="h-72 w-full"
-              />
+              {digitalHumanEnabled ? (
+                <ExaminerAvatar3D
+                  gender={examinerGender}
+                  modelId={examinerModel}
+                  speaking={speaking}
+                  listening={phase === "recording"}
+                  preparing={phase === "examiner" || phase === "prep"}
+                  name={view.session.examinerName ?? "Examiner"}
+                  onProbe={(info) => {
+                    // Telemetry only (5.5): the exam never gates on this.
+                    if (info.loadMs != null) audioMetrics.record("avatar_model_load_ms", info.loadMs, "none", "3d examiner ready");
+                    if (info.error) audioMetrics.record("audio_playback_failure", 1, "none", "avatar-fallback");
+                  }}
+                  className="h-72 w-full"
+                />
+              ) : (
+                <ExaminerAvatar
+                  speaking={speaking}
+                  listening={phase === "recording"}
+                  preparing={phase === "examiner" || phase === "prep"}
+                  name={view.session.examinerName ?? "Examiner"}
+                />
+              )}
               <div className="text-sm font-medium">{view.session.examinerName}</div>
               <div className="text-xs text-zinc-400">Your examiner today</div>
             </div>

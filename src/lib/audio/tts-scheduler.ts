@@ -102,11 +102,24 @@ export function ttsTaskKey(parts: TtsKeyParts): string {
   ].join("\u0000");
 }
 
+/**
+ * Synthesis concurrency for a deployment. A local CPU engine (Kokoro on CPU)
+ * thrashes when several lines are synthesised at once, so it defaults to 1;
+ * GPU builds and remote APIs parallelise fine and default to 2. Operators can
+ * always override with TTS_CONCURRENCY. Pure so the registry and tests share it.
+ */
+export function resolveTtsConcurrency(model: string, baseUrl: string, envOverride?: string | null): number {
+  const n = Number(envOverride);
+  if (Number.isFinite(n) && n >= 1 && n <= 4) return Math.floor(n);
+  const kokoroLike = /^kokoro/i.test(model) || /kokoro/i.test(baseUrl);
+  return kokoroLike ? 1 : 2;
+}
+
 export class TtsScheduler<T> {
   private readonly tasks = new Map<string, InternalTask<T>>();
   private readonly listeners = new Set<(snapshot: TtsTaskSnapshot[]) => void>();
   private readonly run: TtsSchedulerOptions<T>["run"];
-  private readonly maxParallel: number;
+  private maxParallel: number;
   private readonly maxAttempts: number;
   private readonly maxCache: number;
   private readonly keyOf: (parts: TtsKeyParts) => string;
@@ -189,8 +202,7 @@ export class TtsScheduler<T> {
   }
 
   /** Raise the priority of a pending task; never lowers it. */
-  promote(key: string, priority: TtsPriority): void {
-    const t = this.tasks.get(key);
+  promote(key: string, priority: TtsPriority): void {    const t = this.tasks.get(key);
     if (!t || this.disposed) return;
     if (priority >= t.priority) return; // lower number = more urgent
     t.priority = priority;
@@ -201,6 +213,19 @@ export class TtsScheduler<T> {
     if (priority <= TTS_PRIORITY.NEXT && this.running.size >= this.maxParallel) {
       this.preemptOne(priority);
     }
+    this.pump();
+  }
+
+  /**
+   * Adjust the synthesis concurrency at runtime (deployment-specific: a local
+   * CPU engine wants 1, GPU/remote engines can use more). Already-running jobs
+   * are not preempted; the next pump() honours the new limit.
+   */
+  setMaxParallel(n: number): void {
+    const next = Math.max(1, Math.min(4, Math.floor(n)));
+    if (next === this.maxParallel) return;
+    this.maxParallel = next;
+    this.emit();
     this.pump();
   }
 

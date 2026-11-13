@@ -14,10 +14,13 @@ export default async function ExamPage({ params }: PageProps<"/speaking/exam/[id
       voice={user?.examinerVoice ?? "auto"}
       gender={user?.examinerGender === "male" ? "male" : "female"}
       modelId={user?.examinerModel ?? undefined}
+      digitalHuman3d={user?.digitalHuman3d ?? true}
       showSubtitlesDefault={user?.showSubtitles ?? true}
       serverTts={caps.tts.location === "server"}
       ttsModel={caps.tts.model}
       ttsFormat={caps.tts.format}
+      ttsConcurrency={caps.tts.concurrency}
+      ttsStartGateMs={caps.tts.startGateMs}
       browserAsr={caps.asr?.location === "browser"}
       asrAvailable={!!caps.asr}
     />

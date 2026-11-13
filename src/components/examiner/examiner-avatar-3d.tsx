@@ -15,13 +15,35 @@
  *    released).
  *  - Degradation: any failure (no WebGL, model missing, three failed to load)
  *    falls back to the existing 2D SVG avatar — the exam keeps working.
+ *  - Observability: optional `onLifecycle` reports idle → loading → ready |
+ *    fallback (auto-recovered) | error, and `probe` + `onProbe` measure real
+ *    load time, real FPS and the viseme morph-target set while rendering the
+ *    REAL pipeline (used by the Settings diagnostics centre).
  */
 import { useEffect, useRef, useState } from "react";
 import { ExaminerAvatar } from "@/app/speaking/exam/[id]/examiner-avatar";
 import { examinerEnvelope } from "@/lib/audio/examiner-envelope";
 import { lipSync } from "@/lib/lipsync/controller";
-import { visemeIndex } from "@/lib/lipsync/types";
+import { visemeIndex, VISEME_CHANNELS } from "@/lib/lipsync/types";
 import { DEFAULT_MODEL_BY_GENDER, examinerModelById, normalizeModelId, OCULUS_TO_VISEME, type ExaminerGender } from "@/lib/avatar/models";
+
+/** Lifecycle of the 3D pipeline, observable by parents (diagnostics, exam). */
+export type AvatarLifecycleState = "idle" | "loading" | "ready" | "fallback" | "error";
+
+export interface AvatarProbeInfo {
+  /** GLB fetch + GLTF parse duration (ms), measured on the real loader. */
+  loadMs?: number;
+  /** Average FPS over a ~1.5 s sample of the real render loop. */
+  fps?: number;
+  /** How many of the 15 viseme morph targets the model actually carries. */
+  visemesFound?: number;
+  visemesRequired?: number;
+  /** GPU string reported by the BROWSER (may be masked — not a hardware audit). */
+  renderer?: string | null;
+  webgl2?: boolean;
+  /** Set when the pipeline failed and the 2D avatar took over. */
+  error?: string;
+}
 
 interface Props {
   gender: ExaminerGender;
@@ -32,6 +54,38 @@ interface Props {
   preparing?: boolean;
   name: string;
   className?: string;
+  /** Lifecycle notifications (state changes only; safe to re-render on). */
+  onLifecycle?: (state: AvatarLifecycleState) => void;
+  /** Diagnostics: sample one real render run and report the numbers above. */
+  probe?: boolean;
+  onProbe?: (info: AvatarProbeInfo) => void;
+}
+
+/**
+ * Browser-visible GPU capability. Everything here comes from the WebGL context
+ * itself — no plugin/native bridge, so the renderer string is what the BROWSER
+ * chooses to disclose (often masked to "ANGLE (…)" and never a full hardware
+ * inventory: VRAM / real GPU model / machine specs are NOT available).
+ */
+export function webglSupport(): { supported: boolean; webgl2: boolean; renderer: string | null } {
+  if (typeof document === "undefined") return { supported: false, webgl2: false, renderer: null };
+  try {
+    const c = document.createElement("canvas");
+    const gl2 = c.getContext("webgl2") as WebGL2RenderingContext | null;
+    const gl = gl2 ?? (c.getContext("webgl") as WebGLRenderingContext | null);
+    if (!gl) return { supported: false, webgl2: false, renderer: null };
+    let renderer: string | null = null;
+    const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+    if (dbg) {
+      try { renderer = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) as string; } catch { /* masked */ }
+    }
+    // Free the probe context immediately.
+    const lose = gl.getExtension("WEBGL_lose_context");
+    lose?.loseContext();
+    return { supported: true, webgl2: !!gl2, renderer };
+  } catch {
+    return { supported: false, webgl2: false, renderer: null };
+  }
 }
 
 /** Everything the animation loop needs, built once per mount. */
@@ -68,16 +122,33 @@ export function ExaminerAvatar3D(props: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   // Mode mirrors live in a ref so the animation loop never restarts; they are
   // written in an effect, never during render.
-  const refs = useRef({ speaking: props.speaking, listening: props.listening, preparing: !!props.preparing });
+  const refs = useRef({ speaking: props.speaking, listening: props.listening, preparing: !!props.preparing, probe: !!props.probe });
   useEffect(() => {
-    refs.current = { speaking: props.speaking, listening: props.listening, preparing: !!props.preparing };
-  }, [props.speaking, props.listening, props.preparing]);
+    refs.current = { speaking: props.speaking, listening: props.listening, preparing: !!props.preparing, probe: !!props.probe };
+  }, [props.speaking, props.listening, props.preparing, props.probe]);
+
+  // Callbacks live in refs so a parent's inline handler never restarts the
+  // pipeline effect (which would re-download the model).
+  const lifecycleCb = useRef(props.onLifecycle);
+  const probeCb = useRef(props.onProbe);
+  useEffect(() => { lifecycleCb.current = props.onLifecycle; probeCb.current = props.onProbe; }, [props.onLifecycle, props.onProbe]);
+  const setLifecycle = (s: AvatarLifecycleState) => lifecycleCb.current?.(s);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     let disposed = false;
     let cleanup: (() => void) | null = null;
+    const loadStart = performance.now();
+    setFailed(false); // a model switch retries the 3D pipeline from scratch
+    setLifecycle("loading");
+
+    const failOver = (why: string) => {
+      if (disposed) return;
+      setFailed(true); // re-renders with the 2D SVG avatar below
+      setLifecycle("fallback");
+      probeCb.current?.({ error: why });
+    };
 
     (async () => {
       let THREE: typeof import("three");
@@ -86,7 +157,7 @@ export function ExaminerAvatar3D(props: Props) {
         THREE = await import("three");
         ({ GLTFLoader: GLTFLoaderCtor } = await import("three/examples/jsm/loaders/GLTFLoader.js"));
       } catch {
-        setFailed(true);
+        failOver("three.js failed to load");
         return;
       }
       if (disposed) return;
@@ -95,8 +166,8 @@ export function ExaminerAvatar3D(props: Props) {
       let renderer: import("three").WebGLRenderer;
       try {
         renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "low-power" });
-      } catch {
-        setFailed(true);
+      } catch (e) {
+        failOver(`WebGL context unavailable (${(e as Error).message})`);
         return;
       }
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
@@ -182,8 +253,8 @@ export function ExaminerAvatar3D(props: Props) {
         camera.lookAt(headPos.x, headPos.y - 0.03, headPos.z);
 
         rig = { renderer, scene, camera, meshes, bones, baseRotations };
-      } catch {
-        setFailed(true);
+      } catch (e) {
+        failOver(`model failed to load (${(e as Error).message})`);
         return;
       }
       if (disposed || !rig) return;
@@ -229,6 +300,37 @@ export function ExaminerAvatar3D(props: Props) {
         }
       };
 
+      // --- diagnostics probe -------------------------------------------------
+      // Reports the REAL pipeline's numbers: load duration, (probe mode only)
+      // FPS over a ~1.5 s window, and the viseme morph-target coverage. Every
+      // mount reports its load once — the exam records avatar_model_load_ms
+      // from it; only `probe` adds the FPS sampling cost.
+      let fpsFrames = 0;
+      let fpsStart = 0;
+      let probeReported = false;
+      const reportProbeInfo = (fps?: number) => {
+        if (probeReported || disposed) return;
+        probeReported = true;
+        const ctx = rig!.renderer.getContext();
+        const dbg = ctx.getExtension("WEBGL_debug_renderer_info");
+        let rendererName: string | null = null;
+        if (dbg) {
+          try { rendererName = ctx.getParameter(dbg.UNMASKED_RENDERER_WEBGL) as string; } catch { /* masked */ }
+        }
+        probeCb.current?.({
+          loadMs: Math.round(performance.now() - loadStart),
+          ...(fps != null ? { fps: Math.round(fps * 10) / 10 } : {}),
+          visemesFound: VISEME_CHANNELS.filter((v) => visemeAvailable[v]).length,
+          visemesRequired: VISEME_CHANNELS.length,
+          renderer: rendererName,
+          webgl2: typeof WebGL2RenderingContext !== "undefined" && ctx instanceof WebGL2RenderingContext,
+        });
+      };
+      const maybeReportProbe = () => {
+        if (probeReported || disposed) return;
+        reportProbeInfo(fpsFrames > 3 ? fpsFrames / ((performance.now() - fpsStart) / 1000) : undefined);
+      };
+
       // --- idle life --------------------------------------------------------
       let raf = 0;
       let last = performance.now();
@@ -245,7 +347,11 @@ export function ExaminerAvatar3D(props: Props) {
 
       const frame = (now: number) => {
         raf = requestAnimationFrame(frame);
-        if (document.hidden) return;
+        // Offscreen or hidden tab → skip ALL work, not just the render call:
+        // morphs, bone math and viseme sampling are pure CPU and nobody sees
+        // them. `last` only advances while visible, so resume never jumps
+        // (dt is recomputed from the real clock and capped anyway).
+        if (document.hidden || !visible) return;
         const dt = Math.min(0.05, (now - last) / 1000);
         last = now;
         const t = (now - start) / 1000;
@@ -344,8 +450,16 @@ export function ExaminerAvatar3D(props: Props) {
           }
         }
 
-        // 8) Render (paused when offscreen — see IntersectionObserver below).
-        if (visible) rig.renderer.render(rig.scene, rig.camera);
+        // 8) Render (paused when offscreen — the early return above skips the
+        //    whole frame body, so this always runs when reached).
+        rig.renderer.render(rig.scene, rig.camera);
+
+        // 9) FPS sampling for the diagnostics probe (uses the real loop).
+        if (refs.current.probe && !probeReported) {
+          if (fpsFrames === 0) fpsStart = now;
+          fpsFrames++;
+          if (now - fpsStart >= 1500) maybeReportProbe();
+        }
       };
 
       // --- resize / visibility ----------------------------------------------
@@ -365,22 +479,44 @@ export function ExaminerAvatar3D(props: Props) {
       const io = new IntersectionObserver((entries) => { visible = entries[0]?.isIntersecting ?? true; }, { threshold: 0.05 });
       io.observe(canvas);
 
+      // WebGL context loss: the GPU driver can reclaim the context (tab
+      // backgrounding, driver reset). The exam must keep running — fall back
+      // to the 2D avatar instead of rendering a dead canvas.
+      const onContextLost = (e: Event) => {
+        e.preventDefault();
+        failOver("WebGL context was lost (GPU/driver reset)");
+      };
+      canvas.addEventListener("webglcontextlost", onContextLost);
+
       raf = requestAnimationFrame(frame);
+      setLifecycle("ready"); // real pipeline (loader + renderer + loop) is live
+      // Non-probe mounts report the load once too (no FPS sampling cost).
+      if (!refs.current.probe) setTimeout(() => reportProbeInfo(undefined), 0);
       cleanup = () => {
         cancelAnimationFrame(raf);
         ro.disconnect();
         io.disconnect();
+        canvas.removeEventListener("webglcontextlost", onContextLost);
         scene.traverse((obj) => {
           const m = obj as import("three").Mesh;
           if (m.isMesh) {
             m.geometry?.dispose();
             const mats = Array.isArray(m.material) ? m.material : [m.material];
-            for (const mat of mats) mat?.dispose();
+            for (const mat of mats) {
+              // Materials do NOT own their textures: dispose every map
+              // explicitly, or GLB textures stay on the GPU after unmount.
+              const anyMat = mat as import("three").Material & { map?: { dispose(): void } | null };
+              anyMat?.map?.dispose();
+              mat?.dispose();
+            }
           }
         });
         renderer.dispose();
+        // Release the WebGL context itself so repeated exam mounts cannot
+        // accumulate dead contexts (browsers cap live contexts per page).
+        renderer.forceContextLoss();
       };
-    })().catch(() => { if (!disposed) setFailed(true); });
+    })().catch((e) => { failOver(`pipeline error (${(e as Error).message})`); });
 
     return () => {
       disposed = true;

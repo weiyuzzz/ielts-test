@@ -80,7 +80,7 @@ export default async function SpeakingHome() {
           <h3 className="mb-2 mt-6 text-xs font-semibold uppercase tracking-wide text-zinc-400">AI services in use</h3>
           <ul className="space-y-1.5 text-xs text-zinc-600">
             <li>Speech recognition: <b>{caps.asr ? caps.asr.id : "none"}</b></li>
-            <li>Language scoring: <b>{caps.llm ? `${caps.llm.id} (${caps.llm.model})` : "heuristic (no LLM configured)"}</b></li>
+            <li>Language scoring: <b>{caps.llm ? `${caps.llm.id} (${caps.llm.model})` : "not connected (no LLM configured) — learning diagnostics only, no band"}</b></li>
             <li>Examiner voice: <b>{caps.tts.id}</b></li>
             <li>Pronunciation: <b>{caps.pronunciation ? caps.pronunciation.id : "not assessed (no audio model)"}</b></li>
           </ul>
