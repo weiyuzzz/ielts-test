@@ -6,7 +6,7 @@ import { LipSyncLab } from "@/app/speaking/lipsync-lab/lip-sync-lab";
 import { loadVoices, speak, warmupSpeech } from "@/lib/audio/speech";
 import { DEFAULT_MODEL_BY_GENDER, examinerModelById, examinerModelsForGender, normalizeModelId, type ExaminerGender } from "@/lib/avatar/models";
 
-interface S { displayName: string; targetBand: number; examDate: string; examinerVoice: string; examinerGender: "male" | "female"; examinerModel: string; showSubtitles: boolean }
+interface S { displayName: string; targetBand: number; examDate: string; examinerVoice: string; examinerGender: "male" | "female"; examinerModel: string; digitalHuman3d: boolean; showSubtitles: boolean }
 interface ProfileOption { id: string; name: string; provider: string; gender?: "male" | "female" | null }
 
 /** The default voice each provider family pairs with an examiner gender. */
@@ -41,6 +41,14 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
     const storedMic = localStorage.getItem("mic-device") || "";
     const t = setTimeout(() => setMic(storedMic), 0);
     return () => clearTimeout(t);
+  }, []);
+
+  // Keep the 3D toggle in sync when the diagnostics card switches to 2D
+  // (both cards own the same preference; the event makes the sync symmetric).
+  useEffect(() => {
+    const on = (e: Event) => setS((s) => ({ ...s, digitalHuman3d: !!(e as CustomEvent<boolean>).detail }));
+    window.addEventListener("b9:digital-human", on);
+    return () => window.removeEventListener("b9:digital-human", on);
   }, []);
 
   async function save() {
@@ -148,6 +156,29 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
           </label>
         </div>
         <div className="flex items-center gap-3 border-t border-zinc-100 pt-4">
+          <label className="flex flex-1 flex-col gap-1 text-sm">
+            <span className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={s.digitalHuman3d}
+                onChange={(e) => {
+                  const next = { ...s, digitalHuman3d: e.target.checked };
+                  setS(next);
+                  // The diagnostics card tracks this preference live; a plain
+                  // window event avoids lifting state across the two cards.
+                  window.dispatchEvent(new CustomEvent("b9:digital-human", { detail: e.target.checked }));
+                }}
+              />
+              Enable 3D digital examiner
+            </span>
+            <span className="text-xs text-zinc-400">
+              {s.digitalHuman3d
+                ? "On (启用 3D 数字人) — the exam shows the full 3D examiner with real 15-viseme lip-sync (Three.js / WebGL / GLB). Turn off on low-end devices."
+                : "Off — the lightweight 2D examiner is used: Three.js is not loaded, no WebGL context is created, no GLB is downloaded and no 3D lip-sync animation runs. TTS, recording, ASR, exam timing and scoring are unaffected."}
+            </span>
+          </label>
+        </div>
+        <div className="flex items-center gap-3 border-t border-zinc-100 pt-4">
           <button onClick={() => speak(`Good morning. My name is ${examinerName}. Could I see your identification, please?`, { serverTts, voice: s.examinerVoice, act: "greeting", profileId: s.examinerVoice })} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm">Test voice</button>
           <span className="text-xs text-zinc-400">Hear the current examiner speak a greeting.</span>
         </div>
@@ -185,7 +216,9 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
         />
       </Card>
 
-      {/* ---- Lip Sync Lab: previews the examiner chosen above ---------------- */}
+      {/* ---- Lip Sync Lab: previews the examiner chosen above. With the 3D
+              digital human off it runs as a voice audition only — no Three.js,
+              no WebGL context, no GLB download, no 3D animation loop. -------- */}
       <Card className="p-6" id="lipsync-lab">
         <LipSyncLab
           embedded
@@ -196,6 +229,7 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
           modelId={s.examinerModel}
           name={examinerName}
           initialVoice={s.examinerVoice}
+          show3D={s.digitalHuman3d}
         />
       </Card>
     </div>

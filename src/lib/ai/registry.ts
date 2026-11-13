@@ -14,6 +14,7 @@ import { tencentSoePronunciation } from "./tencent-soe";
 import { tencentAsr } from "./tencent-asr";
 import { SPEECH_ACT_LIST } from "@/lib/speaking/speech-act";
 import { readAiConfig, envOverridesFor, withEnvOverrides, type ProviderKey } from "@/lib/server/ai-config";
+import { resolveTtsConcurrency } from "@/lib/audio/tts-scheduler";
 import { VOICE_PRESETS, impliedVoiceGender, resolveVoiceProfile, type VoiceProviderId } from "@/lib/speaking/voice-profile";
 
 const hasOpenAI = () => !!(process.env.OPENAI_API_KEY || process.env.LLM_API_KEY || process.env.ASR_API_KEY);
@@ -174,6 +175,11 @@ export function capabilities() {
       voice: cfg.tts.voice || process.env.TTS_VOICE || (tts.id === "azure-neural-tts" ? process.env.AZURE_TTS_VOICE || "en-GB-SoniaNeural" : "auto"),
       format: process.env.TTS_FORMAT || "mp3",
       streaming: typeof tts.synthesizeStream === "function",
+      /** Deployment-derived synthesis parallelism (TTS_CONCURRENCY overrides;
+       *  local CPU engines default to 1, GPU/remote to 2). */
+      concurrency: resolveTtsConcurrency(tts.model ?? "", process.env.TTS_BASE_URL || process.env.OPENAI_BASE_URL || "", process.env.TTS_CONCURRENCY),
+      /** Bounded opening-preparation gate for the exam start screen (5.2). */
+      startGateMs: Number(process.env.TTS_START_GATE_MS) || 120_000,
       supports: tts.supports ?? { ssml: false, instructions: false, style: false, pitch: false },
       /** Voice profiles the UI may offer, plus what this deployment can actually reach. */
       profiles: VOICE_PRESETS.map((p) => ({

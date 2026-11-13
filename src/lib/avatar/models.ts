@@ -89,10 +89,24 @@ export const OCULUS_TO_VISEME: Readonly<Record<string, string>> = {
   viseme_U: "ou",
 };
 
-/** Warm the HTTP cache so the exam never waits on a model download. */
+/** In-flight/cache map so rapid exam mounts never trigger duplicate GLB fetches. */
+const preloadInflight = new Map<string, Promise<void>>();
+
+/** Warm the HTTP cache so the exam never waits on a model download. Concurrent
+ *  calls for the same model share ONE fetch (force-cache hits are near-free,
+ *  but two parallel fetches for a multi-MB GLB are not). */
 export function preloadExaminerModel(id: string): void {
   if (typeof window === "undefined") return;
   const model = examinerModelById(id);
   if (!model) return;
-  try { void fetch(model.modelUrl, { cache: "force-cache" }).catch(() => {}); } catch { /* ignore */ }
+  const existing = preloadInflight.get(model.modelUrl);
+  if (existing) return;
+  const p = fetch(model.modelUrl, { cache: "force-cache" })
+    .then(() => undefined)
+    .catch(() => undefined)
+    .finally(() => {
+      // Keep the entry briefly so StrictMode double-mounts share the fetch.
+      setTimeout(() => preloadInflight.delete(model.modelUrl), 30_000);
+    });
+  preloadInflight.set(model.modelUrl, p);
 }

@@ -17,6 +17,25 @@ export const METRIC_NAMES = [
   "asr_duration_ms",
   "advance_duration_ms",
   "inter_turn_gap_ms",
+  // ---- fluency / preparation telemetry (part 3, 5.5) ----
+  /** End-to-end opening-preparation duration (health check + opening gate). */
+  "exam_start_preparation_ms",
+  /** User-perceived wait from a line request to its clip being ready. */
+  "tts_queue_wait_ms",
+  /** 0/1 sample: the CURRENT turn's lines were already cached at switch time. */
+  "current_question_ready_ratio",
+  /** 0/1 sample of NEXT-question prefetch outcome after submit. */
+  "next_question_prefetch_success",
+  /** 0/1 sample per failed playback (rate = share of 1s). */
+  "audio_playback_failure",
+  /** 0/1 sample per play-time cache hit (rate over cache-hit/cache-miss). */
+  "audio_cache_hit",
+  /** GLB load duration measured on the real 3D pipeline. */
+  "avatar_model_load_ms",
+  /** Real measured FPS from the diagnostics probe (no exam cost). */
+  "avatar_render_fps",
+  /** 0/1 marker that the exam runs in read-along (no examiner voice) mode. */
+  "read_along_mode",
 ] as const;
 export type MetricName = (typeof METRIC_NAMES)[number];
 

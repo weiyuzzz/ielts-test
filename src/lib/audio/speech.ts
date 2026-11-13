@@ -17,7 +17,7 @@
  */
 import { TtsScheduler, TTS_PRIORITY, ttsTaskKey, type TtsPriority, type TtsTaskSnapshot } from "./tts-scheduler";
 import { SPEECH_ACTS, type ExaminerSpeechAct } from "@/lib/speaking/speech-act";
-import { AudioLifecycle, PlaybackGuard, outcomeOf, type PlaybackOutcome } from "./audio-lifecycle";
+import { AudioLifecycle, PlaybackGuard, classifyAudioFailure, outcomeOf, type PlaybackOutcome } from "./audio-lifecycle";
 import { audioMetrics, installDevTrace, type AudioSource } from "./metrics";
 import { lipSync, type PlaybackMode } from "@/lib/lipsync/controller";
 import type { WordSpan } from "@/lib/lipsync/types";
@@ -317,6 +317,19 @@ export function prefetchTTS(
   void prefetchTTSWithPriority(text, voice, serverTts, priority ? TTS_PRIORITY.NEXT : TTS_PRIORITY.BACKGROUND, act, profile).promise;
 }
 
+// ------------------------------------------------------------------ concurrency (5.3)
+// Deployment-specific synthesis parallelism: a local CPU engine wants 1,
+// GPU/remote engines parallelise. resolveTtsConcurrency() derives the default;
+// the exam page feeds the server-derived value in via configureTtsConcurrency().
+let ttsMaxParallelConfigured: number | null = null;
+export function configureTtsConcurrency(n: number | null | undefined): void {
+  if (n == null || !Number.isFinite(n)) return;
+  const v = Math.max(1, Math.min(4, Math.floor(n)));
+  if (v === ttsMaxParallelConfigured) return;
+  ttsMaxParallelConfigured = v;
+  ttsScheduler.setMaxParallel(v);
+}
+
 /** Queue the whole script. Repeat forms and no-response backups are LOW priority. */
 export function prefetchManyTTSWithPriorities(
   entries: { text: string; priority: TtsPriority; act?: ExaminerSpeechAct }[],
@@ -359,13 +372,33 @@ export function promoteTTS(text: string, voice: string, act: ExaminerSpeechAct =
   ttsScheduler.promote(keyOf(text, voice, act, profile), TTS_PRIORITY.CURRENT);
 }
 
-export function waitForTTS(text: string, voice: string, timeoutMs = 15000, act: ExaminerSpeechAct = "question", profile?: string): Promise<Clip | null> {
-  const req = ttsScheduler.request({ text, voice, model: ttsModel, format: ttsFormat, act, profile }, TTS_PRIORITY.CURRENT);
+/**
+ * Wait for one line's clip. THE wait primitive — say() owns it; speak() never
+ * re-requests a full wait when the caller already waited (prewarmedClip).
+ * `signal` aborts the WAIT only (the exam's disposeAudio() cancels the
+ * underlying synthesis tasks on unmount).
+ */
+export function waitForTTS(text: string, voice: string, timeoutMs = 15000, act: ExaminerSpeechAct = "question", profile?: string, signal?: AbortSignal): Promise<Clip | null> {
+  if (!text.trim()) return Promise.resolve(null);
+  const t0 = performance.now();
   let timer: ReturnType<typeof setTimeout> | undefined;
+  // `signal` aborts the WAIT only; the underlying synthesis stays cancellable
+  // through the scheduler (exam exit calls disposeAudio() → cancel all tasks).
+  const aborted = new Promise<null>((r) => {
+    if (signal?.aborted) r(null);
+    else signal?.addEventListener("abort", () => r(null), { once: true });
+  });
   return Promise.race([
-    req.promise,
+    ttsScheduler.request({ text, voice, model: ttsModel, format: ttsFormat, act, profile }, TTS_PRIORITY.CURRENT).promise,
     new Promise<null>((r) => { timer = setTimeout(() => r(null), timeoutMs); }),
-  ]).finally(() => { if (timer) clearTimeout(timer); });
+    aborted,
+  ]).then((clip) => {
+    // User-perceived queue wait: request → ready (or give-up). Failed waits
+    // still record so the failure tail is visible in the trace.
+    if (clip) audioMetrics.record("tts_queue_wait_ms", performance.now() - t0, "cache-miss", "wait");
+    else audioMetrics.record("tts_queue_wait_ms", performance.now() - t0, "none", "wait-failed");
+    return clip;
+  }).finally(() => { if (timer) clearTimeout(timer); });
 }
 
 export function subscribeTts(fn: (s: TtsTaskSnapshot[]) => void): () => void {
@@ -513,6 +546,21 @@ export interface SpeakOptions {
    *  failure instead of speaking with the OS voice. Used by the Lip Sync Lab
    *  where the whole point is to audition the REAL voice. */
   noBrowserFallback?: boolean;
+  /**
+   * Bounded synthesis wait for callers that ALREADY waited for the audio
+   * (the exam's say() gate waits per line before playing). One waitForTTS with
+   * this budget, NO 120 s + 3×retry loop — without it a dead engine stalls the
+   * exam for minutes re-waiting for audio that already failed once. Direct
+   * callers (Voice Lab, settings audition) keep the full retry behaviour.
+   */
+  waitBudgetMs?: number;
+  /**
+   * Single-wait-responsibility contract (5.1): when PRESENT, the caller has
+   * already run the wait — a Clip plays immediately, null goes straight to the
+   * buffered fallback, and doSpeak never re-waits or re-promotes the task.
+   * Omitted → doSpeak owns the wait (direct callers keep the old behaviour).
+   */
+  prewarmedClip?: Clip | null;
   signal?: AbortSignal;
 }
 export interface SpeakResult {
@@ -543,6 +591,12 @@ async function doSpeak(text: string, opts: SpeakOptions, key: string): Promise<S
 
   const finish = (r: SpeakResult): SpeakResult => {
     guard.finish(begun.generation, key);
+    // Rate metrics (5.5): 0/1 samples so rates are means over the trace.
+    audioMetrics.record("audio_cache_hit", r.via === "server-cache" ? 1 : 0, r.via === "server-cache" ? "cache-hit" : "cache-miss", r.via);
+    if (!r.ok) {
+      const f = classifyAudioFailure({ outcome: r.outcome });
+      audioMetrics.record("audio_playback_failure", 1, "none", f.kind);
+    }
     return r;
   };
 
@@ -550,25 +604,45 @@ async function doSpeak(text: string, opts: SpeakOptions, key: string): Promise<S
 
   if (opts.serverTts) {
     // 1) A finished prefetch plays instantly. No 1500 ms race, no cache deletion.
-    const readyClip = ttsScheduler.get(key);
+    const readyClip = opts.prewarmedClip !== undefined ? opts.prewarmedClip : ttsScheduler.get(key);
     if (readyClip) {
       audioMetrics.record("tts_synthesis_ms", 0, "cache-hit", text.slice(0, 48));
+      audioMetrics.record("audio_cache_hit", 1, "cache-hit", "play");
       const o = await playClip(readyClip, opts.signal);
       if (o.status === "ended") return finish({ ok: true, via: "server-cache", outcome: o });
       if (o.status === "interrupted") return finish({ ok: false, via: "server-cache", outcome: o });
+    } else if (opts.prewarmedClip !== undefined) {
+      // 2) Single-wait-responsibility: the caller already waited and there is
+      //    NO clip. One bounded buffered attempt (no re-promote, no re-wait
+      //    loop), then the browser-fallback rules below decide.
+      const clip = await fetchClip(text, opts.voice, act, profile, opts.signal);
+      if (clip) {
+        const o = await playClip(clip, opts.signal);
+        releaseClip(clip);
+        if (o.status === "ended") return finish({ ok: true, via: "server-buffered", outcome: o });
+        if (o.status === "interrupted") return finish({ ok: false, via: "server-buffered", outcome: o });
+      }
     } else {
-      // 2) Not cached yet. The exam experience REQUIRES the real examiner
-      //    voice (a robotic browser fallback mid-exam is worse than a short
-      //    wait), so wait for the synthesis the scheduler is running/queuing
-      //    at CURRENT priority. If the engine is down (e.g. an MPS crash),
-      //    launchd restarts it within seconds + model warm-up — poll until it
-      //    answers instead of giving up to a truncated stream.
+      // 2b) doSpeak owns the wait (direct callers). The exam experience
+      //    REQUIRES the real examiner voice (a robotic browser fallback
+      //    mid-exam is worse than a short wait), so wait for the synthesis
+      //    the scheduler is running/queuing at CURRENT priority. If the
+      //    engine is down (e.g. an MPS crash), launchd restarts it within
+      //    seconds + model warm-up — poll until it answers instead of giving
+      //    up to a truncated stream.
       promoteTTS(text, opts.voice, act, profile);
-      let warmed = await waitForTTS(text, opts.voice, 120_000, act, profile);
-      for (let attempt = 0; !warmed && attempt < 3 && !opts.signal?.aborted; attempt++) {
-        // Engine crash-restart window: ~5s restart + ~20s model warm-up.
-        await new Promise((r) => setTimeout(r, 10_000));
-        warmed = await waitForTTS(text, opts.voice, 60_000, act, profile);
+      let warmed: Clip | null;
+      if (opts.waitBudgetMs !== undefined) {
+        // Caller declared its own budget: ONE bounded wait, then let the
+        // caller's own fallback chain handle the failure.
+        warmed = await waitForTTS(text, opts.voice, opts.waitBudgetMs, act, profile);
+      } else {
+        warmed = await waitForTTS(text, opts.voice, 120_000, act, profile);
+        for (let attempt = 0; !warmed && attempt < 3 && !opts.signal?.aborted; attempt++) {
+          // Engine crash-restart window: ~5s restart + ~20s model warm-up.
+          await new Promise((r) => setTimeout(r, 10_000));
+          warmed = await waitForTTS(text, opts.voice, 60_000, act, profile);
+        }
       }
       if (warmed) {
         const o = await playClip(warmed, opts.signal);
