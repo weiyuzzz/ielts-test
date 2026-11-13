@@ -1260,8 +1260,7 @@
       "Where it is",
       "When you went there",
       "What you did there",
-      "And explain why you feel it’s a noisy place",
-      "Where it was"
+      "And explain why you feel it’s a noisy place"
      ]
     }
    ],
@@ -1307,8 +1306,7 @@
       "Where it was",
       "When you went there",
       "Who you went there with",
-      "What you did there",
-      "Where you go"
+      "What you did there"
      ]
     }
    ],
@@ -1354,8 +1352,7 @@
       "Where you go",
       "When you go there",
       "Why you go there",
-      "Why you do not like the trip",
-      "What you lost"
+      "Why you do not like the trip"
      ]
     }
    ],
@@ -1435,8 +1432,7 @@
       "Where the shop is",
       "When you went to the shop",
       "What service you received from the staff",
-      "And explain how you felt about the service",
-      "When you visited it"
+      "And explain how you felt about the service"
      ]
     }
    ],
@@ -1566,7 +1562,6 @@
      "cuePoints": [
       "Where it is",
       "What it is like",
-      "What it is like",
       "Why you like to visit it",
       "And explain why you would not like to live there"
      ]
@@ -1614,8 +1609,7 @@
       "Where it is",
       "How you knew it",
       "What it looks like",
-      "Why you enjoy visiting it",
-      "What it is used for"
+      "Why you enjoy visiting it"
      ]
     }
    ],
@@ -1644,7 +1638,8 @@
      "cuePoints": [
       "What it is used for",
       "Where it is",
-      "What it looks like"
+      "What it looks like",
+      "Why you like/dislike it"
      ]
     }
    ],
@@ -1690,8 +1685,7 @@
       "What it is",
       "When you usually do it",
       "Why you do it",
-      "And explain why you think it is a waste of time",
-      "What it is"
+      "And explain why you think it is a waste of time"
      ]
     }
    ],
@@ -1735,10 +1729,9 @@
      "text": "Describe a person whose health and fitness you have helped to improve",
      "cuePoints": [
       "Who this person was",
-      "And explain whether it was easy or difficult",
-      "Why you helped",
-      "How you helped",
-      "How you felt about it"
+      "Why you helped him/her",
+      "How you helped him/her",
+      "And explain whether it was easy or difficult"
      ]
     }
    ],
@@ -1764,8 +1757,7 @@
       "What kind of book it was",
       "What it was about",
       "Why you read it",
-      "Why it made you happy",
-      "Who this person was"
+      "Why it made you happy"
      ]
     }
    ],
@@ -1796,6 +1788,7 @@
     {
      "text": "Describe a time when you helped someone",
      "cuePoints": [
+      "Where you helped him/her",
       "Why you helped",
       "How you helped",
       "How you felt about it"
@@ -1840,8 +1833,7 @@
       "When you watched it",
       "Where you watched it",
       "What it was about",
-      "Why it's your least favourite movie",
-      "Who the person was"
+      "Why it's your least favourite movie"
      ]
     }
    ],
@@ -1885,6 +1877,7 @@
      "text": "Describe a time when someone talked about something you were not interested in but you kept listening",
      "cuePoints": [
       "Who the person was",
+      "What he/she talked about",
       "Why you kept listening",
       "And explain how you felt about the experience"
      ]
@@ -1920,8 +1913,7 @@
       "What the decision was",
       "Why you made the decision",
       "How easy it was for you to make the decision",
-      "And explain why you were happy with the result",
-      "When you changed the decision"
+      "And explain why you were happy with the result"
      ]
     }
    ],
@@ -1967,8 +1959,7 @@
       "When you changed your opinion",
       "What the original opinion was",
       "Why you changed it",
-      "And explain how you felt about the experience",
-      "When this happened"
+      "And explain how you felt about the experience"
      ]
     }
    ],
@@ -2002,8 +1993,7 @@
       "When this happened",
       "What made you changed the plan",
       "What the new plan was",
-      "How you feel about the change",
-      "What the change was"
+      "How you feel about the change"
      ]
     }
    ],
@@ -2049,8 +2039,7 @@
       "What the change was",
       "What caused the change",
       "What you did for the change",
-      "How you feel about the change",
-      "What the decision was"
+      "How you feel about the change"
      ]
     }
    ],
@@ -2092,8 +2081,7 @@
       "What the decision was",
       "Why you made the decision",
       "How easy it was for you to make the decision",
-      "And explain why you were happy with the result",
-      "When you changed the decision"
+      "And explain why you were happy with the result"
      ]
     }
    ],
@@ -2136,6 +2124,7 @@
     {
      "text": "Describe a long-term goal/ambition you would like to achieve",
      "cuePoints": [
+      "How long you have had this goal /ambition",
       "What it is",
       "How you will achieve it",
       "Why you set it"
@@ -2180,7 +2169,12 @@
    "part2": [
     {
      "text": "Describe a person who is good at learning and speaking new languages",
-     "cuePoints": []
+     "cuePoints": [
+      "How you got to know him / her",
+      "How he /she learns a new language",
+      "What languages he/she can speak",
+      "How you feel about him / her"
+     ]
     }
    ],
    "part3": [
@@ -2272,8 +2266,7 @@
       "What the law should be",
       "Why people shouled follow the law",
       "Whether the law will be popular",
-      "How you feel about this law",
-      "What animals are in it"
+      "How you feel about this law"
      ]
     }
    ],
@@ -2354,7 +2347,10 @@
     {
      "text": "Describe a story/book with animals in it",
      "cuePoints": [
-      "What animals are in it"
+      "What animals are in it",
+      "What the story/book is about",
+      "Why you read the  story/book",
+      "What you think of this  story/book"
      ]
     }
    ],
@@ -2400,8 +2396,7 @@
       "What it was",
       "Why you didn't know how to use it",
       "Whether you learned to use it at last",
-      "How you felt about it",
-      "What the problem was"
+      "How you felt about it"
      ]
     }
    ],
@@ -2422,8 +2417,7 @@
       "What the problem was",
       "When and where you faced it",
       "How challenging it was",
-      "And explain how you solved it",
-      "Who you sent it to"
+      "And explain how you solved it"
      ]
     }
    ],
@@ -2463,6 +2457,7 @@
      "text": "Describe a time when you sent a message or an email to someone but received no reply for a long time",
      "cuePoints": [
       "Who you sent it to",
+      "What the message/email was about",
       "Whether you finally received the reply",
       "How you felt about the experience"
      ]
@@ -2510,8 +2505,7 @@
       "When it was",
       "What you did",
       "Why you got up early",
-      "How you felt about it",
-      "What you did"
+      "How you felt about it"
      ]
     }
    ],
@@ -2557,8 +2551,7 @@
       "What you did",
       "Who you worked with",
       "What problems you faced",
-      "Why you worked in the group",
-      "What it was"
+      "Why you worked in the group"
      ]
     }
    ],
@@ -2604,8 +2597,7 @@
       "When and where you watched it",
       "What it is about",
       "Why you watched it",
-      "How you feel about it",
-      "What it is"
+      "How you feel about it"
      ]
     }
    ],
@@ -2651,8 +2643,7 @@
       "Who the person is",
       "Where you can see it",
       "What the advertisement is about",
-      "How you feel about the advertisement",
-      "When and where you watched it"
+      "How you feel about the advertisement"
      ]
     }
    ],
@@ -2690,8 +2681,7 @@
       "What it was",
       "When and where you watched it",
       "Who you watched it with",
-      "And explain why you liked it",
-      "Who the person is"
+      "And explain why you liked it"
      ]
     }
    ],
@@ -2735,10 +2725,9 @@
      "text": "Describe a piece of local news that people are interested in",
      "cuePoints": [
       "What it was about",
+      "Where you saw / heard it",
       "Who has involved",
-      "Why people were interested in it",
-      "When it was",
-      "What you did"
+      "Why people were interested in it"
      ]
     }
    ],
@@ -2773,7 +2762,10 @@
     {
      "text": "Describe a food that people eat on special occasions/events",
      "cuePoints": [
-      "What it is"
+      "What it is",
+      "What the special event/occasion is",
+      "How it is cooked/made",
+      "And explain why people eat it on that special occasion/event"
      ]
     }
    ],
@@ -2811,8 +2803,7 @@
       "Who the famous person was",
       "What the interview was about",
       "When and where you watched the interview",
-      "How you felt about the interview",
-      "Who this person is"
+      "How you felt about the interview"
      ]
     }
    ],
@@ -2854,8 +2845,7 @@
       "Who this person is",
       "What difficult thing this person did",
       "Why this person was successful",
-      "And explain how you feel about this person",
-      "Who this person is"
+      "And explain how you feel about this person"
      ]
     }
    ],
@@ -2897,8 +2887,7 @@
       "Who this person is",
       "How you knew this person",
       "What kinds of things you like to do together",
-      "And explain how you feel about this person",
-      "Who this person is"
+      "And explain how you feel about this person"
      ]
     }
    ],
@@ -2934,10 +2923,9 @@
      "text": "Describe a person who learns history and loves history",
      "cuePoints": [
       "Who this person is",
-      "Who this person is",
-      "What kind of person he or she is",
-      "Why you think this person is popular",
-      "Why you want to"
+      "How he/she learns history",
+      "Why he/she loves history",
+      "And explain how you feel about him/her"
      ]
     }
    ],
@@ -2974,6 +2962,7 @@
      "cuePoints": [
       "Who this person is",
       "What kind of person he or she is",
+      "When you see him/her normally",
       "Why you think this person is popular"
      ]
     }
@@ -3024,8 +3013,7 @@
       "When and where it was",
       "What you did",
       "Who you spent the evening with",
-      "And explain why it was enjoyable",
-      "When and where it was held"
+      "And explain why it was enjoyable"
      ]
     }
    ],
@@ -3069,10 +3057,9 @@
      "text": "Describe a person you know who really likes taking photos",
      "cuePoints": [
       "Who the person is",
-      "What you wanted to buy",
-      "Why you wanted to buy it",
-      "How you saved money for it",
-      "And explain how you felt after buying it"
+      "When and how you got to know him/her",
+      "Where he/she takes photos",
+      "And explain how you feel about him/her"
      ]
     }
    ],
@@ -3118,8 +3105,7 @@
       "What you wanted to buy",
       "Why you wanted to buy it",
       "How you saved money for it",
-      "And explain how you felt after buying it",
-      "When and where it was"
+      "And explain how you felt after buying it"
      ]
     }
    ],
@@ -3158,11 +3144,10 @@
     {
      "text": "Describe an enjoyable evening you had with your friends",
      "cuePoints": [
-      "When and where it was held",
-      "What the party was held for",
-      "How many people attended it",
-      "And explain why it impressed you a lot",
-      "How you knew your frined"
+      "When and where it was",
+      "What you did",
+      "Who you spent the evening with",
+      "And explain why it was enjoyable"
      ]
     }
    ],
@@ -3200,8 +3185,7 @@
       "Who this person was",
       "What the skill was",
       "How you learned it",
-      "How you felt about this person",
-      "Who this person is"
+      "How you felt about this person"
      ]
     }
    ],
@@ -3245,10 +3229,9 @@
      "text": "Describe a person who is good at making things by hand",
      "cuePoints": [
       "Who this person is",
-      "Why you think this person is good at making things by hand",
-      "What the skill was",
-      "Who taught you this skill",
-      "How you learned it"
+      "What he/she  makes",
+      "What materials or technologies he/she uses",
+      "Why you think this person is good at making things by hand"
      ]
     }
    ],
@@ -3294,8 +3277,7 @@
       "What the skill was",
       "Who taught you this skill",
       "How you learned it",
-      "How you felt about learning the skill",
-      "What the course was about"
+      "How you felt about learning the skill"
      ]
     }
    ],
@@ -3338,10 +3320,10 @@
     {
      "text": "Describe a friend of yours who is creative",
      "cuePoints": [
-      "What the course was about",
-      "Where you took the course",
-      "What you did during the course",
-      "Why it impressed you a lot"
+      "Who he/she is",
+      "How you met him / her",
+      "What materials he / she uses when making things by hand",
+      "Why you think he / she is a creative person"
      ]
     }
    ],
@@ -3360,8 +3342,9 @@
      "text": "Describe a happy person you know",
      "cuePoints": [
       "Who this person is",
-      "Who this person is",
-      "What this person usually does to stay organized"
+      "What he/she is like",
+      "How he/she shows happiness",
+      "And explain why you think he/she is a happy person"
      ]
     }
    ],
@@ -3406,8 +3389,8 @@
      "cuePoints": [
       "Who this person is",
       "What this person usually does to stay organized",
-      "Who this person is",
-      "How you got to know each other"
+      "In what situations you have noticed this quality",
+      "And explain why you think being organized is important to him/her"
      ]
     }
    ],
@@ -3452,7 +3435,8 @@
      "cuePoints": [
       "Who this person is",
       "How you got to know each other",
-      "Who this person is"
+      "What he/she does to keep this lifestyle",
+      "How you feel about him / her"
      ]
     }
    ],
@@ -3470,7 +3454,10 @@
     {
      "text": "Describe a person who loves to grow plants (e.g. vegetables, flowers) at home or in the garden",
      "cuePoints": [
-      "Who this person is"
+      "Who this person is",
+      "What plants he/she grows",
+      "How he/she grows the plants",
+      "And explain why he/she loves growing plants"
      ]
     }
    ],
@@ -3504,7 +3491,13 @@
    "part2": [
     {
      "text": "Describe a sucessful sports person you admire",
-     "cuePoints": []
+     "cuePoints": [
+      "Who he/she is",
+      "What you know about him / her",
+      "What he/she is like in real life",
+      "What achievement he/she has made",
+      "Why you admire him/ her"
+     ]
     }
    ],
    "part3": [
@@ -3546,10 +3539,10 @@
     {
      "text": "Describe a friend from your childhood",
      "cuePoints": [
+      "Who he/she is",
       "Where and how you met each other",
       "What you often did together",
-      "Who this person is",
-      "Why you think the business is successful"
+      "What made you like him/her"
      ]
     }
    ],
@@ -3583,7 +3576,12 @@
    "part2": [
     {
      "text": "Describe a person you know who would like to choose a career in the medical field (e.g. a doctor, a nurse)",
-     "cuePoints": []
+     "cuePoints": [
+      "When you knew him/her",
+      "When he/she started to think about that",
+      "What he/she would like to do",
+      "And explain why he/she would like to choose this career"
+     ]
     }
    ],
    "part3": [
@@ -3617,6 +3615,9 @@
     {
      "text": "Describe a person you know who has a successful business",
      "cuePoints": [
+      "How you got to know him / her",
+      "Why and how he/she started the business",
+      "What business he/she does",
       "Why you think the business is successful"
      ]
     }

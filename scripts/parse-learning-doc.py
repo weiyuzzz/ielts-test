@@ -462,7 +462,16 @@ def parse_p3_question(after: str) -> dict:
         [("answer", M_P3_ANSWER), ("follow", M_FOLLOW), ("keywords", M_KEYWORDS_2), ("vocab", M_VOCAB)],
     )
     _zh, lead = split_question_and_translation(sections.get("lead", ""))
+    # A few rows put `📢 语音跟读` immediately after `🗣️ 具体回答`, before the
+    # actual 观点/解释/例子 text. In that case `answer` is empty and the answer
+    # body lands in `follow`. Only fall back when the normal source yields no
+    # stages at all AND `follow` really carries stage markers — otherwise a row
+    # whose answer legitimately lives in `lead` would be overwritten by an
+    # unrelated neighbouring block.
     body = sections.get("answer", "") or lead
+    follow = sections.get("follow", "")
+    if not parse_idea_p3(body) and parse_idea_p3(follow):
+        body = follow
     idea = parse_idea_p3(body)
     learning = build_learning(
         "",
@@ -658,11 +667,17 @@ def main() -> int:
     p3, p3p = parse_part3(doc, topics)
     card_counts = p2_examinees(doc)
 
-    # Part 2 is deliberately not parsed: its material is one "串题故事" shared by
-    # five cue cards, and the document's blocks for it are inconsistent enough
-    # that a mapping would silently put one card's answer under another. Cards
-    # keep their cue points and 考试人数; material stays empty and is reported.
-    pools = {1: p1, 2: {}, 3: p3}
+    # Part 2 material is owned by `parse-part2-doc.py`: its "串题故事" blocks
+    # share one story across several cue cards and need structural group anchors
+    # rather than this script's question-by-question anchoring. Read the existing
+    # Part 2 entries back so re-running this script never wipes them.
+    out_path = Path(args.out)
+    existing_p2 = {}
+    if out_path.exists():
+        for e in json.loads(out_path.read_text(encoding="utf-8")).get("entries", []):
+            if e.get("part") == 2 and e.get("learning"):
+                existing_p2[(e["topicKey"], 2, norm(e.get("text") or ""))] = e["learning"]
+    pools = {1: p1, 2: existing_p2, 3: p3}
     entries, missing = [], []
     counts = {1: 0, 2: 0, 3: 0}
     totals = {1: 0, 2: 0, 3: 0}
@@ -713,7 +728,7 @@ def main() -> int:
             for part in (1, 2, 3)
         }
         print(f"\n条目 {n}：答案 {with_answer} / 译文 {with_zh} / 思路 {with_idea} / 关键词 {with_kw} / 语料 {with_vocab}")
-        print(f"有答案的条目按部分：P1 {per_part[1]} / P2 {per_part[2]}（本期未导入）/ P3 {per_part[3]}")
+        print(f"有答案的条目按部分：P1 {per_part[1]} / P2 {per_part[2]}（由 parse-part2-doc.py 维护）/ P3 {per_part[3]}")
 
     if args.write:
         payload = {
