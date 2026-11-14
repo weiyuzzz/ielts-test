@@ -68,6 +68,14 @@ export const questions = pgTable(
     questionType: text("question_type").notNull().default("retained"),
     /** part1 | part23 | part3 — the bank's own grouping */
     category: text("category").notNull().default("part1"),
+    /**
+     * 'gate' → the topic's opener whose answer steers what is asked next
+     * ("Do you work, or are you a student?"). Always the first question of its
+     * topic; `audience` tags the branch questions that follow.
+     */
+    questionRole: text("question_role"),
+    /** Branch restriction on gate topics: 'student' | 'work' | null (any candidate). */
+    audience: text("audience"),
     cuePoints: jsonb("cue_points").$type<string[]>(),
     examinees: integer("examinees"),
     /** Optional pre-recorded examiner audio; TTS is used when absent. */

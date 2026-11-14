@@ -9,6 +9,7 @@ import { normalizeGender, normalizeModelId, examinerModelById } from "@/lib/avat
 import { asrTimingFromConfig } from "@/lib/speaking/asr-policy";
 import { canSubmitAnswer, canRepeat, decideAdvance, canFinish, type MachineState, type MachineError } from "@/lib/speaking/exam-machine";
 import { LINES, templateFollowUp, generateFollowUp } from "@/lib/speaking/examiner";
+import { classifyWorkOrStudy } from "@/lib/speaking/gate";
 import { tokenize } from "@/lib/speaking/metrics";
 import { getASR, getLLM, TIMEOUTS } from "@/lib/ai/registry";
 import { withTimeout } from "@/lib/ai/types";
@@ -111,7 +112,16 @@ export async function createSession(user: User, mode: SpeakingMode) {
       if (!chosen.some((c) => c.key === k)) chosen.push({ key: k, count: config.part1.questionsPerTopic });
     }
     chosen.forEach((sel, ti) => {
-      const qs = shuffle(p1.filter((q) => q.topicKey === sel.key)).slice(0, sel.count);
+      const topicQs = p1.filter((q) => q.topicKey === sel.key);
+      // A gate question ("Do you work, or are you a student?") always opens its
+      // topic and never competes in the shuffle: what is asked next depends on
+      // its answer. Pending follow-ups start NEUTRAL so an unreadable gate
+      // answer still yields valid questions; advance() refines by audience.
+      const gate = topicQs.find((q) => q.questionRole === "gate");
+      const rest = topicQs.filter((q) => q.id !== gate?.id);
+      const qs = gate
+        ? [gate, ...shuffle(rest.filter((q) => !q.audience)), ...shuffle(rest.filter((q) => q.audience))].slice(0, sel.count)
+        : shuffle(topicQs).slice(0, sel.count);
       qs.forEach((q, qi) => {
         let lead = "";
         if (ti === 0 && qi === 0) lead = `${opening}${LINES.part1Intro} ${LINES.part1Topic(q.topic)}`;
@@ -317,9 +327,14 @@ export async function submitAnswer(user: User, id: string, form: FormData) {
     });
   } else if (!noResponse && asr?.location === "server" && main) {
     const prompt = step.promptText;
-    // Only a practice Part 3 follow-up decision needs the transcript before we
-    // advance. A full mock follows the fixed bank script, and runScoring()
-    // backfills any missing transcript, so waiting here would be pure latency.
+    // Only a practice Part 3 follow-up decision or a Part 1 gate question
+    // ("Do you work, or are you a student?") needs the transcript before we
+    // advance — both decide which questions come next. Everything else in a
+    // full mock follows the fixed bank script, and runScoring() backfills any
+    // missing transcript, so waiting here would be pure latency.
+    const [qrow] = step.questionId
+      ? await db.select({ role: questions.questionRole }).from(questions).where(eq(questions.id, step.questionId)).limit(1)
+      : [];
     const timing = asrTimingFromConfig(
       s.mode as SpeakingMode,
       { part: step.part, kind: step.kind },
@@ -327,6 +342,7 @@ export async function submitAnswer(user: User, id: string, form: FormData) {
       noResponse,
       state.steps.filter((x) => x.kind === "follow_up").length,
       config,
+      qrow?.role === "gate",
     );
     // Server ASR prefers the 16 kHz mono WAV asset: the correct container for
     // every provider, and its timeline matches the pronunciation slicer.
@@ -348,12 +364,66 @@ async function currentAnswerSummary(stepId: string) {
   return { noResponse: a.status === "no_response", text: t?.text ?? null, wordCount: t ? tokenize(t.text).length : Math.round(a.durationMs / 400) };
 }
 
+/**
+ * Part 1 gate branching (see lib/speaking/gate.ts).
+ *
+ * A gate question ("Do you work, or are you a student?") is planned with
+ * NEUTRAL follow-ups because the branch is not known at session creation.
+ * Now that the answer exists, classify its transcript and swap the topic's
+ * still-pending steps for questions from the matching sub-bank — in place, so
+ * step indexes (and the state machine guarding them) never move. An unclear
+ * answer keeps the neutral pre-plan, which is valid for every candidate.
+ */
+async function applyGateBranch(
+  s: typeof examSessions.$inferSelect,
+  steps: (typeof examQuestions.$inferSelect)[],
+  step: typeof examQuestions.$inferSelect,
+  summary: { noResponse: boolean; text: string | null },
+): Promise<void> {
+  if (summary.noResponse || step.kind !== "question" || !step.questionId) return;
+  const [gate] = await db
+    .select({ setId: questions.setId, topicKey: questions.topicKey, role: questions.questionRole })
+    .from(questions)
+    .where(eq(questions.id, step.questionId))
+    .limit(1);
+  if (gate?.role !== "gate") return;
+  const audience = classifyWorkOrStudy(summary.text);
+  if (!audience) return;
+  const pending = steps
+    .filter((x) => x.topic === step.topic && x.kind === "question" && x.status === "pending" && x.stepIndex > step.stepIndex && x.questionId)
+    .sort((a, b) => a.stepIndex - b.stepIndex);
+  if (!pending.length) return;
+  const pool = await db
+    .select()
+    .from(questions)
+    .where(and(eq(questions.setId, gate.setId), eq(questions.topicKey, gate.topicKey), eq(questions.part, 1)));
+  // Re-record → a second advance past the same gate: the branch is already drawn.
+  const current = pool.filter((q) => pending.some((p) => p.questionId === q.id));
+  if (current.length && current.every((q) => q.audience === audience)) return;
+  const asked = new Set(steps.map((x) => x.questionId));
+  const picks = [
+    ...shuffle(pool.filter((q) => q.audience === audience && !asked.has(q.id))),
+    ...shuffle(pool.filter((q) => !q.audience && !asked.has(q.id))),
+  ].slice(0, pending.length);
+  if (!picks.length) return;
+  await db.transaction(async (tx) => {
+    const [locked] = await tx.select().from(examSessions).where(eq(examSessions.id, s.id)).for("update");
+    if (locked.currentStep !== s.currentStep) return; // a concurrent advance already moved on
+    for (let i = 0; i < pending.length; i++) {
+      const q = picks[i];
+      if (!q) break;
+      await tx.update(examQuestions).set({ questionId: q.id, promptText: q.text, generator: "bank" }).where(eq(examQuestions.id, pending[i].id));
+    }
+  });
+}
+
 export async function advance(user: User, id: string, fromStep: number) {
   const s = await loadOwned(user, id);
   const { state, steps } = await machineState(s);
   if (s.status === "in_progress" && fromStep === s.currentStep - 1) return { currentStep: s.currentStep, duplicate: true };
   const step = steps.find((x) => x.stepIndex === s.currentStep);
   const summary = step ? await currentAnswerSummary(step.id) : null;
+  if (step && summary) await applyGateBranch(s, steps, step, summary);
   const llm = getLLM();
   const allowFollowUps = s.mode !== "full";
   const d = decideAdvance(state, fromStep, summary, { llmAvailable: allowFollowUps && !!llm, allowFollowUps });

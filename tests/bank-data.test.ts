@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
-interface Q { text?: string; textZh?: string; cuePoints?: string[] }
+interface Q { text?: string; textZh?: string; cuePoints?: string[]; gate?: boolean; audience?: string }
 interface Topic { key: string; name: string; part1?: Q[]; part2?: Q[]; part3?: Q[] }
 interface Bank { season: string; topics: Topic[] }
 
@@ -74,6 +74,33 @@ for (const file of files) {
           // second English question inside the Chinese hint.
           assert.equal(zh.includes("•"), false, `${file} ${t.key}/${part}: textZh contains a concatenated note`);
           assert.equal(/[A-Za-z]{4,}.*\?/.test(zh), false, `${file} ${t.key}/${part}: textZh contains another question`);
+        }
+      }
+    }
+  });
+
+  test(`bank ${file}: gate questions are topic openers and audiences are valid`, () => {
+    for (const t of bank.topics) {
+      const p1 = t.part1 ?? [];
+      const gates = p1.filter((q) => q.gate === true);
+      assert.ok(gates.length <= 1, `${file} ${t.key}: more than one gate question`);
+      if (gates.length) {
+        assert.equal(p1[0]?.gate, true, `${file} ${t.key}: gate question must be the first entry of part1`);
+      }
+      for (let i = 0; i < p1.length; i++) {
+        const q = p1[i];
+        if (q.audience !== undefined) {
+          assert.ok(q.audience === "student" || q.audience === "work", `${file} ${t.key}/part1[${i}]: invalid audience ${JSON.stringify(q.audience)}`);
+          assert.ok(gates.length > 0, `${file} ${t.key}: audience-tagged question without a gate question`);
+        }
+        if (q.gate === true) {
+          assert.equal(q.audience, undefined, `${file} ${t.key}: the gate question itself must not carry an audience`);
+        }
+      }
+      for (const part of ["part2", "part3"] as const) {
+        for (const q of t[part] ?? []) {
+          assert.equal(q.gate, undefined, `${file} ${t.key}/${part}: gate only applies to part1`);
+          assert.equal(q.audience, undefined, `${file} ${t.key}/${part}: audience only applies to part1`);
         }
       }
     }

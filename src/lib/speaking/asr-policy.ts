@@ -28,12 +28,19 @@ export interface AsrTimingInput {
   noResponse: boolean;
   followUpsUsed: number;
   maxFollowUps: number;
+  /** Gate questions steer which questions come next (see lib/speaking/gate.ts). */
+  isGate?: boolean;
 }
 
 export function asrTimingForStep(i: AsrTimingInput): AsrTiming {
   // Browser ASR supplies the transcript in the upload form; a no-response
   // answer has nothing worth transcribing.
   if (i.asrLocation !== "server" || i.noResponse) return "none";
+
+  // A gate question ("Do you work, or are you a student?") decides which
+  // sub-bank the examiner draws from — like a Part 3 follow-up decision, its
+  // transcript must exist before advancing, even in a full mock.
+  if (i.isGate) return "sync";
 
   // A full mock follows the fixed bank script (no follow-ups). Scoring will
   // transcribe in the background, so never block the candidate here.
@@ -54,9 +61,10 @@ export function asrTimingFromConfig(
   noResponse: boolean,
   followUpsUsed: number,
   config: SpeakingExamConfig,
+  isGate?: boolean,
 ): AsrTiming {
   return asrTimingForStep({
     mode, part: step.part, kind: step.kind, asrLocation, noResponse,
-    followUpsUsed, maxFollowUps: config.part3.maxFollowUps,
+    followUpsUsed, maxFollowUps: config.part3.maxFollowUps, isGate,
   });
 }

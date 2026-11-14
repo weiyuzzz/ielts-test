@@ -18,6 +18,14 @@ export interface BankEntry {
   text: string;
   textZh?: string;
   cuePoints?: string[];
+  /**
+   * 'gate' → the topic's opener whose answer steers what is asked next
+   * ("Do you work, or are you a student?"). Always the first question of its
+   * topic's Part 1 list; the exam never shuffles it into the draw.
+   */
+  gate?: boolean;
+  /** Branch restriction on a gate topic: 'student' | 'work' | unset (any candidate). */
+  audience?: "student" | "work";
   /** Pre-recorded audio for this prompt, and the profile that recorded it. */
   questionAudioUrl?: string;
   questionVoiceProfile?: string;
@@ -104,6 +112,8 @@ function parseEntry(e: unknown, where: string, warnings: string[]): BankEntry | 
     text,
     textZh: typeof x.textZh === "string" ? x.textZh.trim() : undefined,
     cuePoints: Array.isArray(x.cuePoints) ? x.cuePoints.filter((c): c is string => typeof c === "string") : undefined,
+    gate: x.gate === true || undefined,
+    audience: x.audience === "student" || x.audience === "work" ? x.audience : undefined,
     ...readExaminerAudio(x, where),
     ...(learning ? { learning } : {}),
   };
@@ -166,6 +176,9 @@ export function deriveImportPlan(bank: BankJson, setId: number): ImportPlan {
       rows.push({
         ...base, part, text: q.text.trim(), textZh: q.textZh?.trim() || null, orderIndex: i,
         ...(part === 2 ? { cuePoints: q.cuePoints ?? [] } : {}),
+        // Gate / audience tags only carry meaning in Part 1, where a question's
+        // answer decides which follow-ups the examiner draws.
+        ...(part === 1 ? { questionRole: q.gate ? "gate" : null, audience: q.audience ?? null } : {}),
         questionAudioUrl: q.questionAudioUrl ?? null,
         questionVoiceProfile: q.questionVoiceProfile ?? null,
       });

@@ -338,28 +338,39 @@
    "examinees": 3073,
    "part1": [
     {
+     "text": "Do you work, or are you a student?",
+     "textZh": "你是在工作还是学生？",
+     "gate": true
+    },
+    {
      "text": "What subjecs are u studying?",
-     "textZh": "你正在学习哪些科目？"
+     "textZh": "你正在学习哪些科目？",
+     "audience": "student"
     },
     {
      "text": "Do u like your subject?",
-     "textZh": "你喜欢你所学的科目吗？"
+     "textZh": "你喜欢你所学的科目吗？",
+     "audience": "student"
     },
     {
      "text": "Why did u choose to study that subject?",
-     "textZh": "你为什么选择学习这个科目？"
+     "textZh": "你为什么选择学习这个科目？",
+     "audience": "student"
     },
     {
      "text": "Do u think your subject is popular in your country?",
-     "textZh": "你认为这个科目在你国家是否受欢迎？"
+     "textZh": "你认为这个科目在你国家是否受欢迎？",
+     "audience": "student"
     },
     {
      "text": "Do u want to change your major?",
-     "textZh": "你想换专业吗？"
+     "textZh": "你想换专业吗？",
+     "audience": "student"
     },
     {
      "text": "Do u have any plans for your studies in the next five years?",
-     "textZh": "你对未来五年的学业有什么计划？"
+     "textZh": "你对未来五年的学业有什么计划？",
+     "audience": "student"
     },
     {
      "text": "What are the benefits of being your age?",
@@ -367,47 +378,58 @@
     },
     {
      "text": "Do u prefer to study in the mornings or in the afternoon?",
-     "textZh": "你更喜欢在早上还是下午学习？"
+     "textZh": "你更喜欢在早上还是下午学习？",
+     "audience": "student"
     },
     {
      "text": "How much time do u spend on your studies each week?",
-     "textZh": "你每周花多少时间在学习上？"
+     "textZh": "你每周花多少时间在学习上？",
+     "audience": "student"
     },
     {
      "text": "What technology do u use when u study?",
-     "textZh": "你学习时使用什么技术？"
+     "textZh": "你学习时使用什么技术？",
+     "audience": "student"
     },
     {
      "text": "Are u looking forward to working?",
-     "textZh": "你期待工作吗？"
+     "textZh": "你期待工作吗？",
+     "audience": "student"
     },
     {
      "text": "What changes would u like to see in your school?",
-     "textZh": "你希望学校有什么变化？"
+     "textZh": "你希望学校有什么变化？",
+     "audience": "student"
     },
     {
      "text": "What work do u do?",
-     "textZh": "你从事什么工作？"
+     "textZh": "你从事什么工作？",
+     "audience": "work"
     },
     {
      "text": "Why did u choose to do that tpye of work for that job?",
-     "textZh": "为什么选择从事这种类型的工作？"
+     "textZh": "为什么选择从事这种类型的工作？",
+     "audience": "work"
     },
     {
      "text": "Do u want to change to another job?",
-     "textZh": "你想换一份工作吗？"
+     "textZh": "你想换一份工作吗？",
+     "audience": "work"
     },
     {
      "text": "Do u like your job?",
-     "textZh": "你喜欢你的工作吗？"
+     "textZh": "你喜欢你的工作吗？",
+     "audience": "work"
     },
     {
      "text": "What requirements did u need to meet to get your current job?",
-     "textZh": "你需要满足哪些条件才能获得目前的工作？"
+     "textZh": "你需要满足哪些条件才能获得目前的工作？",
+     "audience": "work"
     },
     {
      "text": "What technology do u use at work?",
-     "textZh": "你在工作中使用哪些技术？"
+     "textZh": "你在工作中使用哪些技术？",
+     "audience": "work"
     },
     {
      "text": "What do u think is the most important at the moment?",
@@ -415,11 +437,13 @@
     },
     {
      "text": "Do u have any plans for your work in the next five years?",
-     "textZh": "你对未来五年的工作有什么计划？"
+     "textZh": "你对未来五年的工作有什么计划？",
+     "audience": "work"
     },
     {
      "text": "Do u miss being a student?",
-     "textZh": "你是否怀念学生时代？"
+     "textZh": "你是否怀念学生时代？",
+     "audience": "work"
     },
     {
      "text": "Who helps u the most? Why?",
@@ -437,6 +461,11 @@
    "category": "part1",
    "examinees": 1841,
    "part1": [
+    {
+     "text": "Where do you live?",
+     "textZh": "你住在哪里？",
+     "gate": true
+    },
     {
      "text": "Do u live in a noisy or a quiet area?",
      "textZh": "你住在嘈杂的地区还是安静的地区？"
@@ -479,7 +508,8 @@
    "part1": [
     {
      "text": "Where is your hometown?",
-     "textZh": "你的家乡在哪里？"
+     "textZh": "你的家乡在哪里？",
+     "gate": true
     },
     {
      "text": "Is that a big city or a small place?",
@@ -550,12 +580,13 @@
    "examinees": 728,
    "part1": [
     {
-     "text": "Who do u live with?",
-     "textZh": "你和谁住在一起？"
+     "text": "Do u live in an apartment or a house?",
+     "textZh": "你住的是公寓还是房子？",
+     "gate": true
     },
     {
-     "text": "Do u live in an apartment or a house?",
-     "textZh": "你住的是公寓还是房子？"
+     "text": "Who do u live with?",
+     "textZh": "你和谁住在一起？"
     },
     {
      "text": "What kinds of accommodation do u live in?",
@@ -631,7 +662,8 @@
    "part1": [
     {
      "text": "What city do u live in?",
-     "textZh": "你住在哪个城市？"
+     "textZh": "你住在哪个城市？",
+     "gate": true
     },
     {
      "text": "How long have u lived in this city?",

@@ -30,10 +30,11 @@
 - 考试状态机在服务端权威推进（`src/lib/speaking/exam-machine.ts`）：答题提交、重复请求、跳过、结束全部原子化，刷新/重连不丢状态。
 - 每部分有硬性时间预算，考官到时收尾并进入下一部分；Part 1 支持在最少作答秒数后提前进入下一题。
 - 全真模考每题一次作答；练习模式允许回放后重录。
+- **Gate 分支抽题**：万年保留题里混有「学生版/上班族版」问题的 topic（如 Work or studies），考官必先问 gate 题（"Do you work, or are you a student?"），再按回答内容把后续待答题实时替换为对应分支的题库题；居住类 topic（hometown / home / area / city）同样先问「住在哪里」再展开。转写不可用或语义不明时保持中立题兜底。
 
 ### 题库
 
-- 内置大陆当季题库（Part 1 211 题 / 33 主题、Part 2 58 卡、Part 3 280 题），首次打开 `/admin` 自动导入；`/admin` 可导入新季度 JSON 并切换启用。
+- 内置大陆当季题库（Part 1 213 题 / 33 主题、Part 2 58 卡、Part 3 280 题），首次打开 `/admin` 自动导入；`/admin` 可导入新季度 JSON 并切换启用。
 - 考试严格从**启用题库**抽题，不跨季混题；题库对账见 [`docs/bank-audit.md`](./docs/bank-audit.md)。
 
 ### 数字考官与语音
