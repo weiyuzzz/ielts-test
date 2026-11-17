@@ -28,6 +28,10 @@ export const METRIC_NAMES = [
   "next_question_prefetch_success",
   /** 0/1 sample per failed playback (rate = share of 1s). */
   "audio_playback_failure",
+  /** First non-zero playback position — non-zero means the browser skipped the opening words. */
+  "playback_start_offset_ms",
+  /** 0/1 sample: a line reported "ended" after less than its real length (and was replayed). */
+  "playback_truncated",
   /** 0/1 sample per play-time cache hit (rate over cache-hit/cache-miss). */
   "audio_cache_hit",
   /** GLB load duration measured on the real 3D pipeline. */

@@ -229,6 +229,8 @@ const ttsStreamUrl = (text: string, voice: string, act: ExaminerSpeechAct, profi
 };
 
 let liveAudio: HTMLAudioElement | null = null;
+/** The clip currently on the air — eviction must never tear it down. */
+let liveClip: Clip | null = null;
 const stopLiveAudio = () => {
   if (liveAudio) {
     try { liveAudio.pause(); } catch { /* ignore */ }
@@ -272,6 +274,10 @@ async function fetchClip(text: string, voice: string, act: ExaminerSpeechAct, pr
 }
 
 const releaseClip = (c: Clip) => {
+  // Evicting the clip that is currently on the air used to pause the examiner
+  // mid-sentence (the LRU fills up during a full mock). Leave it alone; it will
+  // be collected by the next eviction once it is no longer playing.
+  if (liveClip === c) return;
   try { c.audio.pause(); } catch { /* ignore */ }
   URL.revokeObjectURL(c.url);
 };
@@ -419,10 +425,23 @@ function bindAudio(
   return new Promise((resolve) => {
     let done = false;
     let started = false;
+    let startAt = 0;
     const t0 = performance.now();
+    const measured = (extra: { startOffsetMs?: number }) => {
+      let durationMs: number | undefined;
+      let playedMs: number | undefined;
+      try {
+        if (Number.isFinite(audio.duration) && audio.duration > 0) durationMs = Math.round(audio.duration * 1000);
+        if (started && Number.isFinite(audio.currentTime)) playedMs = Math.max(0, Math.round((audio.currentTime - startAt) * 1000));
+      } catch { /* duration not known yet */ }
+      return { ...extra, ...(durationMs !== undefined ? { durationMs } : {}), ...(playedMs !== undefined ? { playedMs } : {}) };
+    };
     const finish = (status: "ended" | "interrupted" | "failed", opts: { partial?: boolean; aborted?: boolean } = {}) => {
       if (done) return;
       done = true;
+      // Measure BEFORE pausing: a paused element keeps its position, but reading
+      // after teardown can race with the media pipeline.
+      const m = measured({});
       clearTimeout(watchdog);
       try { audio.pause(); } catch { /* ignore */ }
       audio.onended = null;
@@ -434,7 +453,7 @@ function bindAudio(
       else if (status === "failed") lifecycle.send("FAIL");
       else lifecycle.send("END");
       const via = source;
-      resolve(outcomeOf(status, via, opts));
+      resolve(outcomeOf(status, via, { ...opts, ...m }));
     };
     const onAbort = () => finish("interrupted", { aborted: true });
     const watchdog = setTimeout(() => { if (!started) finish("failed", { aborted: signal?.aborted }); }, 15000);
@@ -442,7 +461,16 @@ function bindAudio(
     audio.onplaying = () => {
       if (started) return;
       started = true;
+      startAt = audio.currentTime;
       clearTimeout(watchdog);
+      // A media element that resumed from the previous playback position would
+      // silently drop the opening words — the exact "only the second half was
+      // spoken" symptom. Pull it back to the start and record the evidence.
+      if (startAt > 0.25) {
+        audioMetrics.record("playback_start_offset_ms", startAt * 1000, source, "started mid-line, seeking back");
+        try { audio.currentTime = 0; } catch { /* ignore */ }
+        startAt = 0;
+      }
       lifecycle.send("PLAY");
       // Sound is actually coming out now: the viseme track follows THIS element's clock.
       lipSync.begin({ mode: lipsync.mode, text: lipsync.text, element: audio, wordAnchors: lipsync.words });
@@ -460,14 +488,22 @@ function bindAudio(
 }
 
 function playClip(clip: Clip, signal?: AbortSignal): Promise<PlaybackOutcome> {
-  const audio = clip.audio;
+  // A cached clip keeps its <audio> element across turns. Reusing that element
+  // lets a previous playback's position (or a pending seek) survive into the new
+  // line, and a browser may then start the sentence mid-way. The blob URL lives
+  // in local memory, so a fresh element per playback costs nothing and always
+  // starts from zero.
+  const audio = clip.url ? new Audio(clip.url) : clip.audio;
+  audio.preload = "auto";
   liveAudio = audio;
+  liveClip = clip;
   const lifecycle = new AudioLifecycle("tts-clip");
   lifecycle.send("LOAD");
   lifecycle.send("READY");
   lifecycle.subscribe((s, prev) => audioMetrics.recordState("tts-clip", s, prev));
   try { audio.currentTime = 0; } catch { /* not seekable yet */ }
-  return bindAudio(audio, signal, lifecycle, "cache-hit", { mode: "clip", text: clip.text ?? "", words: clip.words });
+  return bindAudio(audio, signal, lifecycle, "cache-hit", { mode: "clip", text: clip.text ?? "", words: clip.words })
+    .finally(() => { if (liveClip === clip) liveClip = null; });
 }
 
 /** Progressive playback: audio starts at the first sentence the engine produces. */

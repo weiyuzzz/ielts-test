@@ -61,13 +61,49 @@ export interface PlaybackOutcome {
   partial: boolean;
   /** Explicitly aborted by the user / exam exit. */
   aborted: boolean;
+  /** Media length reported by the element, in milliseconds (undefined when unknown). */
+  durationMs?: number;
+  /** How much of the media was actually consumed before playback settled, in ms. */
+  playedMs?: number;
+  /** First non-zero playback position observed — non-zero means the start was skipped. */
+  startOffsetMs?: number;
 }
 
 export const outcomeOf = (
   status: PlaybackOutcomeStatus,
   via: string,
-  opts: { partial?: boolean; aborted?: boolean } = {},
-): PlaybackOutcome => ({ status, via, partial: opts.partial ?? false, aborted: opts.aborted ?? false });
+  opts: { partial?: boolean; aborted?: boolean; durationMs?: number; playedMs?: number; startOffsetMs?: number } = {},
+): PlaybackOutcome => ({
+  status,
+  via,
+  partial: opts.partial ?? false,
+  aborted: opts.aborted ?? false,
+  ...(opts.durationMs !== undefined ? { durationMs: opts.durationMs } : {}),
+  ...(opts.playedMs !== undefined ? { playedMs: opts.playedMs } : {}),
+  ...(opts.startOffsetMs !== undefined ? { startOffsetMs: opts.startOffsetMs } : {}),
+});
+
+/**
+ * The browser reported a NORMAL end, yet far less audio was consumed than the
+ * media actually contains. That is not a synthesis fault — the clip is complete
+ * (the server-side tests prove it) — it is a playback stall: a competing media
+ * element, a decoder that gave up, or an element that was torn down mid-line.
+ * The caller replays such a line once from the start instead of advancing on a
+ * half-heard question.
+ *
+ * Deliberately conservative: a short clip (< 1.5 s) reports noisy durations, and
+ * anything actually consumed past 60% is treated as "the user heard it".
+ */
+export function playbackLooksTruncated(
+  o: Pick<PlaybackOutcome, "status" | "durationMs" | "playedMs">,
+  threshold = 0.6,
+): boolean {
+  if (o.status !== "ended") return false;
+  const duration = o.durationMs ?? 0;
+  const played = o.playedMs;
+  if (!(duration > 1500) || played === undefined) return false;
+  return played < duration * threshold;
+}
 
 // ------------------------------------------------------------------ failure taxonomy (5.4)
 

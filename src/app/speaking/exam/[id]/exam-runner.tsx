@@ -11,7 +11,7 @@ import {
   warmupSpeech, promoteTTS, waitForTTS, configureTtsConcurrency, ttsScheduler, keyOf, audioMetrics, type ScriptLine,
 } from "@/lib/audio/speech";
 import { AudioPreloader, classifyScriptLines, type PreloadEntry, type PreparationResult } from "@/lib/audio/audio-resources";
-import { outcomeOf, classifyAudioFailure, type PlaybackOutcome } from "@/lib/audio/audio-lifecycle";
+import { outcomeOf, classifyAudioFailure, playbackLooksTruncated, type PlaybackOutcome } from "@/lib/audio/audio-lifecycle";
 import { uploadWithRetry, postJson, UploadError } from "@/lib/audio/upload";
 import { LINES } from "@/lib/speaking/examiner";
 import type { SpeakingExamConfig } from "@/lib/speaking/config";
@@ -413,6 +413,8 @@ export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, 
   async function say(lines: ScriptLine[] | string, signal: AbortSignal, audioUrl?: string | null, presetText?: string, attempt = 0): Promise<PlaybackOutcome> {
     const queue: ScriptLine[] = typeof lines === "string" ? [{ text: lines, act: "question" }] : lines;
     const full = lineText(queue);
+    /** Lines already replayed once because their playback started late/ended early. */
+    const replayed = new Set<string>();
     if (signal.aborted || !full.trim()) return outcomeOf("interrupted", "none", { aborted: true });
     const profileId = voiceRef.current;
     const silentTurn = readAlongRef.current;
@@ -460,6 +462,20 @@ export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, 
           if (signal.aborted) return outcomeOf("interrupted", "none", { aborted: true });
           let r = await speak(l.text, { serverTts, voice: profileId, act: l.act, profileId, noBrowserFallback: true, signal, prewarmedClip: clip });
           let f = classifyAudioFailure({ outcome: r.outcome });
+          // Playback that started at a non-zero offset, or stopped well before the
+          // end of the clip, means the candidate missed words. Replay that line
+          // ONCE from zero — silently accepting it is what makes half a question
+          // disappear.
+          if (r.ok && !replayed.has(l.text) && playbackLooksTruncated(r.outcome)) {
+            replayed.add(l.text);
+            audioMetrics.record(
+              "playback_truncated", 1, "none",
+              `${Math.round(r.outcome.playedMs ?? 0)}/${Math.round(r.outcome.durationMs ?? 0)}ms`,
+            );
+            setNotice("Replaying the examiner's line from the start…");
+            r = await speak(l.text, { serverTts, voice: profileId, act: l.act, profileId, noBrowserFallback: true, signal, prewarmedClip: clip });
+            f = classifyAudioFailure({ outcome: r.outcome });
+          }
           // Bounded in-place retry for retryable failures only (5.4) — a config
           // error or a user cancellation never retries.
           let tries = 0;

@@ -16,7 +16,7 @@ import assert from "node:assert/strict";
 import { TtsScheduler, TTS_PRIORITY, ttsTaskKey } from "../src/lib/audio/tts-scheduler";
 import {
   reduceAudioState, canTransition, AudioLifecycle, PlaybackGuard,
-  outcomeOf, TERMINAL_STATES,
+  outcomeOf, TERMINAL_STATES, playbackLooksTruncated,
 } from "../src/lib/audio/audio-lifecycle";
 import { AudioMetrics, METRIC_NAMES } from "../src/lib/audio/metrics";
 import {
@@ -493,6 +493,37 @@ test("metrics: all 10 timings recorded, sources distinguish hit / miss / stream,
   assert.equal(trace.turns[1].outcome, "advanced");
   assert.ok(trace.states.some((s) => s.state === "playing"), "dev call chain includes lifecycle states");
   assert.ok(trace.events.some((e) => e.name === "inter_turn_gap_ms"));
+});
+
+// ============================================================ truncated playback
+test("playbackLooksTruncated: only a short, normally-ended line is replayed", () => {
+  // Normal line: consumed nearly all of the media.
+  assert.equal(playbackLooksTruncated({ status: "ended", durationMs: 8000, playedMs: 7950 }), false);
+  // Half-heard question: the browser reported "ended" at 40% of the real length.
+  assert.equal(playbackLooksTruncated({ status: "ended", durationMs: 8000, playedMs: 3100 }), true);
+  // Exactly at the threshold is NOT truncated (boundary is strict).
+  assert.equal(playbackLooksTruncated({ status: "ended", durationMs: 8000, playedMs: 4800 }), false);
+  // Tiny clips report noisy durations — never replay them.
+  assert.equal(playbackLooksTruncated({ status: "ended", durationMs: 900, playedMs: 100 }), false);
+  // A failed/interrupted line is the caller's business, not a truncation.
+  assert.equal(playbackLooksTruncated({ status: "failed", durationMs: 8000, playedMs: 100 }), false);
+  assert.equal(playbackLooksTruncated({ status: "interrupted", durationMs: 8000, playedMs: 100 }), false);
+  // Unknown duration or unknown consumed time: cannot judge, do not replay.
+  assert.equal(playbackLooksTruncated({ status: "ended", playedMs: 100 }), false);
+  assert.equal(playbackLooksTruncated({ status: "ended", durationMs: 8000 }), false);
+});
+
+test("outcomeOf carries the media measurements the truncation check needs", () => {
+  const o = outcomeOf("ended", "cache-hit", { durationMs: 8000, playedMs: 3000, startOffsetMs: 0 });
+  assert.equal(o.durationMs, 8000);
+  assert.equal(o.playedMs, 3000);
+  assert.equal(o.startOffsetMs, 0);
+  assert.equal(playbackLooksTruncated(o), true);
+  // Fields are omitted entirely when unknown — never fabricated as 0.
+  const bare = outcomeOf("ended", "cache-hit");
+  assert.equal("durationMs" in bare, false);
+  assert.equal("playedMs" in bare, false);
+  assert.equal("startOffsetMs" in bare, false);
 });
 
 // ============================================================ explicit limits
