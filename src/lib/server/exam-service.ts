@@ -301,6 +301,10 @@ export async function createCustomSession(user: User, mode: SpeakingMode, select
     (config.part1.enabled ? snapshot.part1.budgetSeconds : 0) +
     (config.part2.enabled ? snapshot.part2.budgetSeconds : 0) +
     (config.part3.enabled ? snapshot.part3.budgetSeconds : 0);
+  // Self-selected practice is untimed by design: freeze this into the snapshot
+  // so the runner drops every per-part / per-answer / whole-test clock. The
+  // formal mock (createSession) never sets it, so its timing is untouched.
+  snapshot.untimed = true;
 
   return db.transaction(async (tx) => {
     const [s] = await tx
@@ -418,7 +422,11 @@ export async function submitAnswer(user: User, id: string, form: FormData) {
   if (!check.ok) machineFail(check.error);
   const step = steps.find((x) => x.id === examQuestionId)!;
 
-  const durationMs = Math.max(0, Math.min(Number(form.get("durationMs") || 0), (step.answerSeconds + 5) * 1000));
+  // Timed modes clamp to the question budget (+ a small grace) so a stale or
+  // spoofed client cannot inflate duration. Untimed practice has no budget, so
+  // allow a generous cap and keep the real speak time for scoring / audio.
+  const durationCapMs = config.untimed ? 30 * 60 * 1000 : (step.answerSeconds + 5) * 1000;
+  const durationMs = Math.max(0, Math.min(Number(form.get("durationMs") || 0), durationCapMs));
   const audio = form.get("audio");
   const wav = form.get("wav");
   const files = [audio, wav].filter((f): f is File => f instanceof File && f.size > 0);

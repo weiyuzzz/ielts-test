@@ -177,10 +177,10 @@ export function CustomExamBuilder({ items, practiceCounts }: { items: BuilderIte
 
   return (
     <Card className="p-4">
-      <h2 className="text-sm font-semibold text-zinc-900">Build a custom mock test</h2>
+      <h2 className="text-sm font-semibold text-zinc-900">Build a custom practice test</h2>
       <p className="mt-1 max-w-2xl text-[11px] leading-5 text-zinc-400">
-        Pick the exact topics to practise. A full mock runs Part 1 → 2 → 3; a part mock runs that part only.
-        Selecting several topics in one part examines them back to back. Timing, examiner and scoring are the same as a normal mock.
+        Pick the exact topics to practise. A full session runs Part 1 → 2 → 3; a part session runs that part only.
+        Selecting several topics in one part examines them back to back. <b className="font-medium text-emerald-700">Custom practice is untimed — no per-part or whole-test clock, and nothing is cut off early — so you can speak at your own pace.</b> Formal mock tests keep the real exam timing.
         The two small numbers on each topic are its question count and how many mock tests you have practised it in —
         shown for reference only; practise history never affects which topics a test picks.
       </p>

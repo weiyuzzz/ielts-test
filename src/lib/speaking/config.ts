@@ -51,6 +51,13 @@ export interface SpeakingExamConfig {
   };
   /** Whole test 11–14 minutes; used for the on-screen time budget. */
   totalBudgetSeconds: number;
+  /**
+   * Self-selected practice (the topic picker in the learning library) runs
+   * untimed: no per-part clock, no answer/prep countdown and no auto-advance.
+   * Absent/false means the normal timed behaviour — this keeps every formal
+   * mock and every session created before this field existed unchanged.
+   */
+  untimed?: boolean;
   /** Candidate may finish an answer early after this many seconds */
   minFinishSeconds: number;
   /** Answers shorter than this (ms) are treated as "no response" */

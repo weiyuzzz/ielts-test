@@ -193,6 +193,8 @@ export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, 
   const [speaking, setSpeaking] = useState(false);
   const [showSubs, setShowSubs] = useState(showSubtitlesDefault);
   const [cd, setCd] = useState({ left: 0, total: 0, overtime: 0, grace: 0 });
+  /** Stopwatch seconds for untimed self-selected practice (counts up, never a limit). */
+  const [stopwatch, setStopwatch] = useState(0);
   const [canEarly, setCanEarly] = useState(false);
   const [level, setLevel] = useState(0);
   /** Rolling input envelope (oldest → newest) so the bars move like a real meter. */
@@ -338,6 +340,8 @@ export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, 
       const clock = partClock.current;
       const cfg = cfgRef.current;
       if (!clock || !cfg) return;
+      // Self-selected practice is untimed: no per-part expiry, no auto-close.
+      if (cfg.untimed) return;
       const budget = budgetForPart(cfg, clock.part);
       const left = partRemaining(budget, Date.now() - clock.startedAt);
       setPartLeft(left);
@@ -358,6 +362,28 @@ export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, 
 
   function countdown(seconds: number, earlyAfter: number, signal: AbortSignal, graceSeconds = 0): Promise<CountdownResult> {
     return new Promise((resolve) => {
+      // Untimed self-selected practice: a stopwatch that counts up, never auto-
+      // finishes, and lets the candidate end the turn whenever they are ready.
+      // Only an explicit action (button / repeat / device / abort) resolves it.
+      if (cfgRef.current?.untimed) {
+        const start = Date.now();
+        setStopwatch(0);
+        setCd({ left: 0, total: 0, overtime: 0, grace: 0 });
+        setCanEarly(true);
+        let done = false;
+        const finish = (r: CountdownResult) => {
+          if (done) return;
+          done = true;
+          clearInterval(t);
+          cdResolve.current = null;
+          setCanEarly(false);
+          resolve(r);
+        };
+        const t = setInterval(() => setStopwatch(Math.floor((Date.now() - start) / 1000)), 250);
+        cdResolve.current = finish;
+        signal.addEventListener("abort", () => finish("aborted"));
+        return;
+      }
       const start = Date.now();
       const totalWithGrace = seconds + graceSeconds;
       setCd({ left: seconds, total: seconds, overtime: 0, grace: graceSeconds });
@@ -784,8 +810,9 @@ export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, 
 
           data = await record(step, signal, cfg);
           if (!data) return;
-          // The examiner stops the candidate at 2 minutes, as in the real test.
-          if (step.kind === "cue_card" && !signal.aborted
+          // The examiner stops the candidate at 2 minutes, as in the real test —
+          // but never in untimed self-selected practice.
+          if (step.kind === "cue_card" && !cfg.untimed && !signal.aborted
             && (await say([{ text: LINES.part2TimeUp, act: "time_warning" }], signal)).status === "interrupted") return;
         }
 
@@ -964,6 +991,7 @@ export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, 
 
   // ------------------------------------------------------------------ render
   const cfg = view?.session.config;
+  const untimed = cfg?.untimed === true;
   const steps = view?.steps ?? [];
   const parts = [...new Set(steps.map((s) => s.part))];
   const answered = steps.filter((s) => s.status === "answered").length;
@@ -972,14 +1000,15 @@ export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, 
   // Overtime (Part 2 only): the visible 2:00 talk clock has hit zero and a grace
   // window is running. The main number holds at 0:00; the grace is shown in a
   // separate "Overtime" line so the original two-minute countdown is untouched.
-  const inOvertime = cd.grace > 0 && cd.overtime > 0;
+  const inOvertime = !untimed && cd.grace > 0 && cd.overtime > 0;
   // The ring is the timer: preparation fills it clockwise, answering drains it
   // anticlockwise, so the direction itself tells you which phase you are in.
+  // Untimed practice uses a full, static ring — there is no budget to drain.
   const RING_C = 2 * Math.PI * 45;
   const isPrep = phase === "prep";
-  const ringFrac = cd.total ? (isPrep ? 1 - pct : pct) : 0;
-  const urgent = cd.total > 0 && cd.left <= 10;
-  const critical = cd.total > 0 && cd.left <= 5;
+  const ringFrac = untimed ? 1 : cd.total ? (isPrep ? 1 - pct : pct) : 0;
+  const urgent = !untimed && cd.total > 0 && cd.left <= 10;
+  const critical = !untimed && cd.total > 0 && cd.left <= 5;
   const hearing = phase === "recording" && level > 0.05;
   const step = current;
   const reveal = !!step && revealedStepId === step.id;
@@ -1167,7 +1196,9 @@ export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, 
             <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400">
               <span className="rounded bg-zinc-100 px-1.5 py-0.5">Part {step.part}</span>
               <span className="max-w-[12rem] truncate rounded bg-zinc-100 px-1.5 py-0.5">{step.topic}</span>
-              {activePart !== null && <span className="rounded bg-indigo-50 px-1.5 py-0.5 tabular-nums text-indigo-700">{formatClock(partLeft ?? 0)} left in this part</span>}
+              {activePart !== null && (untimed
+                ? <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700">untimed practice</span>
+                : <span className="rounded bg-indigo-50 px-1.5 py-0.5 tabular-nums text-indigo-700">{formatClock(partLeft ?? 0)} left in this part</span>)}
             </div>
             <section className="mt-5 rounded-2xl border border-zinc-200 bg-white p-6 sm:p-8">
               <div className="mb-3 flex items-start justify-between gap-3">
@@ -1235,7 +1266,7 @@ export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, 
                       <circle cx="50" cy="50" r="45" fill="none" stroke="#e4e4e7" strokeWidth="5" />
                       <circle
                         cx="50" cy="50" r="45" fill="none"
-                        stroke={isPrep ? "#18181b" : critical ? "#dc2626" : urgent ? "#f59e0b" : "#dc2626"}
+                        stroke={untimed ? "#059669" : isPrep ? "#18181b" : critical ? "#dc2626" : urgent ? "#f59e0b" : "#dc2626"}
                         strokeWidth="5" strokeLinecap="round"
                         strokeDasharray={`${Math.max(0.001, ringFrac) * RING_C} ${RING_C}`}
                         style={{
@@ -1246,8 +1277,12 @@ export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, 
                       />
                     </svg>
                     <div className="text-center">
-                      <div className={`text-4xl font-semibold tabular-nums ${inOvertime || critical ? "animate-pulse text-red-600" : urgent ? "text-amber-600" : "text-zinc-900"}`}>{mmss(cd.left)}</div>
-                      {inOvertime ? (
+                      <div className={`text-4xl font-semibold tabular-nums ${inOvertime || critical ? "animate-pulse text-red-600" : urgent ? "text-amber-600" : "text-zinc-900"}`}>{untimed ? mmss(stopwatch) : mmss(cd.left)}</div>
+                      {untimed ? (
+                        <div className="mt-1 text-[11px] uppercase tracking-wide text-emerald-600">
+                          No time limit · speak freely
+                        </div>
+                      ) : inOvertime ? (
                         <div className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-red-600">
                           Overtime · {mmss(cd.overtime)} left — finish now
                         </div>
@@ -1281,11 +1316,14 @@ export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, 
                       {phase === "prep" ? "Start speaking now" : inOvertime ? "Finish now" : step.part === 2 ? "Finish answer" : "Next question"}
                     </button>
                   </div>
-                  {phase === "recording" && !canEarly && (
+                  {phase === "recording" && !canEarly && !untimed && (
                     <p className="mt-2 text-xs text-zinc-400">
                       {step.part === 2 ? "You can finish after" : "You can move on after"} {cfg?.minFinishSeconds}s
                       {step.part !== 2 && cfg ? ` · auto-advance at ${step.answerSeconds}s` : ""}
                     </p>
+                  )}
+                  {phase === "recording" && untimed && (
+                    <p className="mt-2 text-xs text-emerald-600">No auto-advance — finish whenever you are ready.</p>
                   )}
                 </>
               )}
@@ -1356,36 +1394,58 @@ export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, 
               <div className="text-xs text-zinc-400">Your examiner today</div>
             </div>
             <div className="rounded-2xl border border-zinc-200 bg-white p-4">
-              <div className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Time limits</div>
-              <p className="mt-1 text-[11px] leading-4 text-zinc-400">Official range per part — the examiner moves on at the upper bound.</p>
-              <ul className="mt-3 space-y-3">
-                {partRows.map((r) => {
-                  const low = r.isActive && r.left <= 30;
-                  return (
-                    <li key={r.p}>
-                      <div className="flex items-baseline justify-between gap-2">
-                        <span className={`text-sm ${r.isActive ? "font-semibold text-zinc-900" : "text-zinc-500"}`}>Part {r.p}</span>
-                        <span className={`text-sm tabular-nums ${r.done && !r.isActive ? "text-emerald-600" : low ? "text-amber-600" : r.isActive ? "text-zinc-900" : "text-zinc-400"}`}>
-                          {r.done && !r.isActive ? "done" : formatClock(r.left)}
-                        </span>
-                      </div>
-                      <div className="mt-0.5 flex items-center justify-between gap-2 text-[11px] text-zinc-400">
-                        <span className="truncate">{PART_TITLE[r.p] ?? "Questions"}</span>
-                        <span className="shrink-0">{OFFICIAL_RANGE[r.p] ?? ""}</span>
-                      </div>
-                      <div className="mt-1 h-1 overflow-hidden rounded-full bg-zinc-100">
-                        <div
-                          className={`h-1 rounded-full transition-[width] duration-500 ${r.isActive ? (low ? "bg-amber-500" : "bg-zinc-900") : "bg-zinc-300"}`}
-                          style={{ width: `${partProgress(r.budget, r.left) * 100}%` }}
-                        />
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-              <p className="mt-3 border-t border-zinc-100 pt-2 text-[11px] leading-4 text-zinc-400">
-                {cfg ? `Part 1 answers are capped at ${cfg.part1.answerSeconds}s each; you can move on after ${cfg.minFinishSeconds}s.` : ""}
-              </p>
+              {untimed ? (
+                <>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Practice pace</div>
+                  <p className="mt-1 text-[11px] leading-4 text-zinc-400">
+                    This is a self-selected practice session — no time limits.
+                  </p>
+                  <ul className="mt-3 space-y-2">
+                    {parts.map((p) => (
+                      <li key={p} className="flex items-baseline justify-between gap-2">
+                        <span className={`text-sm ${p === activePart ? "font-semibold text-zinc-900" : "text-zinc-500"}`}>Part {p}</span>
+                        <span className="text-xs text-emerald-600">no limit</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-3 border-t border-zinc-100 pt-2 text-[11px] leading-4 text-zinc-400">
+                    Speak for as long as you need and press the finish button when you are done. Nothing is cut off early — examiner voice and scoring are the same as a mock test.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Time limits</div>
+                  <p className="mt-1 text-[11px] leading-4 text-zinc-400">Official range per part — the examiner moves on at the upper bound.</p>
+                  <ul className="mt-3 space-y-3">
+                    {partRows.map((r) => {
+                      const low = r.isActive && r.left <= 30;
+                      return (
+                        <li key={r.p}>
+                          <div className="flex items-baseline justify-between gap-2">
+                            <span className={`text-sm ${r.isActive ? "font-semibold text-zinc-900" : "text-zinc-500"}`}>Part {r.p}</span>
+                            <span className={`text-sm tabular-nums ${r.done && !r.isActive ? "text-emerald-600" : low ? "text-amber-600" : r.isActive ? "text-zinc-900" : "text-zinc-400"}`}>
+                              {r.done && !r.isActive ? "done" : formatClock(r.left)}
+                            </span>
+                          </div>
+                          <div className="mt-0.5 flex items-center justify-between gap-2 text-[11px] text-zinc-400">
+                            <span className="truncate">{PART_TITLE[r.p] ?? "Questions"}</span>
+                            <span className="shrink-0">{OFFICIAL_RANGE[r.p] ?? ""}</span>
+                          </div>
+                          <div className="mt-1 h-1 overflow-hidden rounded-full bg-zinc-100">
+                            <div
+                              className={`h-1 rounded-full transition-[width] duration-500 ${r.isActive ? (low ? "bg-amber-500" : "bg-zinc-900") : "bg-zinc-300"}`}
+                              style={{ width: `${partProgress(r.budget, r.left) * 100}%` }}
+                            />
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <p className="mt-3 border-t border-zinc-100 pt-2 text-[11px] leading-4 text-zinc-400">
+                    {cfg ? `Part 1 answers are capped at ${cfg.part1.answerSeconds}s each; you can move on after ${cfg.minFinishSeconds}s.` : ""}
+                  </p>
+                </>
+              )}
             </div>
           </aside>
         )}
