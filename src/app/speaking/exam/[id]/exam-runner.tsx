@@ -82,6 +82,12 @@ const PER_LINE_WAIT_MS = 120_000;
 const START_GATE_MS_DEFAULT = 120_000;
 /** Bounded auto-retries per turn for retryable audio failures (5.4). */
 const MAX_AUDIO_RETRIES = 2;
+/** Part 2 overtime grace: after the visible 2:00 talk clock hits zero, the
+ *  candidate gets this many extra seconds to wrap up. During the grace the
+ *  visible clock stays at 0:00 and an "Overtime" countdown is shown instead;
+ *  the answer auto-submits when the grace expires. Only the real speaking time
+ *  (answerSeconds) is counted on the server — the grace is a UI courtesy. */
+const PART2_OVERTIME_SECONDS = 30;
 
 /**
  * Exact examiner utterance for a step — one source of truth for speaking AND
@@ -186,7 +192,7 @@ export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, 
   const [subtitle, setSubtitle] = useState("");
   const [speaking, setSpeaking] = useState(false);
   const [showSubs, setShowSubs] = useState(showSubtitlesDefault);
-  const [cd, setCd] = useState({ left: 0, total: 0 });
+  const [cd, setCd] = useState({ left: 0, total: 0, overtime: 0, grace: 0 });
   const [canEarly, setCanEarly] = useState(false);
   const [level, setLevel] = useState(0);
   /** Rolling input envelope (oldest → newest) so the bars move like a real meter. */
@@ -350,10 +356,11 @@ export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, 
   const waitUser = () => new Promise<string>((res) => { userAction.current = res; });
   const act = (v: string) => { const f = userAction.current; userAction.current = null; f?.(v); };
 
-  function countdown(seconds: number, earlyAfter: number, signal: AbortSignal): Promise<CountdownResult> {
+  function countdown(seconds: number, earlyAfter: number, signal: AbortSignal, graceSeconds = 0): Promise<CountdownResult> {
     return new Promise((resolve) => {
       const start = Date.now();
-      setCd({ left: seconds, total: seconds });
+      const totalWithGrace = seconds + graceSeconds;
+      setCd({ left: seconds, total: seconds, overtime: 0, grace: graceSeconds });
       setCanEarly(earlyAfter <= 0);
       let done = false;
       const finish = (r: CountdownResult) => {
@@ -366,9 +373,18 @@ export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, 
       };
       const t = setInterval(() => {
         const el = (Date.now() - start) / 1000;
-        setCd({ left: Math.max(0, Math.ceil(seconds - el)), total: seconds });
-        if (el >= earlyAfter) setCanEarly(true);
-        if (el >= seconds) finish("timeout");
+        if (graceSeconds > 0 && el >= seconds) {
+          // Overtime: visible talk clock holds at 0:00 while a grace countdown
+          // runs. The candidate may still finish early at any point.
+          const overtimeLeft = Math.max(0, Math.ceil(totalWithGrace - el));
+          setCd({ left: 0, total: seconds, overtime: overtimeLeft, grace: graceSeconds });
+          setCanEarly(true);
+          if (el >= totalWithGrace) finish("timeout");
+        } else {
+          setCd({ left: Math.max(0, Math.ceil(seconds - el)), total: seconds, overtime: 0, grace: graceSeconds });
+          if (el >= earlyAfter) setCanEarly(true);
+          if (graceSeconds === 0 && el >= seconds) finish("timeout");
+        }
       }, 250);
       cdResolve.current = finish;
       signal.addEventListener("abort", () => finish("aborted"));
@@ -539,7 +555,13 @@ export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, 
       }
       setLiveText("");
       setPhase("recording");
-      const r = await countdown(step.answerSeconds, cfg.minFinishSeconds, signal);
+      const isPart2Talk = step.part === 2 && step.kind === "cue_card";
+      const r = await countdown(
+        step.answerSeconds,
+        cfg.minFinishSeconds,
+        signal,
+        isPart2Talk ? PART2_OVERTIME_SECONDS : 0,
+      );
       const recording = await rs.stopAnswer();
       const transcript = tr ? await tr.stop() : "";
       trRef.current = null;
@@ -931,6 +953,10 @@ export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, 
   const answered = steps.filter((s) => s.status === "answered").length;
   const pct = cd.total ? cd.left / cd.total : 0;
   const mmss = (n: number) => `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}`;
+  // Overtime (Part 2 only): the visible 2:00 talk clock has hit zero and a grace
+  // window is running. The main number holds at 0:00; the grace is shown in a
+  // separate "Overtime" line so the original two-minute countdown is untouched.
+  const inOvertime = cd.grace > 0 && cd.overtime > 0;
   // The ring is the timer: preparation fills it clockwise, answering drains it
   // anticlockwise, so the direction itself tells you which phase you are in.
   const RING_C = 2 * Math.PI * 45;
@@ -1127,8 +1153,6 @@ export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, 
               <span className="max-w-[12rem] truncate rounded bg-zinc-100 px-1.5 py-0.5">{step.topic}</span>
               {activePart !== null && <span className="rounded bg-indigo-50 px-1.5 py-0.5 tabular-nums text-indigo-700">{formatClock(partLeft ?? 0)} left in this part</span>}
             </div>
-            {showSubs && subtitle && <p className="mt-4 rounded-xl bg-white px-4 py-3 text-sm leading-6 text-zinc-600 ring-1 ring-zinc-200" />}
-
             <section className="mt-5 rounded-2xl border border-zinc-200 bg-white p-6 sm:p-8">
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
@@ -1206,10 +1230,16 @@ export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, 
                       />
                     </svg>
                     <div className="text-center">
-                      <div className={`text-4xl font-semibold tabular-nums ${critical ? "animate-pulse text-red-600" : urgent ? "text-amber-600" : "text-zinc-900"}`}>{mmss(cd.left)}</div>
-                      <div className="mt-1 text-[11px] uppercase tracking-wide text-zinc-400">
-                        {phase === "recording" ? (hearing ? "Hearing you" : "Listening") : "Preparation"}
-                      </div>
+                      <div className={`text-4xl font-semibold tabular-nums ${inOvertime || critical ? "animate-pulse text-red-600" : urgent ? "text-amber-600" : "text-zinc-900"}`}>{mmss(cd.left)}</div>
+                      {inOvertime ? (
+                        <div className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-red-600">
+                          Overtime · {mmss(cd.overtime)} left — finish now
+                        </div>
+                      ) : (
+                        <div className="mt-1 text-[11px] uppercase tracking-wide text-zinc-400">
+                          {phase === "recording" ? (hearing ? "Hearing you" : "Listening") : "Preparation"}
+                        </div>
+                      )}
                     </div>
                   </div>
                   {phase === "recording" && (
@@ -1231,8 +1261,8 @@ export function ExamRunner({ sessionId, voice, gender, modelId, digitalHuman3d, 
                     {phase === "recording" && repeatsLeft > 0 && step.kind !== "cue_card" && (
                       <button onClick={() => cdResolve.current?.("repeat")} className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm">Ask to repeat ({repeatsLeft})</button>
                     )}
-                    <button disabled={!canEarly} onClick={() => cdResolve.current?.("early")} className="rounded-lg bg-zinc-900 px-5 py-2 text-sm font-medium text-white disabled:opacity-30">
-                      {phase === "prep" ? "Start speaking now" : step.part === 2 ? "Finish answer" : "Next question"}
+                    <button disabled={!canEarly} onClick={() => cdResolve.current?.("early")} className={`rounded-lg px-5 py-2 text-sm font-medium text-white disabled:opacity-30 ${inOvertime ? "bg-red-600" : "bg-zinc-900"}`}>
+                      {phase === "prep" ? "Start speaking now" : inOvertime ? "Finish now" : step.part === 2 ? "Finish answer" : "Next question"}
                     </button>
                   </div>
                   {phase === "recording" && !canEarly && (
