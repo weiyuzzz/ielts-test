@@ -32,6 +32,10 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
   const [saved, setSaved] = useState<string | null>(null);
   /** Transient feedback for the instantly-persisted 3D toggle. */
   const [dhSaved, setDhSaved] = useState<string | null>(null);
+  /** Transient feedback for the examiner-only Save button. */
+  const [examinerSaved, setExaminerSaved] = useState<string | null>(null);
+  /** Last examiner identity actually written to the server (for the dirty hint). */
+  const [savedExaminer, setSavedExaminer] = useState({ voice: initial.examinerVoice, gender: initial.examinerGender, model: initial.examinerModel });
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [mic, setMic] = useState("");
 
@@ -58,6 +62,25 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
     const res = await fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...s, examDate: s.examDate || null }) });
     const j = await res.json();
     setSaved(res.ok ? "Saved" : j.error || "Failed");
+    if (res.ok) setSavedExaminer({ voice: s.examinerVoice, gender: s.examinerGender, model: s.examinerModel });
+  }
+
+  /** Persist just the examiner identity, so a change here survives into the next exam. */
+  async function saveExaminer() {
+    setExaminerSaved(null);
+    const res = await fetch("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ examinerVoice: s.examinerVoice, examinerGender: s.examinerGender, examinerModel: s.examinerModel }),
+    });
+    const j = await res.json();
+    if (res.ok) {
+      setSavedExaminer({ voice: s.examinerVoice, gender: s.examinerGender, model: s.examinerModel });
+      setExaminerSaved("Saved ✓ — applies to your next exam");
+    } else {
+      setExaminerSaved(j.error || "Save failed — check your connection");
+    }
+    setTimeout(() => setExaminerSaved(null), 3500);
   }
 
   /**
@@ -94,6 +117,7 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
 
   const field = "mt-1 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:border-zinc-400";
   const examinerName = examinerModelById(s.examinerModel)?.displayName ?? GENDER_NAME[s.examinerGender];
+  const examinerDirty = s.examinerVoice !== savedExaminer.voice || s.examinerGender !== savedExaminer.gender || s.examinerModel !== savedExaminer.model;
   return (
     <div className="space-y-6">
       {/* ---- Profile --------------------------------------------------------- */}
@@ -135,7 +159,7 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
       <Card className="space-y-4 p-6">
         <div>
           <h2 className="font-semibold">Examiner</h2>
-          <p className="mt-0.5 text-xs text-zinc-400">The digital human and the voice are one person. The choice is frozen when a test starts.</p>
+          <p className="mt-0.5 text-xs text-zinc-400">The digital human and the voice are one person. Click <span className="font-medium text-zinc-600">Save examiner</span> below after changing — the saved choice is frozen into your next exam; a running exam keeps its original examiner.</p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="text-sm">
@@ -224,6 +248,11 @@ export function SettingsForm({ initial, serverTts, ttsVoice, ttsStreaming, profi
         <div className="flex items-center gap-3 border-t border-zinc-100 pt-4">
           <button onClick={() => speak(`Good morning. My name is ${examinerName}. Could I see your identification, please?`, { serverTts, voice: s.examinerVoice, act: "greeting", profileId: s.examinerVoice })} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm">Test voice</button>
           <span className="text-xs text-zinc-400">Hear the current examiner speak a greeting.</span>
+        </div>
+        <div className="flex items-center gap-3 border-t border-zinc-100 pt-4">
+          <button onClick={saveExaminer} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700">Save examiner</button>
+          {examinerDirty && <span className="text-xs text-amber-600">Unsaved changes — click Save examiner to use this choice in your next mock exam.</span>}
+          {examinerSaved && <span className="text-xs text-zinc-500">{examinerSaved}</span>}
         </div>
       </Card>
 
