@@ -110,8 +110,12 @@ async function soeRequest(
   if (!res.ok) {
     throw new ProviderError("tencent-soe", "http", `${res.status} ${(await res.text().catch(() => "")).slice(0, 200)}`);
   }
-  const j = (await res.json()) as { Response?: Record<string, unknown>; Error?: { Code: string; Message: string } };
-  if (j.Error) throw new ProviderError("tencent-soe", "invalid_response", `${j.Error.Code}: ${j.Error.Message}`);
+  const j = (await res.json()) as { Response?: Record<string, unknown> & { Error?: { Code: string; Message: string } }; Error?: { Code: string; Message: string } };
+  // Tencent Cloud v3 returns errors INSIDE the Response envelope, not at top level.
+  // Checking only j.Error let e.g. AuthFailure.AccountUnavailable slip through and
+  // be misread as all-zero scores (fake "evidence" instead of a real failure).
+  const err = j.Response?.Error ?? j.Error;
+  if (err) throw new ProviderError("tencent-soe", "invalid_response", `${err.Code}: ${err.Message}`);
   if (!j.Response) throw new ProviderError("tencent-soe", "invalid_response", "no Response envelope");
   return j.Response;
 }
