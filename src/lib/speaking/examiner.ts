@@ -20,8 +20,25 @@ export const LINES = {
   part2Intro: "Now I'm going to give you a topic, and I'd like you to talk about it for one to two minutes. Before you talk, you'll have one minute to think about what you're going to say. You can make some notes if you wish.",
   part2Start: "All right? Remember, you have one to two minutes for this. I'll tell you when the time is up. Can you start speaking now, please?",
   part2TimeUp: "Thank you. That is the end of your talk.",
-  part3Intro: (t: string) => `We've been talking about ${t.toLowerCase()}, and I'd like to discuss with you one or two more general questions related to this.`,
-  part3Practice: (t: string) => `Let's discuss some general questions related to ${t.toLowerCase()}.`,
+  // The bank's topic labels for Part 2/3 are Chinese (e.g. 嘈杂地). Feeding them
+  // to an English TTS engine makes it spell each character out ("Chinese letter
+  // Chinese letter …"). Only interpolate the topic when it is actually Latin
+  // text; otherwise fall back to topic-free wording (a real IELTS examiner
+  // never needs to name the card aloud here anyway).
+  part3Intro: (t: string) => {
+    const topic = (t ?? "").trim();
+    const usable = topic && !/[\u3400-\u9fff]/.test(topic);
+    return usable
+      ? `We've been talking about ${topic.toLowerCase()}, and I'd like to discuss with you one or two more general questions related to this.`
+      : "We've been talking about this topic, and I'd like to discuss with you one or two more general questions related to this.";
+  },
+  part3Practice: (t: string) => {
+    const topic = (t ?? "").trim();
+    const usable = topic && !/[\u3400-\u9fff]/.test(topic);
+    return usable
+      ? `Let's discuss some general questions related to ${topic.toLowerCase()}.`
+      : "Let's discuss some general questions related to this topic.";
+  },
   ack: ["Thank you.", "OK.", "Right.", "I see."],
   noResponse: "That's all right. Let's move on.",
   closing: "Thank you. That is the end of the speaking test.",

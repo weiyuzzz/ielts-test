@@ -17,6 +17,12 @@ import { clampPitch, clampSpeed, type VoiceProfile } from "@/lib/speaking/voice-
 /** Collapse whitespace and strip characters that make engines spell out symbols. */
 export function normalizeExaminerText(text: string): string {
   return text
+    // English TTS engines (e.g. Kokoro) spell CJK characters out one by one as
+    // "Chinese letter …". The question bank stores Part 2/3 topic labels in
+    // Chinese, so as a last line of defence replace any CJK run with a neutral
+    // English placeholder before synthesis. Templates in examiner.ts already
+    // avoid emitting CJK; this catches anything that slips through elsewhere.
+    .replace(/[\u3400-\u9fff]+/g, "this topic")
     .replace(/\s+/g, " ")
     .replace(/[\u201c\u201d]/g, '"')
     .replace(/[\u2018\u2019]/g, "'")
