@@ -1,5 +1,6 @@
 import { ensureSeed } from "@/lib/server/seed";
-import { activeLearningLibrary } from "@/lib/server/queries";
+import { activeLearningLibrary, topicPracticeCounts } from "@/lib/server/queries";
+import { getCurrentUser } from "@/lib/server/user";
 import { PageHeader } from "@/components/ui";
 import { decideFollowAudio } from "@/lib/content/audio-policy";
 import { capabilities } from "@/lib/ai/registry";
@@ -12,6 +13,10 @@ export default async function Questions() {
   await ensureSeed();
   const library = await activeLearningLibrary();
   const profile = envDefaultProfile();
+  // Practice history is shown next to each topic. It is deliberately not fed back
+  // into question selection — see `topicPracticeCounts`.
+  const user = await getCurrentUser();
+  const practice = user ? await topicPracticeCounts(user.id) : { byPart: {}, byTopic: {} };
   // `browser-speech-synthesis` means the deployment has no neural engine; the
   // study player then uses the browser voice and says so, instead of pretending.
   const serverTts = capabilities().tts.id !== "browser-speech-synthesis";
@@ -46,6 +51,7 @@ export default async function Questions() {
         region={library.region}
         profile={profile}
         serverTts={serverTts}
+        practiceCounts={practice}
       />
     </>
   );

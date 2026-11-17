@@ -5,6 +5,25 @@
  */
 export type SpeakingMode = "full" | "part1" | "part2" | "part3";
 
+/**
+ * How many topics a candidate may hand-pick per Part in the custom builder.
+ * Part 1 mirrors the real test's 3-topic structure; Part 2/3 allow two sets so a
+ * learner can drill two cue cards or two discussions back to back.
+ */
+export const CUSTOM_TOPIC_LIMITS: Record<1 | 2 | 3, number> = { 1: 3, 2: 2, 3: 2 };
+
+/**
+ * Hand-picked topics for a custom mock test ("Build a custom mock test" in the
+ * learning library). Only the parts enabled by `mode` are read; each enabled
+ * part must name 1..CUSTOM_TOPIC_LIMITS[n] topics. Several topics in a part run
+ * as several sets back to back (two cue cards, two discussions, …).
+ */
+export interface CustomSelection {
+  part1?: string[];
+  part2?: string[];
+  part3?: string[];
+}
+
 export interface SpeakingExamConfig {
   mode: SpeakingMode;
   /** IELTS Speaking: Part 1 = 3 topics (1 evergreen + 2 seasonal), 10–11 short questions. */

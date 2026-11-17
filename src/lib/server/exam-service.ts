@@ -2,7 +2,7 @@ import { after } from "next/server";
 import { db } from "@/db";
 import { examSessions, examQuestions, questions, answerRecords, audioAssets, transcripts, assessments, users } from "@/db/schema";
 import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
-import { resolveConfig, EXAMINER_NAMES_BY_GENDER, type SpeakingExamConfig, type SpeakingMode } from "@/lib/speaking/config";
+import { resolveConfig, EXAMINER_NAMES_BY_GENDER, CUSTOM_TOPIC_LIMITS, type SpeakingExamConfig, type SpeakingMode, type CustomSelection } from "@/lib/speaking/config";
 import { resolveVoiceProfile, sanitizeProfile, type VoiceProfile } from "@/lib/speaking/voice-profile";
 import { readAiConfig, envOverridesFor, withEnvOverrides } from "@/lib/server/ai-config";
 import { normalizeGender, normalizeModelId, examinerModelById } from "@/lib/avatar/models";
@@ -181,6 +181,141 @@ export async function createSession(user: User, mode: SpeakingMode) {
     const [s] = await tx
       .insert(examSessions)
       .values({ userId: user.id, module: "speaking", mode, examinerName, configSnapshot: { ...config, bankSeason: bank.season, bankRegion: bank.region, examinerGender, examinerModel: examinerModelId, voiceProfile: withEnvOverrides(envOverridesFor(readAiConfig(), "tts"), () => resolveVoiceProfile(user.examinerVoice)), digitalHuman3d: user.digitalHuman3d !== false } as unknown as Record<string, unknown>, totalSteps: steps.length })
+      .returning();
+    await tx.insert(examQuestions).values(steps.map((st, i) => ({ ...st, sessionId: s.id, stepIndex: i })));
+    return s;
+  });
+}
+
+/**
+ * Build an exam from topics the candidate hand-picked in the learning library
+ * ("Build a custom mock test").
+ *
+ * Deliberately a SEPARATE entry point from createSession(): the random draw is
+ * the exam's contract, and adding a practice feature must never perturb it. A
+ * custom session still writes the same exam_sessions/exam_questions rows, so the
+ * runner, state machine, scoring and report paths stay exactly as they are.
+ *
+ * Selection rules (mirrored by the UI):
+ *  - `mode` decides which parts run; topics for other parts are rejected
+ *  - every enabled part must name 1..CUSTOM_TOPIC_LIMITS[n] topics
+ *  - several topics in a part run as several sets back to back
+ */
+export async function createCustomSession(user: User, mode: SpeakingMode, selection: CustomSelection) {
+  await ensureSeed();
+  const config = resolveConfig(mode);
+  const bank = await activeBank();
+  if (!bank) throw new HttpError(500, "No active question bank. Import one in /admin.", "no_active_bank");
+  const pool = await db.select().from(questions).where(eq(questions.setId, bank.id));
+
+  const enabledPart = (part: 1 | 2 | 3) =>
+    part === 1 ? config.part1.enabled : part === 2 ? config.part2.enabled : config.part3.enabled;
+  const rawKeys = (part: 1 | 2 | 3) =>
+    part === 1 ? selection.part1 : part === 2 ? selection.part2 : selection.part3;
+
+  // Validate before touching the database: the UI enforces the same rules, but a
+  // direct API call must not be able to build a nonsensical exam.
+  const picks: Record<1 | 2 | 3, string[]> = { 1: [], 2: [], 3: [] };
+  for (const part of [1, 2, 3] as const) {
+    const keys = [...new Set((rawKeys(part) ?? []).map((k) => k.trim()).filter(Boolean))];
+    if (!enabledPart(part)) {
+      if (keys.length) throw new HttpError(400, `Part ${part} is not part of a ${mode} session`, "unexpected_part_topics");
+      continue;
+    }
+    if (!keys.length) throw new HttpError(400, `Pick at least one Part ${part} topic`, "part_topics_required");
+    if (keys.length > CUSTOM_TOPIC_LIMITS[part]) {
+      throw new HttpError(400, `Pick at most ${CUSTOM_TOPIC_LIMITS[part]} Part ${part} topics`, "too_many_part_topics");
+    }
+    for (const k of keys) {
+      if (!pool.some((q) => q.part === part && q.topicKey === k)) {
+        throw new HttpError(400, `Part ${part} has no questions for topic ${k}`, "unknown_part_topic");
+      }
+    }
+    picks[part] = keys;
+  }
+
+  const examinerGender = normalizeGender(user.examinerGender);
+  const examinerModelId = normalizeModelId(user.examinerModel, examinerGender);
+  const examinerName = examinerModelById(examinerModelId)?.displayName ?? EXAMINER_NAMES_BY_GENDER[examinerGender][0];
+  type StepDraft = Omit<typeof examQuestions.$inferInsert, "sessionId" | "stepIndex">;
+  const steps: StepDraft[] = [];
+  const opening = mode === "full" ? `${LINES.openingFull(examinerName, LINES.greetingPeriod())} ${LINES.idComplete} ` : "";
+
+  // Part 1 — one set of questions per picked topic, a gate question always first.
+  if (config.part1.enabled) {
+    picks[1].forEach((key, ti) => {
+      const topicQs = pool.filter((q) => q.part === 1 && q.topicKey === key);
+      const gate = topicQs.find((q) => q.questionRole === "gate");
+      const rest = topicQs.filter((q) => q.id !== gate?.id);
+      const qs = (gate
+        ? [gate, ...shuffle(rest.filter((q) => !q.audience)), ...shuffle(rest.filter((q) => q.audience))]
+        : shuffle(topicQs)
+      ).slice(0, config.part1.questionsPerTopic);
+      qs.forEach((q, qi) => {
+        let lead = "";
+        if (ti === 0 && qi === 0) lead = `${opening}${LINES.part1Intro} ${LINES.part1Topic(q.topic)}`;
+        else if (qi === 0) lead = LINES.part1NextTopic(q.topic);
+        steps.push({ part: 1, kind: "question", questionId: q.id, topic: q.topic, examinerLead: lead.trim(), promptText: q.text, generator: "bank", answerSeconds: config.part1.answerSeconds });
+      });
+    });
+  }
+
+  // Part 2 — each picked topic contributes its cue card, chained back to back.
+  if (config.part2.enabled) {
+    picks[2].forEach((key, ci) => {
+      const card = pool.find((q) => q.part === 2 && q.topicKey === key);
+      if (!card) return;
+      const lead = ci === 0 ? `${steps.length === 0 ? opening : ""}${LINES.part2Intro}` : LINES.nextCueCard;
+      steps.push({
+        part: 2, kind: "cue_card", questionId: card.id, topic: card.topic,
+        examinerLead: lead.trim(), promptText: card.text, cuePoints: card.cuePoints ?? [], generator: "bank",
+        prepSeconds: config.part2.prepSeconds, answerSeconds: config.part2.answerSeconds,
+      });
+    });
+  }
+
+  // Part 3 — each picked topic contributes its own discussion set, in bank order.
+  if (config.part3.enabled) {
+    picks[3].forEach((key, ti) => {
+      const own = pool
+        .filter((q) => q.part === 3 && q.topicKey === key)
+        .sort((a, b) => a.orderIndex - b.orderIndex)
+        .slice(0, config.part3.questions);
+      own.forEach((q, i) => {
+        const lead = i === 0
+          ? (ti === 0 ? (mode === "full" ? LINES.part3Intro(q.topic) : LINES.part3Practice(q.topic)) : LINES.nextDiscussion)
+          : "";
+        steps.push({ part: 3, kind: "question", questionId: q.id, topic: q.topic, examinerLead: lead, promptText: q.text, generator: "bank", answerSeconds: config.part3.answerSeconds });
+      });
+    });
+  }
+
+  if (!steps.length) throw new HttpError(500, "The selected topics could not build an exam");
+
+  // Chaining sets stretches the part: without this the part clock would expire
+  // on the second cue card / discussion and cut it off before it starts.
+  const snapshot: SpeakingExamConfig = structuredClone(config);
+  snapshot.part2.budgetSeconds = config.part2.budgetSeconds * Math.max(1, picks[2].length);
+  snapshot.part3.budgetSeconds = config.part3.budgetSeconds * Math.max(1, picks[3].length);
+  snapshot.totalBudgetSeconds =
+    (config.part1.enabled ? snapshot.part1.budgetSeconds : 0) +
+    (config.part2.enabled ? snapshot.part2.budgetSeconds : 0) +
+    (config.part3.enabled ? snapshot.part3.budgetSeconds : 0);
+
+  return db.transaction(async (tx) => {
+    const [s] = await tx
+      .insert(examSessions)
+      .values({
+        userId: user.id, module: "speaking", mode, examinerName,
+        configSnapshot: {
+          ...snapshot, bankSeason: bank.season, bankRegion: bank.region, examinerGender, examinerModel: examinerModelId,
+          voiceProfile: withEnvOverrides(envOverridesFor(readAiConfig(), "tts"), () => resolveVoiceProfile(user.examinerVoice)),
+          digitalHuman3d: user.digitalHuman3d !== false,
+          // Recorded so history/report can explain why this session looks unusual.
+          customSelection: picks,
+        } as unknown as Record<string, unknown>,
+        totalSteps: steps.length,
+      })
       .returning();
     await tx.insert(examQuestions).values(steps.map((st, i) => ({ ...st, sessionId: s.id, stepIndex: i })));
     return s;

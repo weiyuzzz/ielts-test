@@ -20,6 +20,11 @@ export const LINES = {
   part2Intro: "Now I'm going to give you a topic, and I'd like you to talk about it for one to two minutes. Before you talk, you'll have one minute to think about what you're going to say. You can make some notes if you wish.",
   part2Start: "All right? Remember, you have one to two minutes for this. I'll tell you when the time is up. Can you start speaking now, please?",
   part2TimeUp: "Thank you. That is the end of your talk.",
+  /** Custom mocks can chain several cue cards; the second card onwards gets this
+   *  shorter lead-in instead of the full first-card briefing. */
+  nextCueCard: "Now I'd like you to talk about another topic. You have one minute to prepare, and then up to two minutes to speak.",
+  /** Custom mocks can chain several Part 3 discussions; opens the next topic. */
+  nextDiscussion: "Now let's discuss some general questions related to another topic.",
   // The bank's topic labels for Part 2/3 are Chinese (e.g. 嘈杂地). Feeding them
   // to an English TTS engine makes it spell each character out ("Chinese letter
   // Chinese letter …"). Only interpolate the topic when it is actually Latin

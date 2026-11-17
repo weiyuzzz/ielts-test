@@ -2,16 +2,21 @@ import { db } from "@/db";
 import { examSessions, assessments } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { requireUser, errorResponse, HttpError } from "@/lib/server/user";
-import { createSession } from "@/lib/server/exam-service";
-import type { SpeakingMode } from "@/lib/speaking/config";
+import { createSession, createCustomSession } from "@/lib/server/exam-service";
+import type { SpeakingMode, CustomSelection } from "@/lib/speaking/config";
 
 export async function POST(req: Request) {
   try {
     const user = await requireUser();
-    const body = (await req.json().catch(() => ({}))) as { mode?: string };
+    const body = (await req.json().catch(() => ({}))) as { mode?: string; selection?: CustomSelection };
     const mode = body.mode as SpeakingMode;
     if (!["full", "part1", "part2", "part3"].includes(mode)) throw new HttpError(400, "mode must be full|part1|part2|part3");
-    const s = await createSession(user, mode);
+    // A `selection` means the candidate hand-picked topics in the learning
+    // library. Without one the request takes the original random draw, so every
+    // existing caller is unaffected.
+    const s = body.selection
+      ? await createCustomSession(user, mode, body.selection)
+      : await createSession(user, mode);
     return Response.json({ id: s.id }, { status: 201 });
   } catch (e) {
     return errorResponse(e);

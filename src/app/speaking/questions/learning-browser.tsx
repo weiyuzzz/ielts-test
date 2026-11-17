@@ -6,12 +6,19 @@ import type { VoiceProfile } from "@/lib/speaking/voice-profile";
 import type { Coverage } from "@/lib/content/store";
 import type { IdeaStage, KeyPhrase, LearningQuestion, QuestionLearningContent, VocabGroup } from "@/lib/content/types";
 import { playStoredAudio, speakStudyText, stopPlayback } from "@/lib/content/playback";
+import { CustomExamBuilder } from "./custom-exam-builder";
 
 export interface LibraryItem extends LearningQuestion {
   cuePoints: string[];
   /** Counts only — the full material is fetched when a row is opened. */
   summary: { hasAnswer: boolean; ideas: number; phrases: number; vocab: number };
   follow: { playable: boolean; url?: string; reason?: string };
+}
+
+/** Practice history for the topic labels. Display only — never feeds question selection. */
+export interface PracticeCounts {
+  byPart: Record<string, number>;
+  byTopic: Record<string, number>;
 }
 
 /** Exam count — shown only when the source document prints a figure. */
@@ -92,6 +99,7 @@ export function LearningBrowser({
   region,
   profile,
   serverTts,
+  practiceCounts,
 }: {
   items: LibraryItem[];
   coverage: Coverage;
@@ -99,6 +107,7 @@ export function LearningBrowser({
   region: string | null;
   profile: VoiceProfile;
   serverTts: boolean;
+  practiceCounts: PracticeCounts;
 }) {
   const [part, setPart] = useState<"all" | 1 | 2 | 3>("all");
   const [query, setQuery] = useState("");
@@ -174,6 +183,8 @@ export function LearningBrowser({
 
   return (
     <div className="space-y-5">
+      <CustomExamBuilder items={items} practiceCounts={practiceCounts} />
+
       <Card className="p-4">
         <div className="flex flex-wrap items-center gap-2">
           {(["all", 1, 2, 3] as const).map((p) => (
@@ -214,12 +225,19 @@ export function LearningBrowser({
 
       {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
 
-      {topics.map((t) => (
+      {topics.map((t) => {
+        const practised = practiceCounts.byTopic[t.key] ?? 0;
+        return (
         <Card key={t.key} className="p-4">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold">{t.name}</span>
             {t.nameZh && <span className="text-xs text-zinc-400">{t.nameZh}</span>}
             <Badge>{t.items.length} questions</Badge>
+            <span title="How many mock tests you have answered this topic in. Shown for reference only — it does not affect which topics a mock test picks.">
+              <Badge tone={practised ? "indigo" : "zinc"}>
+                {practised ? `Practised ${practised}×` : "Not practised"}
+              </Badge>
+            </span>
           </div>
           <ul className="divide-y divide-zinc-50">
             {t.items.map((it) => {
@@ -406,7 +424,8 @@ export function LearningBrowser({
             })}
           </ul>
         </Card>
-      ))}
+        );
+      })}
 
       {!topics.length && <p className="rounded-xl bg-white p-6 text-center text-sm text-zinc-400">No matching questions.</p>}
 

@@ -1,6 +1,6 @@
 import { db } from "@/db";
-import { examSessions, assessments, assessmentDimensions, questions, users } from "@/db/schema";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { examSessions, examQuestions, assessments, assessmentDimensions, questions, users } from "@/db/schema";
+import { and, desc, eq, inArray, ne, or } from "drizzle-orm";
 import { activeBank } from "./bank-service";
 import { attachLearning, computeCoverage, loadSeasonIndex } from "@/lib/content/store";
 
@@ -107,4 +107,62 @@ export async function practiceTopics(): Promise<{ season: string | null; topics:
     season: library.season,
     topics: [...byKey.values()].sort((a, b) => a.topic.localeCompare(b.topic)),
   };
+}
+
+export interface TopicPracticeCounts {
+  /** `${part}:${topicKey}` → mock sessions in which that part's questions were answered. */
+  byPart: Record<string, number>;
+  /** `topicKey` → sessions that covered the topic in any part (P2 and P3 share a key). */
+  byTopic: Record<string, number>;
+}
+
+/**
+ * How often the user has actually practised each topic.
+ *
+ * A session counts only when the topic's question was reached (`answered`) or the
+ * whole session was completed; abandoned tests and untouched plans do not inflate it.
+ *
+ * This is display metadata for the study pages. The exam path never calls it, so
+ * it cannot bias which topics `createSession` picks — practise history is not a
+ * weighting factor by design.
+ */
+export async function topicPracticeCounts(userId: string): Promise<TopicPracticeCounts> {
+  // One distinct (part, topic, session) row per topic a session reached. A session
+  // that runs the same topic in P2 and P3 yields two rows, so the topic-level figure
+  // unions the sessions instead of adding the per-part figures up.
+  const rows = await db
+    .selectDistinct({
+      part: examQuestions.part,
+      topicKey: questions.topicKey,
+      sessionId: examQuestions.sessionId,
+    })
+    .from(examQuestions)
+    .innerJoin(examSessions, eq(examQuestions.sessionId, examSessions.id))
+    .innerJoin(questions, eq(examQuestions.questionId, questions.id))
+    .where(
+      and(
+        eq(examSessions.userId, userId),
+        eq(examSessions.module, "speaking"),
+        ne(examSessions.status, "abandoned"),
+        or(eq(examSessions.status, "completed"), eq(examQuestions.status, "answered")),
+      ),
+    );
+
+  const byPartSessions = new Map<string, Set<string>>();
+  const byTopicSessions = new Map<string, Set<string>>();
+  for (const r of rows) {
+    const partKey = `${r.part}:${r.topicKey}`;
+    const partSet = byPartSessions.get(partKey) ?? new Set<string>();
+    partSet.add(r.sessionId);
+    byPartSessions.set(partKey, partSet);
+    const topicSet = byTopicSessions.get(r.topicKey) ?? new Set<string>();
+    topicSet.add(r.sessionId);
+    byTopicSessions.set(r.topicKey, topicSet);
+  }
+
+  const byPart: Record<string, number> = {};
+  for (const [k, v] of byPartSessions) byPart[k] = v.size;
+  const byTopic: Record<string, number> = {};
+  for (const [k, v] of byTopicSessions) byTopic[k] = v.size;
+  return { byPart, byTopic };
 }
